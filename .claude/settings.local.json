@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__d61e196c-7950-4797-acc5-57d57c1d5c7b__read_me",
+      "mcp__d61e196c-7950-4797-acc5-57d57c1d5c7b__create_view",
+      "Bash(npm list:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(pkill -f \"vite\")",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)"
+    ]
+  }
+}
