@@ -1,11 +1,15 @@
 /**
  * Dynamic Step Field Renderer
- * Renders fields based on action parameter contracts
+ * Renders fields based on action parameter contracts and element authoring patterns
+ * Layout:
+ * Row 1: Action | Element (Locator) | ElementCategory (LocatorType)
+ * Row 2: Summary/Description (full width)
+ * Row 3: [Dynamic Locator checkbox] [ElementReplaceKey - appears when checked]
+ * Rows 4+: Other fields (Value, ExpectedValue, Key, Headers, etc.)
  */
-
-import { SearchableSelect } from '../Common/SearchableSelect';
-import { ACTION_REGISTRY, ParameterContract } from '../../utils/actionRegistry';
-import { ParsedStep } from './StepsEditor';
+import { ACTION_REGISTRY, getElementAuthoringFields } from '../../utils/actionRegistry';
+import type { ParameterContract } from '../../utils/actionRegistry';
+import type { ParsedStep } from './StepsEditor';
 
 interface StepFieldRendererProps {
   step: ParsedStep;
@@ -16,7 +20,7 @@ const ELEMENT_CATEGORY_OPTIONS = [
   { value: 'XPATH', label: 'XPATH' },
   { value: 'ID', label: 'ID' },
   { value: 'CLASS', label: 'CLASS' },
-  { value: 'CSS', label: 'CSSSELECTOR' },
+  { value: 'CSSSELECTOR', label: 'CSSSELECTOR' },
   { value: 'TAGNAME', label: 'TAGNAME' },
   { value: 'LINKTEXT', label: 'LINKTEXT' },
   { value: 'NAME', label: 'NAME' },
@@ -30,9 +34,23 @@ function shouldRenderField(
   fieldName: string,
   contract: ParameterContract | undefined
 ): boolean {
-  if (!contract) return true;
+  if (fieldName === 'description') {
+    return true;
+  }
+
+  if (!contract) {
+    return [
+      'element',
+      'elementCategory',
+      'value',
+      'expectedValue',
+      'key',
+      'headers',
+    ].includes(fieldName);
+  }
 
   const contractField = contract[fieldName as keyof ParameterContract];
+  if (contractField === undefined) return false;
   return contractField !== 'not-used';
 }
 
@@ -48,14 +66,14 @@ function isFieldRequired(
 
 function getFieldLabel(fieldName: string): string {
   const labels: Record<string, string> = {
-    element: 'LOCATOR OR TARGET',
+    element: 'LOCATOR',
     elementCategory: 'LOCATOR TYPE',
     value: 'VALUE',
     expectedValue: 'EXPECTED VALUE',
     key: 'DATA KEY',
     headers: 'HEADERS',
-    description: 'STEP SUMMARY',
-    elementReplaceTextDataKey: 'ELEMENT REPLACE KEY',
+    description: 'SUMMARY',
+    elementReplaceTextDataKey: 'REPLACEMENT KEY(S)',
     isElementPathDynamic: 'DYNAMIC LOCATOR',
     isConcatenated: 'CONCATENATED',
   };
@@ -71,7 +89,7 @@ function getFieldPlaceholder(fieldName: string): string {
     key: 'e.g., step_result_1',
     headers: 'e.g., Student Name',
     description: 'e.g., Checking staff details tab is present',
-    elementReplaceTextDataKey: 'e.g., saved_key_1',
+    elementReplaceTextDataKey: 'saved_key or key1,key2',
   };
   return placeholders[fieldName] || '';
 }
@@ -80,34 +98,46 @@ export function StepFieldRenderer({ step, onFieldChange }: StepFieldRendererProp
   const actionDef = ACTION_REGISTRY[step.action];
   const contract = actionDef?.contract;
 
+  // Get element authoring field visibility based on element category
+  const elementFields = getElementAuthoringFields(actionDef, step.elementCategory);
+
   return (
     <>
-      {/* Element/Locator Fields */}
-      {shouldRenderField('element', contract) && (
-        <div className="steps-editor__field">
-          <label className={`steps-editor__label ${isFieldRequired('element', contract) ? '' : 'steps-editor__label--optional'}`}>
-            {getFieldLabel('element')} {isFieldRequired('element', contract) && '*'}
+      {/* ===== ROW 1: Summary (spans 3 cols, next to Action) ===== */}
+      {shouldRenderField('description', contract) && (
+        <div className="steps-editor__field steps-editor__field--summary-inline">
+          <label className={`steps-editor__label ${isFieldRequired('description', contract) ? '' : 'steps-editor__label--optional'}`}>
+            {getFieldLabel('description')}
           </label>
           <input
             type="text"
             className="steps-editor__input"
-            style={{ fontFamily: 'var(--font-mono)' }}
-            value={step.element || ''}
-            onChange={(e) => onFieldChange('element', e.target.value)}
-            placeholder={getFieldPlaceholder('element')}
+            value={step.description || ''}
+            onChange={(e) => onFieldChange('description', e.target.value)}
+            placeholder={getFieldPlaceholder('description')}
           />
         </div>
       )}
 
-      {shouldRenderField('elementCategory', contract) && (
-        <div className="steps-editor__field">
+      {/* ===== ROW 2: Locator Type (1 col) | Element/Locator (2 cols) ===== */}
+      {elementFields.showElementCategory && (
+        <div className="steps-editor__field steps-editor__field--locator-type">
           <label className={`steps-editor__label ${isFieldRequired('elementCategory', contract) ? '' : 'steps-editor__label--optional'}`}>
-            {getFieldLabel('elementCategory')} {isFieldRequired('elementCategory', contract) && '*'}
+            {getFieldLabel('elementCategory')}
           </label>
           <select
             className="steps-editor__select"
             value={step.elementCategory || 'XPATH'}
-            onChange={(e) => onFieldChange('elementCategory', e.target.value)}
+            onChange={(e) => {
+              onFieldChange('elementCategory', e.target.value);
+              // Reset dynamic fields if switching categories
+              if (!['URL', 'VERIFY', 'VERIFYERROR'].includes(e.target.value)) {
+                if (step.isElementPathDynamic && !step.element?.includes('$$') && !step.element?.match(/Datakey\d+/)) {
+                  onFieldChange('isElementPathDynamic', false);
+                }
+              }
+            }}
+            title={elementFields.elementCategoryHint}
           >
             {ELEMENT_CATEGORY_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -118,25 +148,108 @@ export function StepFieldRenderer({ step, onFieldChange }: StepFieldRendererProp
         </div>
       )}
 
-      {shouldRenderField('value', contract) && (
+      {elementFields.showElement && (
+        <div className="steps-editor__field steps-editor__field--locator">
+          <label className={`steps-editor__label ${isFieldRequired('element', contract) ? '' : 'steps-editor__label--optional'}`}>
+            {getFieldLabel('element')}
+          </label>
+          <input
+            type="text"
+            className="steps-editor__input"
+            style={{ fontFamily: 'var(--font-mono)' }}
+            value={step.element || ''}
+            onChange={(e) => onFieldChange('element', e.target.value)}
+            placeholder={elementFields.elementCategoryHint || getFieldPlaceholder('element')}
+            title={elementFields.elementCategoryHint}
+          />
+        </div>
+      )}
+
+      {/* ===== ROW 3: Value (if applicable) ===== */}
+      {(elementFields.showValue || shouldRenderField('value', contract)) && (
         <div className="steps-editor__field">
           <label className={`steps-editor__label ${isFieldRequired('value', contract) ? '' : 'steps-editor__label--optional'}`}>
-            {getFieldLabel('value')} {isFieldRequired('value', contract) && '*'}
+            {getFieldLabel('value')}
+            {step.elementCategory === 'URL' && <span title="URL Navigation"> (URL)</span>}
+            {step.elementCategory === 'VERIFYERROR' && <span title="Expected Error Text"> (Error Text)</span>}
           </label>
           <input
             type="text"
             className="steps-editor__input"
             value={step.value || ''}
             onChange={(e) => onFieldChange('value', e.target.value)}
-            placeholder={getFieldPlaceholder('value')}
+            placeholder={
+              step.elementCategory === 'URL'
+                ? 'https://example.com or #SavedURLKey'
+                : step.elementCategory === 'VERIFYERROR'
+                ? 'Expected error message text'
+                : getFieldPlaceholder('value')
+            }
           />
         </div>
       )}
 
+      {/* ===== ROW 4: Dynamic Locator Checkbox (1 col) + Replacement Key (3 cols) ===== */}
+      {elementFields.showIsElementPathDynamic && (
+        <div className="steps-editor__field steps-editor__field--dynamic-toggle-row">
+          <label className="steps-editor__label steps-editor__label--optional">
+            {getFieldLabel('isElementPathDynamic')}
+          </label>
+          <div className="steps-editor__checkbox-wrapper">
+            <input
+              type="checkbox"
+              id={`dynamic-${step.index || 'new'}`}
+              className="steps-editor__checkbox"
+              checked={step.isElementPathDynamic || false}
+              onChange={(e) => onFieldChange('isElementPathDynamic', e.target.checked)}
+              title="Enable to use saved keys for element replacement"
+            />
+            <label htmlFor={`dynamic-${step.index || 'new'}`} className="steps-editor__checkbox-label">
+              {step.isElementPathDynamic ? 'Dynamic' : 'Static'}
+            </label>
+          </div>
+        </div>
+      )}
+
+      {elementFields.showElementReplaceTextDataKey && step.isElementPathDynamic && (
+        <div className="steps-editor__field steps-editor__field--replace-key-full">
+          <label className="steps-editor__label" style={{ color: !step.elementReplaceTextDataKey ? 'var(--accent-error-dark)' : 'var(--color-text-secondary)' }}>
+            {getFieldLabel('elementReplaceTextDataKey')} *
+          </label>
+          <input
+            type="text"
+            className="steps-editor__input"
+            style={{
+              fontFamily: 'var(--font-mono)',
+              borderColor: !step.elementReplaceTextDataKey ? 'var(--accent-error-light)' : undefined
+            }}
+            value={step.elementReplaceTextDataKey || ''}
+            onChange={(e) => onFieldChange('elementReplaceTextDataKey', e.target.value)}
+            placeholder={getFieldPlaceholder('elementReplaceTextDataKey')}
+            title="Saved key name(s) to replace in Element. Use comma for multiple keys."
+          />
+          {!step.elementReplaceTextDataKey ? (
+            <small className="steps-editor__field-error">
+              Required: Dynamic locator enabled - must provide replacement key(s)
+            </small>
+          ) : (
+            <small className="steps-editor__hint">
+              {step.element?.match(/Datakey\d+/)
+                ? `Found ${(step.element.match(/Datakey\d+/g) || []).length} token(s) - provide that many keys`
+                : step.element?.includes('$$')
+                ? 'Enter 1 key to replace $$'
+                : 'Enter key name(s)'}
+            </small>
+          )}
+        </div>
+      )}
+
+      {/* ===== ROW 5+: Other Fields (ExpectedValue, Key, Headers, etc.) ===== */}
+
       {shouldRenderField('expectedValue', contract) && (
         <div className="steps-editor__field">
           <label className={`steps-editor__label ${isFieldRequired('expectedValue', contract) ? '' : 'steps-editor__label--optional'}`}>
-            {getFieldLabel('expectedValue')} {isFieldRequired('expectedValue', contract) && '*'}
+            {getFieldLabel('expectedValue')}
           </label>
           <input
             type="text"
@@ -148,26 +261,11 @@ export function StepFieldRenderer({ step, onFieldChange }: StepFieldRendererProp
         </div>
       )}
 
-      {shouldRenderField('description', contract) && (
-        <div className="steps-editor__field">
-          <label className={`steps-editor__label ${isFieldRequired('description', contract) ? '' : 'steps-editor__label--optional'}`}>
-            {getFieldLabel('description')} {isFieldRequired('description', contract) && '*'}
-          </label>
-          <textarea
-            className="steps-editor__textarea"
-            value={step.description || ''}
-            onChange={(e) => onFieldChange('description', e.target.value)}
-            placeholder={getFieldPlaceholder('description')}
-            rows={2}
-          />
-        </div>
-      )}
-
       {/* Data Store and Headers Fields */}
       {shouldRenderField('key', contract) && (
         <div className="steps-editor__field">
           <label className={`steps-editor__label ${isFieldRequired('key', contract) ? '' : 'steps-editor__label--optional'}`}>
-            {getFieldLabel('key')} {isFieldRequired('key', contract) && '*'}
+            {getFieldLabel('key')}
           </label>
           <input
             type="text"
@@ -183,7 +281,7 @@ export function StepFieldRenderer({ step, onFieldChange }: StepFieldRendererProp
       {shouldRenderField('headers', contract) && (
         <div className="steps-editor__field">
           <label className={`steps-editor__label ${isFieldRequired('headers', contract) ? '' : 'steps-editor__label--optional'}`}>
-            {getFieldLabel('headers')} {isFieldRequired('headers', contract) && '*'}
+            {getFieldLabel('headers')}
           </label>
           <input
             type="text"
@@ -193,39 +291,6 @@ export function StepFieldRenderer({ step, onFieldChange }: StepFieldRendererProp
             onChange={(e) => onFieldChange('headers', e.target.value)}
             placeholder={getFieldPlaceholder('headers')}
           />
-        </div>
-      )}
-
-      {/* Advanced Fields */}
-      {shouldRenderField('elementReplaceTextDataKey', contract) && (
-        <div className="steps-editor__field">
-          <label className={`steps-editor__label steps-editor__label--optional`}>
-            {getFieldLabel('elementReplaceTextDataKey')}
-          </label>
-          <input
-            type="text"
-            className="steps-editor__input"
-            style={{ fontFamily: 'var(--font-mono)' }}
-            value={step.elementReplaceTextDataKey || ''}
-            onChange={(e) => onFieldChange('elementReplaceTextDataKey', e.target.value)}
-            placeholder={getFieldPlaceholder('elementReplaceTextDataKey')}
-          />
-        </div>
-      )}
-
-      {shouldRenderField('isElementPathDynamic', contract) && (
-        <div className="steps-editor__field">
-          <label className="steps-editor__label steps-editor__label--optional">
-            {getFieldLabel('isElementPathDynamic')}
-          </label>
-          <select
-            className="steps-editor__select"
-            value={step.isElementPathDynamic ? 'true' : 'false'}
-            onChange={(e) => onFieldChange('isElementPathDynamic', e.target.value === 'true')}
-          >
-            <option value="false">False</option>
-            <option value="true">True</option>
-          </select>
         </div>
       )}
 

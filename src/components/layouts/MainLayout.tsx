@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { Box, Container } from '@mui/material';
 import { Header } from './Header';
 
 interface MainLayoutProps {
@@ -10,27 +9,11 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, title, onSettingsClick }: MainLayoutProps) {
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        bgcolor: 'background.default',
-      }}
-    >
+    <div className="flex flex-col" style={{ minHeight: '100vh', background: 'var(--dark-bg)' }}>
       <Header title={title} onSettingsClick={onSettingsClick} />
-
-      <Container
-        maxWidth="xl"
-        sx={{
-          flex: 1,
-          py: 3,
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
+      <div className="flex-1 overflow-y-auto" style={{ padding: 'var(--spacing-lg)' }}>
         {children}
-      </Container>
-    </Box>
+      </div>
+    </div>
   );
 }

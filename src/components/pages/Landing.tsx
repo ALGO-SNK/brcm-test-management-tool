@@ -19,40 +19,45 @@ export function Landing({ onSelectPlan, onSettingsClick, workspaceSettings }: La
     <MainLayout title={projectName} onSettingsClick={onSettingsClick}>
       <div>
         {/* Hero Section */}
-        <div className="hero">
-          <div className="hero__top mb-lg">
-            <div className="hero__intro">
-              <h1 className="hero__title text-3xl">
-                {projectName}
-              </h1>
-              <p className="hero__copy text-sm text-secondary">
+        <div className="mb-lg">
+          <div className="row">
+            <div className="col s12">
+              <h1 className="text-3xl font-semibold mb-md">{projectName}</h1>
+              <p className="text-sm text-secondary mb-lg">
                 Pick a plan to continue into the suite tree, then move through test cases and details without changing the app's visual language.
               </p>
-            </div>
 
-            <div className="hero__stats-wrap">
               {/* Stats Cards */}
-              <div className="hero__stats">
-                <div className="stat-card stat-card--primary">
-                  <div className="stat-card__label">Plans</div>
-                  <div className="stat-card__value text-primary">{planCount}</div>
+              <div className="row">
+                <div className="col s12 m6 l3">
+                  <div className="card">
+                    <div className="card-content">
+                      <span className="card-title text-sm text-secondary">Plans</span>
+                      <div className="text-2xl font-bold text-primary mt-md">{planCount}</div>
+                    </div>
+                  </div>
                 </div>
-                <div className="stat-card stat-card--success">
-                  <div className="stat-card__label">Runtime</div>
-                  <div className="flex items-center gap-sm mt-sm">
-                    <span className="dot dot--green" />
-                    <span className="font-bold">Connected</span>
+
+                <div className="col s12 m6 l3">
+                  <div className="card">
+                    <div className="card-content">
+                      <span className="card-title text-sm text-secondary">Runtime</span>
+                      <div className="flex items-center gap-sm mt-md">
+                        <span className="dot dot--green" />
+                        <span className="font-bold">Connected</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <p className="text-sm text-secondary mt-md">
+          <p className="text-sm text-secondary mt-lg mb-md">
             Open a plan first. The suite tree and test list appear only after drill-down begins.
           </p>
 
-          <div className="flex gap-sm mt-md">
+          <div className="flex gap-sm">
             <button className="btn btn--secondary btn--sm">
               <IconRefresh size={14} />
               Refresh plans
@@ -60,9 +65,9 @@ export function Landing({ onSelectPlan, onSettingsClick, workspaceSettings }: La
           </div>
         </div>
 
-        <div>
-          <div className="section-header mb-md">
-            <h2 className="text-xl font-semibold text-primary uppercase">Plans</h2>
+        <div className="mt-xl">
+          <div className="mb-lg">
+            <h2 className="text-xl font-semibold text-primary mb-sm">Plans</h2>
             <p className="text-sm text-secondary">
               Choose a plan to open its suites, child suites, and test cases.
             </p>

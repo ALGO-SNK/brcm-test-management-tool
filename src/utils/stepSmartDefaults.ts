@@ -2,9 +2,12 @@
  * Smart Defaults for Step Fields
  * Provides suggestions and auto-population based on action type
  */
-
-import { ParsedStep } from '../components/TestCases/StepsEditor';
-import { ACTION_REGISTRY } from './actionRegistry';
+import type { ParsedStep } from '../components/TestCases/StepsEditor';
+import {
+  getActionDefinition,
+  inferElementCategory as inferElementCategoryFromRegistry,
+  getElementAuthoringFields,
+} from './actionRegistry';
 
 export interface SmartDefaultSuggestion {
   field: keyof ParsedStep;
@@ -17,7 +20,7 @@ export interface SmartDefaultSuggestion {
  */
 export function getSmartDefaults(step: ParsedStep): SmartDefaultSuggestion[] {
   const suggestions: SmartDefaultSuggestion[] = [];
-  const actionDef = ACTION_REGISTRY[step.action];
+  const actionDef = getActionDefinition(step.action);
 
   if (!actionDef) {
     return suggestions;
@@ -25,13 +28,14 @@ export function getSmartDefaults(step: ParsedStep): SmartDefaultSuggestion[] {
 
   const contract = actionDef.contract;
 
+  // ===== Element + ElementCategory Authoring Patterns =====
   // Suggest ElementCategory if Element is provided but ElementCategory is not
   if (
     step.element &&
     !step.elementCategory &&
     contract.elementCategory !== 'not-used'
   ) {
-    const suggestedCategory = inferElementCategory(step.element);
+    const suggestedCategory = inferElementCategoryFromRegistry(step.element);
     if (suggestedCategory) {
       suggestions.push({
         field: 'elementCategory',
@@ -39,6 +43,31 @@ export function getSmartDefaults(step: ParsedStep): SmartDefaultSuggestion[] {
         reason: `Inferred from element pattern: "${step.element.substring(0, 30)}..."`,
       });
     }
+  }
+
+  // Suggest dynamic locator fields when appropriate
+  if (step.element && step.elementCategory && !step.isElementPathDynamic) {
+    const fieldsConfig = getElementAuthoringFields(actionDef, step.elementCategory);
+
+    // If element contains $$ or Datakey tokens, suggest enabling dynamic locator
+    if (step.element.includes('$$') || step.element.match(/Datakey\d+/)) {
+      if (fieldsConfig.showIsElementPathDynamic) {
+        suggestions.push({
+          field: 'isElementPathDynamic',
+          value: 'true',
+          reason: 'Element contains replacement tokens ($$ or Datakey1). Enable dynamic locator.',
+        });
+      }
+    }
+  }
+
+  // Suggest ElementReplaceTextDataKey when dynamic locator is enabled
+  if (step.isElementPathDynamic && !step.elementReplaceTextDataKey && contract.elementReplaceTextDataKey !== 'not-used') {
+    suggestions.push({
+      field: 'elementReplaceTextDataKey',
+      value: 'save_key_name',
+      reason: 'Dynamic locator requires one or more saved keys (comma-separated for multiple).',
+    });
   }
 
   // Suggest ExpectedValue for verification actions
@@ -69,39 +98,24 @@ export function getSmartDefaults(step: ParsedStep): SmartDefaultSuggestion[] {
 }
 
 /**
- * Infer element category from element pattern
- */
-function inferElementCategory(element: string): string | null {
-  // XPath detection
-  if (element.match(/^(\/\/|\/|\.)/)) {
-    return 'XPATH';
-  }
-
-  // ID detection - single word or alphanumeric with underscores
-  if (element.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/) && !element.includes(' ')) {
-    return 'ID';
-  }
-
-  // CSS Selector detection
-  if (element.match(/^[.#\[]/)) {
-    return 'CSS';
-  }
-
-  // JavaScript detection
-  if (element.includes('document') || element.includes('window')) {
-    return 'JSPATH';
-  }
-
-  // Default to XPath for safety
-  return null;
-}
-
-/**
  * Suggest ExpectedValue based on action type
  */
 function suggestExpectedValueForAction(
   action: string
 ): { value: string; reason: string } | null {
+  if (
+    action.startsWith('IS')
+    || action.startsWith('CHECK_')
+    || action.startsWith('VERIFY_')
+    || action.includes('_VISIBLE')
+    || action.includes('_ENABLED')
+  ) {
+    return {
+      value: 'true',
+      reason: 'Most assertion actions expect a boolean expected value.',
+    };
+  }
+
   const suggestions: Record<string, { value: string; reason: string }> = {
     ISVISIBLE: {
       value: 'true',
@@ -150,6 +164,20 @@ function suggestExpectedValueForAction(
 function suggestValueForAction(
   action: string
 ): { value: string; reason: string } | null {
+  if (action === 'SELECT_LIST_ITEM' || action === 'TABLE_CLICK_ROW') {
+    return {
+      value: 'take:5,skip:0',
+      reason: 'Union format from action matrix: count or take:x,skip:y.',
+    };
+  }
+
+  if (action.includes('FILTER')) {
+    return {
+      value: '',
+      reason: 'Use a filter term matched against the target column.',
+    };
+  }
+
   const suggestions: Record<string, { value: string; reason: string }> = {
     TYPE: {
       value: '',

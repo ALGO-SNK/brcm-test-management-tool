@@ -3,7 +3,11 @@
  * Shows validation errors and warnings inline
  */
 
-import { ValidationError } from '../../utils/stepValidation';
+/**
+ * Step Validation Display Component
+ * Shows validation errors and warnings inline
+ */
+import type {ValidationError} from '../../utils/stepValidation';
 
 interface StepValidationDisplayProps {
   errors: ValidationError[];

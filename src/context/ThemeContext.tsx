@@ -15,35 +15,19 @@ const THEME_FONT_KEY = 'theme-font';
 
 const THEME_MODES: ThemeMode[] = [
   'dark',
-  'midnight',
-  'slate',
-  'light',
-  'mist',
-  'dawn',
-  'oneui-dark',
-  'oneui-light',
-  'macos-dark',
   'macos-light',
 ];
 
-const LIGHT_MODES: ThemeMode[] = ['light', 'mist', 'dawn', 'oneui-light', 'macos-light'];
+const LIGHT_MODES: ThemeMode[] = ['macos-light'];
 
 const THEME_TOGGLE_MAP: Record<ThemeMode, ThemeMode> = {
-  dark: 'light',
-  light: 'dark',
-  midnight: 'mist',
-  mist: 'midnight',
-  slate: 'dawn',
-  dawn: 'slate',
-  'oneui-dark': 'oneui-light',
-  'oneui-light': 'oneui-dark',
-  'macos-dark': 'macos-light',
-  'macos-light': 'macos-dark',
+  dark: 'macos-light',
+  'macos-light': 'dark',
 };
 
 function parseThemeMode(value: string | null): ThemeMode {
   if (value && THEME_MODES.includes(value as ThemeMode)) return value as ThemeMode;
-  return 'oneui-dark';
+  return 'dark';
 }
 
 function parseAccent(value: string | null): AccentMode {

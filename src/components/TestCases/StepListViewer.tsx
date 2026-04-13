@@ -3,7 +3,11 @@
  * Displays test steps in read-only view mode
  */
 
-import { ParsedStep } from './StepsEditor';
+/**
+ * Step List Viewer
+ * Displays test steps in read-only view mode
+ */
+import type {ParsedStep} from './StepsEditor';
 import { ACTION_REGISTRY } from '../../utils/actionRegistry';
 
 interface StepListViewerProps {
@@ -15,10 +19,10 @@ function getActionLabel(actionName: string): string {
   return definition?.description || actionName;
 }
 
-function getActionCategory(actionName: string): string {
-  const definition = ACTION_REGISTRY[actionName];
-  return definition?.category || 'unknown';
-}
+// function getActionCategory(actionName: string): string {
+//   const definition = ACTION_REGISTRY[actionName];
+//   return definition?.category || 'unknown';
+// }
 
 function formatParameterValue(value: string | boolean | undefined): string {
   if (!value) return '—';

@@ -71,3 +71,17 @@ export default defineConfig([
   },
 ])
 ```
+
+## Electron desktop app
+
+Run the React app as a desktop app:
+
+```bash
+npm run electron:dev
+```
+
+Build renderer and launch Electron against the built files:
+
+```bash
+npm run electron:start
+```

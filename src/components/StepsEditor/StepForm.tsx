@@ -1,17 +1,5 @@
-import { useState, useEffect } from 'react';
-import {
-  Box,
-  TextField,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Button,
-  Stack,
-  Typography,
-  Alert,
-} from '@mui/material';
-import { Save, Cancel } from '@mui/icons-material';
+import { useState } from 'react';
+import { IconSave, IconX } from '../Common/Icons';
 import type { StepData, ElementCategory } from '../../types';
 
 interface StepFormProps {
@@ -21,185 +9,140 @@ interface StepFormProps {
 }
 
 const ELEMENT_CATEGORIES: ElementCategory[] = [
-  'XPATH',
-  'ID',
-  'TAGNAME',
-  'CSSSELECTOR',
-  'LINKTEXT',
-  'NAME',
-  'URL',
-  'JSPATH',
-  'VERIFY',
-  'VERIFYERROR',
+  'XPATH', 'ID', 'TAGNAME', 'CSSSELECTOR', 'LINKTEXT', 'NAME', 'URL', 'JSPATH', 'VERIFY', 'VERIFYERROR',
 ];
 
 const COMMON_ACTIONS = [
-  'NAVIGATE',
-  'CLICK',
-  'ENTER_TEXT',
-  'CLEAR_TEXT',
-  'VERIFY_TEXT',
-  'VERIFY_ELEMENT_VISIBLE',
-  'DELAY',
-  'TAKE_SCREENSHOT',
-  'HOVER',
-  'DOUBLE_CLICK',
-  'RIGHT_CLICK',
-  'PRESS_KEY',
-  'SELECT_OPTION',
-  'SWITCH_TO_FRAME',
-  'EXECUTE_SCRIPT',
+  'NAVIGATE', 'CLICK', 'ENTER_TEXT', 'CLEAR_TEXT', 'VERIFY_TEXT', 'VERIFY_ELEMENT_VISIBLE',
+  'DELAY', 'TAKE_SCREENSHOT', 'HOVER', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'PRESS_KEY',
+  'SELECT_OPTION', 'SWITCH_TO_FRAME', 'EXECUTE_SCRIPT',
 ];
 
 export function StepForm({ step, onSave, onCancel }: StepFormProps) {
   const [formData, setFormData] = useState<StepData>(step);
   const [errors, setErrors] = useState<string[]>([]);
 
-  useEffect(() => {
-    setFormData(step);
-    setErrors([]);
-  }, [step]);
-
   const handleChange = (field: keyof StepData, value: string | number | boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-      updatedAt: new Date().toISOString(),
-    }));
-
-    // Clear errors when user starts typing
-    if (errors.length > 0) {
-      setErrors([]);
-    }
+    setFormData(prev => ({ ...prev, [field]: value, updatedAt: new Date().toISOString() }));
+    if (errors.length > 0) setErrors([]);
   };
 
   const validate = (): boolean => {
     const newErrors: string[] = [];
-
-    if (!formData.action || formData.action.trim() === '') {
-      newErrors.push('Action is required');
-    }
-
-    if (!formData.elementCategory) {
-      newErrors.push('Element category is required');
-    }
-
-    // Validate element if action requires it (not for navigation/delay)
+    if (!formData.action || formData.action.trim() === '') newErrors.push('Action is required');
+    if (!formData.elementCategory) newErrors.push('Element category is required');
     if (['NAVIGATE', 'DELAY', 'TAKE_SCREENSHOT'].indexOf(formData.action) === -1) {
-      if (!formData.element || formData.element.trim() === '') {
-        newErrors.push('Element is required for this action');
-      }
+      if (!formData.element || formData.element.trim() === '') newErrors.push('Element is required for this action');
     }
-
-    // Validate value if action requires it
     if (['NAVIGATE', 'ENTER_TEXT', 'DELAY', 'VERIFY_TEXT'].indexOf(formData.action) !== -1) {
-      if (!formData.value || formData.value.trim() === '') {
-        newErrors.push('Value is required for this action');
-      }
+      if (!formData.value || formData.value.trim() === '') newErrors.push('Value is required for this action');
     }
-
     setErrors(newErrors);
     return newErrors.length === 0;
   };
 
   const handleSave = () => {
-    if (validate()) {
-      onSave(formData);
-    }
+    if (validate()) onSave(formData);
   };
 
   return (
-    <Box sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1 }}>
-      <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-        Edit Step {(formData.order ?? 0) + 1}
-      </Typography>
+    <div className="card">
+      <div className="card__body">
+        <h3 className="text-xl font-semibold mb-lg">Edit Step {(formData.order ?? 0) + 1}</h3>
 
-      {errors.length > 0 && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {errors.map((err, idx) => (
-            <div key={idx}>{err}</div>
-          ))}
-        </Alert>
-      )}
+        {errors.length > 0 && (
+          <div className="alert alert--error mb-md">
+            <div>
+              {errors.map((err, idx) => (
+                <div key={idx}>{err}</div>
+              ))}
+            </div>
+          </div>
+        )}
 
-      <Stack spacing={2}>
-        <FormControl fullWidth>
-          <InputLabel>Action</InputLabel>
-          <Select
-            value={formData.action}
-            label="Action"
-            onChange={e => handleChange('action', e.target.value)}
-          >
-            {COMMON_ACTIONS.map(action => (
-              <MenuItem key={action} value={action}>
-                {action}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <div className="flex flex-col gap-md">
+          <div className="form-group">
+            <label className="form-label">Action</label>
+            <select
+              className="form-select"
+              value={formData.action}
+              onChange={e => handleChange('action', e.target.value)}
+            >
+              {COMMON_ACTIONS.map(action => (
+                <option key={action} value={action}>{action}</option>
+              ))}
+            </select>
+          </div>
 
-        <FormControl fullWidth>
-          <InputLabel>Element Category</InputLabel>
-          <Select
-            value={formData.elementCategory}
-            label="Element Category"
-            onChange={e => handleChange('elementCategory', e.target.value as ElementCategory)}
-          >
-            {ELEMENT_CATEGORIES.map(cat => (
-              <MenuItem key={cat} value={cat}>
-                {cat}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+          <div className="form-group">
+            <label className="form-label">Element Category</label>
+            <select
+              className="form-select"
+              value={formData.elementCategory}
+              onChange={e => handleChange('elementCategory', e.target.value as ElementCategory)}
+            >
+              {ELEMENT_CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
 
-        <TextField
-          label="Element"
-          placeholder="XPath, CSS Selector, ID, etc."
-          value={formData.element}
-          onChange={e => handleChange('element', e.target.value)}
-          fullWidth
-          multiline
-          rows={2}
-        />
+          <div className="form-group">
+            <label className="form-label">Element</label>
+            <textarea
+              className="form-textarea"
+              placeholder="XPath, CSS Selector, ID, etc."
+              value={formData.element}
+              onChange={e => handleChange('element', e.target.value)}
+              rows={2}
+            />
+          </div>
 
-        <TextField
-          label="Value"
-          placeholder="Value for action (text to enter, URL, etc.)"
-          value={formData.value}
-          onChange={e => handleChange('value', e.target.value)}
-          fullWidth
-          multiline
-          rows={2}
-        />
+          <div className="form-group">
+            <label className="form-label">Value</label>
+            <textarea
+              className="form-textarea"
+              placeholder="Value for action (text to enter, URL, etc.)"
+              value={formData.value}
+              onChange={e => handleChange('value', e.target.value)}
+              rows={2}
+            />
+          </div>
 
-        <TextField
-          label="Expected Value"
-          placeholder="For verification actions"
-          value={formData.expectedValue}
-          onChange={e => handleChange('expectedValue', e.target.value)}
-          fullWidth
-        />
+          <div className="form-group">
+            <label className="form-label">Expected Value</label>
+            <input
+              className="form-input"
+              type="text"
+              placeholder="For verification actions"
+              value={formData.expectedValue}
+              onChange={e => handleChange('expectedValue', e.target.value)}
+            />
+          </div>
 
-        <TextField
-          label="Description"
-          placeholder="Step description"
-          value={formData.description}
-          onChange={e => handleChange('description', e.target.value)}
-          fullWidth
-          multiline
-          rows={2}
-        />
+          <div className="form-group">
+            <label className="form-label">Description</label>
+            <textarea
+              className="form-textarea"
+              placeholder="Step description"
+              value={formData.description}
+              onChange={e => handleChange('description', e.target.value)}
+              rows={2}
+            />
+          </div>
 
-        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', pt: 2 }}>
-          <Button variant="outlined" startIcon={<Cancel />} onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button variant="contained" startIcon={<Save />} onClick={handleSave}>
-            Save Step
-          </Button>
-        </Box>
-      </Stack>
-    </Box>
+          <div className="flex gap-sm justify-end" style={{ paddingTop: 'var(--space-md)' }}>
+            <button className="btn btn--secondary" onClick={onCancel}>
+              <IconX size={16} />
+              Cancel
+            </button>
+            <button className="btn btn--primary" onClick={handleSave}>
+              <IconSave size={16} />
+              Save Step
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

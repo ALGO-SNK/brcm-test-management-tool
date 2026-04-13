@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Grid, Button, Box, Typography, Alert } from '@mui/material';
-import { Add, Save, FileDownload } from '@mui/icons-material';
 import { v4 as uuidv4 } from 'uuid';
 import type { StepData, ADOTestCase } from '../../types';
 import { StepsList } from './StepsList';
 import { StepForm } from './StepForm';
 import { fetchStepsForCase, saveSteps } from '../../mock/handlers';
-import { useNotification } from '../../context/NotificationContext';
+import { useNotification } from '../../context/useNotification';
+import { IconPlus, IconSave, IconDownload } from '../Common/Icons';
 
 interface StepsEditorProps {
   testCase: ADOTestCase;
@@ -28,15 +27,11 @@ export function StepsEditor({ testCase, onSaved }: StepsEditorProps) {
         setSteps(data);
         setHasChanges(false);
       } catch (err) {
-        addNotification(
-          'error',
-          `Failed to load steps: ${err instanceof Error ? err.message : 'Unknown error'}`
-        );
+        addNotification('error', `Failed to load steps: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setLoading(false);
       }
     };
-
     loadSteps();
   }, [testCase.id, addNotification]);
 
@@ -54,13 +49,12 @@ export function StepsEditor({ testCase, onSaved }: StepsEditorProps) {
       stepDescription: '',
       isConcatenated: false,
       isElementPathDynamic: false,
-      elementReplaceKey: '',
+      elementReplaceTextDataKey: '',
       extraFields: {},
       order: steps.length,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-
     setSteps([...steps, newStep]);
     setSelectedIndex(steps.length);
     setHasChanges(true);
@@ -89,15 +83,9 @@ export function StepsEditor({ testCase, onSaved }: StepsEditorProps) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-
     const newSteps = [...steps];
     newSteps.splice(index + 1, 0, duplicated);
-
-    // Update order
-    newSteps.forEach((step, idx) => {
-      step.order = idx;
-    });
-
+    newSteps.forEach((step, idx) => { step.order = idx; });
     setSteps(newSteps);
     setHasChanges(true);
     addNotification('success', 'Step duplicated');
@@ -105,10 +93,8 @@ export function StepsEditor({ testCase, onSaved }: StepsEditorProps) {
 
   const handleSaveStep = (updatedStep: StepData) => {
     if (selectedIndex === null) return;
-
     const newSteps = [...steps];
     newSteps[selectedIndex] = updatedStep;
-
     setSteps(newSteps);
     setHasChanges(true);
     addNotification('success', 'Step updated');
@@ -116,21 +102,13 @@ export function StepsEditor({ testCase, onSaved }: StepsEditorProps) {
 
   const handleSaveAllSteps = async () => {
     try {
-      // Update order
-      const orderedSteps = steps.map((step, idx) => ({
-        ...step,
-        order: idx,
-      }));
-
+      const orderedSteps = steps.map((step, idx) => ({ ...step, order: idx }));
       await saveSteps(testCase.id, orderedSteps);
       setHasChanges(false);
       addNotification('success', `Saved ${orderedSteps.length} steps`);
       onSaved();
     } catch (err) {
-      addNotification(
-        'error',
-        `Failed to save steps: ${err instanceof Error ? err.message : 'Unknown error'}`
-      );
+      addNotification('error', `Failed to save steps: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -138,18 +116,9 @@ export function StepsEditor({ testCase, onSaved }: StepsEditorProps) {
     const csv = [
       ['Order', 'Action', 'Element', 'Category', 'Value', 'Expected', 'Description'].join(','),
       ...steps.map(s =>
-        [
-          (s.order ?? 0) + 1,
-          s.action,
-          `"${s.element}"`,
-          s.elementCategory,
-          `"${s.value}"`,
-          `"${s.expectedValue}"`,
-          `"${s.description}"`,
-        ].join(',')
+        [(s.order ?? 0) + 1, s.action, `"${s.element}"`, s.elementCategory, `"${s.value}"`, `"${s.expectedValue}"`, `"${s.description}"`].join(',')
       ),
     ].join('\n');
-
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -160,39 +129,35 @@ export function StepsEditor({ testCase, onSaved }: StepsEditorProps) {
   };
 
   if (loading) {
-    return <Typography>Loading steps...</Typography>;
+    return <div className="loading-center"><div className="spinner" /></div>;
   }
 
   return (
-    <Box>
+    <div>
       {hasChanges && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          You have unsaved changes
-        </Alert>
+        <div className="alert alert--info mb-md">You have unsaved changes</div>
       )}
 
-      <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'space-between' }}>
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          Steps ({steps.length})
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button size="small" startIcon={<FileDownload />} onClick={handleExportSteps}>
+      <div className="section-header mb-md">
+        <h3 className="text-xl font-semibold">Steps ({steps.length})</h3>
+        <div className="flex gap-sm">
+          <button className="btn btn--ghost btn--sm" onClick={handleExportSteps}>
+            <IconDownload size={14} />
             Export CSV
-          </Button>
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<Save />}
+          </button>
+          <button
+            className="btn btn--primary btn--sm"
             onClick={handleSaveAllSteps}
             disabled={!hasChanges}
           >
+            <IconSave size={14} />
             Save All
-          </Button>
-        </Box>
-      </Box>
+          </button>
+        </div>
+      </div>
 
-      <Grid container spacing={2}>
-        <Grid item xs={12} md={5}>
+      <div className="steps-layout">
+        <div>
           <StepsList
             steps={steps}
             onSelectStep={handleSelectStep}
@@ -201,25 +166,29 @@ export function StepsEditor({ testCase, onSaved }: StepsEditorProps) {
             onDuplicateStep={handleDuplicateStep}
             selectedIndex={selectedIndex}
           />
-        </Grid>
+        </div>
 
-        <Grid item xs={12} md={7}>
+        <div>
           {selectedIndex !== null && selectedIndex < steps.length ? (
             <StepForm
+              key={steps[selectedIndex].id}
               step={steps[selectedIndex]}
               onSave={handleSaveStep}
               onCancel={() => setSelectedIndex(null)}
             />
           ) : (
-            <Box sx={{ p: 3, bgcolor: 'background.paper', borderRadius: 1, textAlign: 'center' }}>
-              <Typography color="textSecondary">Select a step to edit or add a new one</Typography>
-              <Button variant="contained" startIcon={<Add />} onClick={handleAddStep} sx={{ mt: 2 }}>
-                Add First Step
-              </Button>
-            </Box>
+            <div className="card">
+              <div className="card__body text-center" style={{ padding: 'var(--space-xl)' }}>
+                <p className="text-secondary mb-md">Select a step to edit or add a new one</p>
+                <button className="btn btn--primary" onClick={handleAddStep}>
+                  <IconPlus size={16} />
+                  Add First Step
+                </button>
+              </div>
+            </div>
           )}
-        </Grid>
-      </Grid>
-    </Box>
+        </div>
+      </div>
+    </div>
   );
 }

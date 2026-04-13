@@ -6,7 +6,6 @@
  */
 
 import type { StepData, XMLParseResult, ElementCategory } from '../types';
-import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Parse XML steps string from ADO custom field
@@ -51,7 +50,7 @@ function parseADOStepStructure(xmlString: string): XMLParseResult {
   const warnings: string[] = [];
 
   // Remove XML declaration
-  let cleanXml = xmlString.replace(/<\?xml[^?]*\?>/, '').trim();
+  const cleanXml = xmlString.replace(/<\?xml[^?]*\?>/, '').trim();
 
   // Extract all <step> elements
   const stepPattern = /<step\s+id="([^"]+)"[^>]*>([\s\S]*?)<\/step>/gi;
@@ -140,9 +139,9 @@ function parsePipeDelimitedAction(content: string, order: number, stepId?: strin
     return null;
   }
 
-  // Build StepData object
+  // Build StepData object - preserve original step ID from ADO
   const step: StepData = {
-    id: stepId || uuidv4(),
+    id: stepId, // Keep original step ID from ADO XML (e.g., "15", "14", "2", etc.)
     action: action.toUpperCase(),
     element: attributes['Element'] || '',
     elementCategory: normalizeElementCategory(attributes['ElementCategory'] || 'XPATH'),
@@ -154,7 +153,7 @@ function parsePipeDelimitedAction(content: string, order: number, stepId?: strin
     stepDescription: attributes['Description'] || '',
     isConcatenated: attributes['IsConcatenated']?.toLowerCase() === 'true',
     isElementPathDynamic: attributes['IsElementPathDynamic']?.toLowerCase() === 'true',
-    elementReplaceKey: attributes['ElementPathReplaceKey'] || attributes['ElementReplaceTextDataKey'] || '',
+    elementReplaceTextDataKey: attributes['ElementPathReplaceKey'] || attributes['ElementReplaceTextDataKey'] || '',
     extraFields: {
       // Store any extra fields not in the standard contract
       ...Object.keys(attributes)
@@ -247,10 +246,13 @@ function unescapeHTML(text: string): string {
 /**
  * Extract steps from ADO work item custom field
  */
-export function extractStepsFromWorkItem(workItem: any, fieldName: string = 'Microsoft.VSTS.TCM.Steps'): XMLParseResult {
+export function extractStepsFromWorkItem(
+  workItem: { fields?: Record<string, unknown> },
+  fieldName: string = 'Microsoft.VSTS.TCM.Steps',
+): XMLParseResult {
   const stepsField = workItem.fields?.[fieldName];
 
-  if (!stepsField) {
+  if (typeof stepsField !== 'string') {
     return {
       steps: [],
       errors: [`Field ${fieldName} not found in work item`],
@@ -292,4 +294,112 @@ export function isValidXML(xmlString: string): boolean {
 export function countStepsInXML(xmlString: string): number {
   const matches = xmlString.match(/Action=/g) || [];
   return matches.length;
+}
+
+/**
+ * Escape HTML/XML special characters
+ */
+function escapeXmlText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Build step command text from fields (pipe-delimited format)
+ * Ensures trailing pipe at the end for ADO format compatibility
+ */
+function buildStepCommandText(step: {
+  action?: string;
+  element?: string;
+  elementCategory?: string;
+  value?: string;
+  expectedValue?: string;
+  key?: string;
+  headers?: string;
+  description?: string;
+  isConcatenated?: boolean;
+  isElementPathDynamic?: boolean;
+  elementReplaceTextDataKey?: string;
+}): string {
+  const parts: string[] = [];
+
+  if (step.action) parts.push(`Action=${step.action}`);
+  if (step.element) parts.push(`Element=${step.element}`);
+  if (step.elementCategory) parts.push(`ElementCategory=${step.elementCategory}`);
+  if (step.value) parts.push(`Value=${step.value}`);
+  if (step.expectedValue) parts.push(`ExpectedValue=${step.expectedValue}`);
+  if (step.key) parts.push(`DataKey=${step.key}`);
+  if (step.headers) parts.push(`Headers=${step.headers}`);
+  if (step.description) parts.push(`Description=${step.description}`);
+  if (step.isConcatenated) parts.push(`IsConcatenated=true`);
+  if (step.isElementPathDynamic) parts.push(`IsElementPathDynamic=true`);
+  if (step.elementReplaceTextDataKey) parts.push(`ElementReplaceTextDataKey=${step.elementReplaceTextDataKey}`);
+
+  let commandText = parts.join('|');
+
+  // Ensure trailing pipe for ADO format compatibility
+  if (commandText && !commandText.endsWith('|')) {
+    commandText += '|';
+  }
+
+  return commandText;
+}
+
+/**
+ * Serialize steps back to ADO XML format
+ * Converts StepData or ParsedStep objects to the XML structure expected by ADO
+ * Matches the ADO XML structure with proper escaping and formatting
+ */
+export function serializeStepsToXML(
+  steps: Array<{
+    id?: string;
+    action?: string;
+    element?: string;
+    elementCategory?: string | ElementCategory;
+    value?: string;
+    expectedValue?: string;
+    key?: string;
+    headers?: string;
+    description?: string;
+    isConcatenated?: boolean;
+    isElementPathDynamic?: boolean;
+    elementReplaceTextDataKey?: string;
+    order?: number;
+  }>,
+): string {
+  if (!steps || steps.length === 0) {
+    return '';
+  }
+
+  // Calculate "last" attribute: use the highest step ID number
+  const lastId = Math.max(...steps.map(step => Number(step.id) || Number(step.order) + 1 || 0), 0);
+
+  const lines = [
+    '<?xml version="1.0" encoding="utf-16"?>',
+    `<steps id="0" last="${lastId}">`,
+  ];
+
+  steps.forEach(step => {
+    const stepId = String(step.id ?? step.order + 1);
+    const commandText = buildStepCommandText(step);
+
+    // Wrap in DIV/P tags and escape
+    const wrappedCommand = `<DIV><P>${commandText}</P></DIV>`;
+    const escapedCommand = escapeXmlText(wrappedCommand);
+
+    // Build the step element with proper formatting
+    lines.push(`  <step id="${escapeXmlText(stepId)}" type="ActionStep">`);
+    lines.push(`    <parameterizedString isformatted="true">${escapedCommand}</parameterizedString>`);
+    // Include second parameterizedString with BR tag (required by ADO)
+    lines.push(`    <parameterizedString isformatted="true">&lt;DIV&gt;&lt;P&gt;&lt;BR/&gt;&lt;/P&gt;&lt;/DIV&gt;</parameterizedString>`);
+    lines.push(`    <description />`);
+    lines.push(`  </step>`);
+  });
+
+  lines.push(`</steps>`);
+  return lines.join('\n');
 }

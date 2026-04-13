@@ -1,20 +1,46 @@
 import { useState } from 'react';
-import { CssBaseline } from '@mui/material';
 import { ThemeContextProvider } from './context/ThemeContext';
 import { NotificationContextProvider } from './context/NotificationContext';
 import { Toast } from './components/Common/Toast';
 import { Landing } from './components/pages/Landing';
 import { TestCaseList } from './components/pages/TestCaseList';
-import { TestCaseDetail } from './components/pages/TestCaseDetail';
+import { WorkspaceSettings, type WorkspaceSettingsValues } from './components/pages/WorkspaceSettings';
 import type { ADOTestPlan, ADOTestSuite, ADOTestCase } from './types';
 
-type PageType = 'landing' | 'cases' | 'detail';
+type PageType = 'landing' | 'cases' | 'detail' | 'settings';
+type ContentPage = 'landing' | 'cases' | 'detail';
+
+const WORKSPACE_SETTINGS_KEY = 'workspace-settings';
+
+function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
+  const fallback: WorkspaceSettingsValues = {
+    organization: '',
+    projectName: '',
+    patToken: '',
+    apiVersion: '7.2',
+  };
+
+  try {
+    const raw = localStorage.getItem(WORKSPACE_SETTINGS_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<WorkspaceSettingsValues> & { organizationUrl?: string };
+    return {
+      ...fallback,
+      ...parsed,
+      organization: parsed.organization ?? parsed.organizationUrl ?? fallback.organization,
+    };
+  } catch {
+    return fallback;
+  }
+}
 
 export function App() {
   const [currentPage, setCurrentPage] = useState<PageType>('landing');
+  const [previousPage, setPreviousPage] = useState<ContentPage>('landing');
   const [selectedPlan, setSelectedPlan] = useState<ADOTestPlan | null>(null);
   const [selectedSuite, setSelectedSuite] = useState<ADOTestSuite | null>(null);
   const [selectedCase, setSelectedCase] = useState<ADOTestCase | null>(null);
+  const [workspaceSettings, setWorkspaceSettings] = useState<WorkspaceSettingsValues>(getInitialWorkspaceSettings);
 
   const handleSelectPlan = (plan: ADOTestPlan) => {
     setSelectedPlan(plan);
@@ -23,6 +49,10 @@ export function App() {
     setSelectedCase(null);
   };
 
+  const handleSelectSuite = (suite: ADOTestSuite) => {
+    setSelectedSuite(suite);
+    setSelectedCase(null);
+  };
 
   const handleSelectCase = (testCase: ADOTestCase) => {
     setSelectedCase(testCase);
@@ -42,40 +72,56 @@ export function App() {
   };
 
   const handleSettingsClick = () => {
-    // In future: navigate to settings page
-    console.log('Settings clicked');
+    if (currentPage !== 'settings') {
+      setPreviousPage(currentPage as ContentPage);
+    }
+    setCurrentPage('settings');
   };
+
+  const handleBackFromSettings = () => {
+    setCurrentPage(previousPage);
+  };
+
+  const handleSaveWorkspaceSettings = (values: WorkspaceSettingsValues) => {
+    setWorkspaceSettings(values);
+    localStorage.setItem(WORKSPACE_SETTINGS_KEY, JSON.stringify(values));
+  };
+
+  const isSettingsOpen = currentPage === 'settings';
+  const activeContentPage: ContentPage = isSettingsOpen ? previousPage : (currentPage as ContentPage);
 
   return (
     <ThemeContextProvider>
       <NotificationContextProvider>
-        <CssBaseline />
         <Toast />
 
-        {currentPage === 'landing' && (
+        {activeContentPage === 'landing' && (
           <Landing
             onSelectPlan={handleSelectPlan}
             onSettingsClick={handleSettingsClick}
+            workspaceSettings={workspaceSettings}
           />
         )}
 
-        {currentPage === 'cases' && selectedPlan && (
+        {(activeContentPage === 'cases' || activeContentPage === 'detail') && selectedPlan && (
           <TestCaseList
             plan={selectedPlan}
             suite={selectedSuite}
+            selectedCase={selectedCase}
+            onSelectSuite={handleSelectSuite}
             onSelectCase={handleSelectCase}
+            onBackToCases={handleBackToCases}
             onBackToPlan={handleBackToPlan}
             onSettingsClick={handleSettingsClick}
+            workspaceSettings={workspaceSettings}
           />
         )}
 
-        {currentPage === 'detail' && selectedPlan && selectedSuite && selectedCase && (
-          <TestCaseDetail
-            plan={selectedPlan}
-            suite={selectedSuite}
-            caseId={selectedCase.id}
-            onBackToCases={handleBackToCases}
-            onSettingsClick={handleSettingsClick}
+        {isSettingsOpen && (
+          <WorkspaceSettings
+            values={workspaceSettings}
+            onSave={handleSaveWorkspaceSettings}
+            onBack={handleBackFromSettings}
           />
         )}
       </NotificationContextProvider>

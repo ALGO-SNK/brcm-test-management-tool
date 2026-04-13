@@ -9,7 +9,18 @@
       "Bash(curl -s http://localhost:5173/)",
       "Bash(pkill -f \"vite\")",
       "Bash(git add:*)",
-      "Bash(git commit -m ':*)"
+      "Bash(git commit -m ':*)",
+      "Bash(npm uninstall:*)",
+      "Bash(curl -s http://localhost:5173)",
+      "Read(//tmp/**)",
+      "Bash(pkill -f \"npm run dev\")",
+      "Bash(npx tsc:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(xargs grep:*)",
+      "Bash(grep -n \"CreateTestCaseForm\" src/components/**/*.tsx src/components/**/**/*.tsx)",
+      "Bash(ls -la /c/Users/snkjh/WebstormProjects/bcm-testbuilder/src/utils/action*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
+      "Bash(pkill -f \"vite\\\\|node\")"
     ]
   }
 }

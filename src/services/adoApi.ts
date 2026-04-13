@@ -240,6 +240,30 @@ async function fetchJson<T>(url: string, patToken: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function patchJson<T>(
+  url: string,
+  patToken: string,
+  operations: Array<{ op: string; path: string; value: unknown }>,
+): Promise<T> {
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json-patch+json',
+      Accept: 'application/json',
+      Authorization: `Basic ${toBasicAuthToken(patToken)}`,
+    },
+    body: JSON.stringify(operations),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    const details = body.trim().slice(0, 240);
+    throw new ADORequestError(response.status, `ADO PATCH request failed (${response.status}): ${details || response.statusText}`);
+  }
+
+  return (await response.json()) as T;
+}
+
 function getPlanSelfHref(plan: ADOTestPlan): string | null {
   return plan._links?._self?.href ?? plan._links?.self?.href ?? null;
 }
@@ -498,6 +522,13 @@ export function getCachedTestCaseById(
   return entry ? toCachedResource(entry) : null;
 }
 
+export function clearTestCaseDetailCache(
+  settings: WorkspaceConnectionSettings,
+  caseId: number,
+): void {
+  clearCacheEntry(getTestCaseDetailCacheKey(settings, caseId));
+}
+
 export async function fetchPlans(settings: WorkspaceConnectionSettings): Promise<ADOTestPlan[]> {
   assertSettings(settings);
 
@@ -622,6 +653,7 @@ export async function fetchTestCaseDetail(
     }
 
     const encodedApiVersion = encodeURIComponent(apiVersion);
+    // Try both with and without expand parameter - custom fields should be included by default
     candidateUrls.push(`${baseApi}/wit/workitems/${encodedCaseId}?api-version=${encodedApiVersion}`);
     candidateUrls.push(`${baseApi}/wit/workItems/${encodedCaseId}?api-version=${encodedApiVersion}`);
   }
@@ -632,6 +664,45 @@ export async function fetchTestCaseDetail(
   for (const url of uniqueCandidateUrls) {
     try {
       const workItem = await fetchJson<ADOWorkItem>(url, settings.patToken.trim());
+
+      // Debug: Log what fields are actually in the response
+      if (workItem.fields) {
+        const customFields = Object.keys(workItem.fields).filter(k => k.startsWith('Custom.'));
+        const requiredFields = {
+          'Custom.TestingMethod': workItem.fields['Custom.TestingMethod'],
+          'Custom.ApplicableRegions': workItem.fields['Custom.ApplicableRegions'],
+          'Custom.ExecutiveProcess': workItem.fields['Custom.ExecutiveProcess'],
+          'Custom.PLTPProcessArea': workItem.fields['Custom.PLTPProcessArea'],
+          'Custom.InitialStep': workItem.fields['Custom.InitialStep'],
+        };
+
+        console.debug('[ADO API] ========== FULL FIELD DEBUG ==========');
+        console.debug('[ADO API] ✅ Successfully fetched Work Item ID:', workItem.id);
+        console.debug('[ADO API] API URL used:', url);
+        console.debug('[ADO API] All custom fields found:', customFields);
+        console.debug('[ADO API] ✅ CUSTOM FIELD VALUES:', requiredFields);
+        console.debug('[ADO API] Total fields in response:', Object.keys(workItem.fields).length);
+
+        // Show fields that might match our expected ones with different casing
+        const possibleMatches = Object.keys(workItem.fields).filter(k =>
+          k.toLowerCase().includes('testing') ||
+          k.toLowerCase().includes('region') ||
+          k.toLowerCase().includes('process') ||
+          k.toLowerCase().includes('step')
+        );
+        if (possibleMatches.length > 0) {
+          console.debug('[ADO API] Fields matching keywords:', possibleMatches);
+        }
+        console.debug('[ADO API] ====================================');
+
+        if (customFields.length === 0) {
+          console.warn('[ADO API] ⚠️ WARNING: No custom fields in this work item!');
+          console.warn('[ADO API] Work Item ID:', workItem.id, '(may not have values set)');
+        } else {
+          console.log('[ADO API] ✅ SUCCESS: Custom fields found and will be displayed');
+        }
+      }
+
       const mappedCase = mapWorkItemToTestCase(workItem, fallbackCase);
       writeCacheEntry(getTestCaseDetailCacheKey(settings, caseId), mappedCase);
       return mappedCase;
@@ -649,4 +720,214 @@ export async function fetchTestCaseDetail(
   }
 
   throw new Error('Failed to load work item details from ADO.');
+}
+
+export async function updateTestCase(
+  settings: WorkspaceConnectionSettings,
+  caseId: number,
+  updateData: {
+    status?: string;
+    method?: string;
+    region?: string;
+    execProcess?: string;
+    pltpProcess?: string;
+    initialSteps?: string;
+    stepsXml?: string;
+  },
+  preferredHref?: string,
+): Promise<ADOTestCase> {
+  assertSettings(settings);
+
+  const apiVersions = getApiVersionCandidates(settings.apiVersion);
+  const encodedCaseId = encodeURIComponent(String(caseId));
+  const baseApi = buildBaseApiUrl(settings);
+
+  const candidateUrls: string[] = [];
+  for (const apiVersion of apiVersions) {
+    const encodedApiVersion = encodeURIComponent(apiVersion);
+    if (preferredHref) {
+      const normalizedWorkItemHref = normalizeWorkItemHref(preferredHref, caseId);
+      if (normalizedWorkItemHref) {
+        candidateUrls.push(withApiVersion(normalizedWorkItemHref, apiVersion));
+      }
+    }
+    candidateUrls.push(`${baseApi}/wit/workitems/${encodedCaseId}?api-version=${encodedApiVersion}`);
+    candidateUrls.push(`${baseApi}/wit/workItems/${encodedCaseId}?api-version=${encodedApiVersion}`);
+  }
+
+  // Build PATCH operations using "add" operation (more reliable than "replace")
+  const operations: Array<{ op: string; path: string; value: unknown }> = [];
+
+  // Only add operations for fields that have values
+  if (updateData.status) {
+    operations.push({ op: 'add', path: '/fields/System.State', value: updateData.status });
+  }
+  if (updateData.method) {
+    operations.push({ op: 'add', path: '/fields/Custom.TestingMethod', value: updateData.method });
+  }
+  if (updateData.region) {
+    operations.push({ op: 'add', path: '/fields/Custom.ApplicableRegions', value: updateData.region });
+  }
+  if (updateData.execProcess) {
+    operations.push({ op: 'add', path: '/fields/Custom.ExecutiveProcess', value: updateData.execProcess });
+  }
+  if (updateData.pltpProcess) {
+    operations.push({ op: 'add', path: '/fields/Custom.PLTPProcessArea', value: updateData.pltpProcess });
+  }
+  if (updateData.initialSteps !== undefined && updateData.initialSteps.trim()) {
+    operations.push({ op: 'add', path: '/fields/Custom.InitialStep', value: updateData.initialSteps });
+  }
+  // Always update steps XML if provided (most important field)
+  if (updateData.stepsXml) {
+    operations.push({ op: 'add', path: '/fields/Microsoft.VSTS.TCM.Steps', value: updateData.stepsXml });
+  }
+
+  if (operations.length === 0) {
+    throw new Error('No fields to update');
+  }
+
+  let lastError: unknown = null;
+
+  for (const url of candidateUrls) {
+    try {
+      const updatedWorkItem = await patchJson<ADOWorkItem>(url, settings.patToken.trim(), operations);
+      const mappedCase = mapWorkItemToTestCase(updatedWorkItem);
+
+      // Invalidate and update cache
+      clearCacheEntry(getTestCaseDetailCacheKey(settings, caseId));
+      writeCacheEntry(getTestCaseDetailCacheKey(settings, caseId), mappedCase);
+
+      return mappedCase;
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw new Error(`Failed to update work item in ADO: ${lastError.message}`);
+  }
+
+  throw new Error('Failed to update work item in ADO.');
+}
+
+/**
+ * Helper function to POST JSON data to ADO API
+ */
+async function postJson<T>(
+  url: string,
+  patToken: string,
+  body: unknown,
+  contentType: string = 'application/json',
+): Promise<T> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': contentType,
+      Accept: 'application/json',
+      Authorization: `Basic ${toBasicAuthToken(patToken)}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    const details = body.trim().slice(0, 240);
+    throw new ADORequestError(response.status, `ADO POST request failed (${response.status}): ${details || response.statusText}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+/**
+ * Create a new test case in Azure DevOps
+ */
+export async function createTestCase(
+  settings: WorkspaceConnectionSettings,
+  newCaseData: {
+    title: string;
+    description?: string;
+    status?: string;
+    method?: string;
+    region?: string;
+    execProcess?: string;
+    pltpProcess?: string;
+    initialSteps?: string;
+    stepsXml?: string;
+  },
+): Promise<ADOTestCase> {
+  assertSettings(settings);
+
+  if (!newCaseData.title || !newCaseData.title.trim()) {
+    throw new Error('Test case title is required');
+  }
+
+  const apiVersions = getApiVersionCandidates(settings.apiVersion);
+  const baseApi = buildBaseApiUrl(settings);
+
+  // Build the work item fields
+  const fields: Record<string, unknown> = {
+    'System.Title': newCaseData.title,
+    'System.Description': newCaseData.description || '',
+  };
+
+  // Add custom fields if provided
+  if (newCaseData.status) {
+    fields['System.State'] = newCaseData.status;
+  }
+  if (newCaseData.method) {
+    fields['Custom.TestingMethod'] = newCaseData.method;
+  }
+  if (newCaseData.region) {
+    fields['Custom.ApplicableRegions'] = newCaseData.region;
+  }
+  if (newCaseData.execProcess) {
+    fields['Custom.ExecutiveProcess'] = newCaseData.execProcess;
+  }
+  if (newCaseData.pltpProcess) {
+    fields['Custom.PLTPProcessArea'] = newCaseData.pltpProcess;
+  }
+  if (newCaseData.initialSteps) {
+    fields['Custom.InitialStep'] = newCaseData.initialSteps;
+  }
+  if (newCaseData.stepsXml) {
+    fields['Microsoft.VSTS.TCM.Steps'] = newCaseData.stepsXml;
+  }
+
+  const workItemPayload = {
+    fields,
+  };
+
+  let lastError: unknown = null;
+
+  // Try different API versions
+  for (const apiVersion of apiVersions) {
+    const encodedApiVersion = encodeURIComponent(apiVersion);
+    const url = `${baseApi}/wit/workitems/${"Test Case"}?api-version=${encodedApiVersion}`;
+
+    try {
+      const createdWorkItem = await postJson<ADOWorkItem>(url, settings.patToken.trim(), workItemPayload);
+      const mappedCase = mapWorkItemToTestCase(createdWorkItem);
+
+      // Cache the newly created case
+      writeCacheEntry(getTestCaseDetailCacheKey(settings, createdWorkItem.id), mappedCase);
+
+      return mappedCase;
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw new Error(`Failed to create test case in ADO: ${lastError.message}`);
+  }
+
+  throw new Error('Failed to create test case in ADO.');
 }

@@ -1,0 +1,169 @@
+/**
+ * Materialize CSS Overrides
+ * Customizes Materialize's default theme with current design system colors,
+ * dark theme support, and typography settings
+ */
+
+// ============================================================================
+// Color Variables - Map to current design system
+// ============================================================================
+
+// Primary colors - Azure DevOps blue theme
+$primary-color: #0a6cdb !default;        // Current primary blue
+$primary-light: #62adff !default;        // Current primary-light
+$primary-dark: #0858b3 !default;         // Current primary-hover
+
+// Secondary colors
+$secondary-color: #2f3b52 !default;      // Current border/secondary color
+
+// Status colors
+$success-color: #22c55e !default;        // Green for success
+$error-color: #ef4444 !default;          // Red for errors
+$warning-color: #f59e0b !default;        // Amber for warnings
+$info-color: #3b82f6 !default;           // Blue for info
+
+// ============================================================================
+// Dark Theme Colors
+// ============================================================================
+
+// Dark mode background colors
+$dark-bg: #0c1119;                       // Main background (from color-bg)
+$dark-bg-elevated: #151d2a;              // Elevated surfaces (from color-bg-elevated)
+$dark-text: #e7edf8;                     // Primary text (from color-text)
+$dark-text-secondary: #b2bfd8;           // Secondary text (from color-text-secondary)
+$dark-border: #2f3b52;                   // Borders (from secondary color)
+
+// ============================================================================
+// Shadow Customization
+// ============================================================================
+
+$shadow-key-umbra-opacity: 0.2 !default;
+$shadow-key-penumbra-opacity: 0.14 !default;
+$shadow-ambient-shadow-opacity: 0.12 !default;
+
+// ============================================================================
+// Typography
+// ============================================================================
+
+$font-stack: 'Inter', system-ui, -apple-system, sans-serif !default;
+$heading-font-stack: 'Manrope', system-ui, -apple-system, sans-serif !default;
+
+// Font sizes
+$font-size-base: 14px !default;
+$font-size-sm: 12px !default;
+$font-size-lg: 16px !default;
+$font-size-xl: 20px !default;
+$font-size-2xl: 24px !default;
+$font-size-3xl: 32px !default;
+
+// Line heights
+$line-height-tight: 1.25;
+$line-height-normal: 1.5;
+$line-height-relaxed: 1.75;
+
+// ============================================================================
+// Spacing Scale
+// ============================================================================
+
+$spacing-xs: 4px;
+$spacing-sm: 8px;
+$spacing-md: 12px;
+$spacing-lg: 16px;
+$spacing-xl: 24px;
+$spacing-2xl: 32px;
+$spacing-3xl: 48px;
+
+// ============================================================================
+// Responsive Breakpoints - Materialize defaults
+// ============================================================================
+
+$small-screen: 600px !default;
+$medium-screen: 992px !default;
+$large-screen: 1200px !default;
+$extra-large-screen: 1600px !default;
+
+// ============================================================================
+// Borders and Radius
+// ============================================================================
+
+$border-radius: 4px;
+$border-radius-lg: 8px;
+$border-radius-xl: 12px;
+
+// ============================================================================
+// Z-index Scale
+// ============================================================================
+
+$z-dropdown: 1000;
+$z-sticky: 1020;
+$z-fixed: 1030;
+$z-modal-backdrop: 1040;
+$z-modal: 1050;
+$z-popover: 1060;
+$z-tooltip: 1070;
+
+// ============================================================================
+// Accent Color Variables (for theme customization)
+// ============================================================================
+
+// Map current accent colors to CSS custom properties
+// These can be swapped via theme context
+:root {
+  --accent-primary: #{$primary-color};
+  --accent-light: #{$primary-light};
+  --accent-dark: #{$primary-dark};
+
+  // Status colors
+  --accent-success: #{$success-color};
+  --accent-error: #{$error-color};
+  --accent-warning: #{$warning-color};
+  --accent-info: #{$info-color};
+
+  // Dark theme
+  --dark-bg: #{$dark-bg};
+  --dark-bg-elevated: #{$dark-bg-elevated};
+  --dark-text: #{$dark-text};
+  --dark-text-secondary: #{$dark-text-secondary};
+  --dark-border: #{$dark-border};
+}
+
+// ============================================================================
+// Materialize Component Overrides
+// ============================================================================
+
+// Buttons
+$button-border: none;
+$button-background-focus: rgba($primary-color, 0.1);
+$button-font-size: 14px;
+$button-height: 40px;
+
+// Input fields
+$input-height: 40px;
+$input-border-color: $dark-border;
+$input-background-color: transparent;
+$input-error-color: $error-color;
+
+// Cards
+$card-padding: 16px;
+$card-bg-color: $dark-bg-elevated;
+$card-link-color: $primary-color;
+$card-link-color-light: $primary-light;
+
+// Tables
+$table-border-color: $dark-border;
+$table-striped-color: rgba($dark-text, 0.05);
+
+// Navigation
+$navbar-bg-color: $dark-bg-elevated;
+$navbar-height: 56px;
+
+// Forms
+$label-font-size: 12px;
+$label-color: $dark-text-secondary;
+
+// ============================================================================
+// Transition and Animation
+// ============================================================================
+
+$transition-duration: 0.2s;
+$transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
