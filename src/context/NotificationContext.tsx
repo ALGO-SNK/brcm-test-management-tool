@@ -1,27 +1,18 @@
-import React, { createContext, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-
-export type NotificationType = 'success' | 'error' | 'warning' | 'info';
-
-export interface Notification {
-  id: string;
-  type: NotificationType;
-  message: string;
-  duration?: number; // ms, 0 = infinite
-}
-
-interface NotificationContextType {
-  notifications: Notification[];
-  addNotification: (type: NotificationType, message: string, duration?: number) => string;
-  removeNotification: (id: string) => void;
-  clearNotifications: () => void;
-}
-
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+import {
+  NotificationContext,
+  type Notification,
+  type NotificationType,
+} from './notificationContext.shared';
 
 export function NotificationContextProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const removeNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((notification) => notification.id !== id));
+  }, []);
 
   const addNotification = useCallback(
     (type: NotificationType, message: string, duration: number = 4000): string => {
@@ -38,12 +29,8 @@ export function NotificationContextProvider({ children }: { children: ReactNode 
 
       return id;
     },
-    [],
+    [removeNotification],
   );
-
-  const removeNotification = useCallback((id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  }, []);
 
   const clearNotifications = useCallback(() => {
     setNotifications([]);
@@ -61,12 +48,4 @@ export function NotificationContextProvider({ children }: { children: ReactNode 
       {children}
     </NotificationContext.Provider>
   );
-}
-
-export function useNotification() {
-  const context = React.useContext(NotificationContext);
-  if (!context) {
-    throw new Error('useNotification must be used within NotificationContextProvider');
-  }
-  return context;
 }

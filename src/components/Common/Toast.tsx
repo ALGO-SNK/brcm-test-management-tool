@@ -1,45 +1,22 @@
-import { Alert, Snackbar, Stack } from '@mui/material';
-import { useNotification } from '../../context/NotificationContext';
+import { useNotification } from '../../context/useNotification';
+import { IconX } from './Icons';
 
 export function Toast() {
   const { notifications, removeNotification } = useNotification();
 
   return (
-    <Stack
-      spacing={2}
-      sx={{
-        position: 'fixed',
-        bottom: 16,
-        right: 16,
-        zIndex: 9999,
-        pointerEvents: 'none',
-      }}
-    >
+    <div className="toast-container">
       {notifications.map(notification => (
-        <Snackbar
-          key={notification.id}
-          open={true}
-          autoHideDuration={notification.duration}
-          onClose={() => removeNotification(notification.id)}
-          sx={{ pointerEvents: 'auto' }}
-        >
-          <Alert
-            onClose={() => removeNotification(notification.id)}
-            severity={
-              notification.type === 'success'
-                ? 'success'
-                : notification.type === 'error'
-                  ? 'error'
-                  : notification.type === 'warning'
-                    ? 'warning'
-                    : 'info'
-            }
-            sx={{ width: '100%' }}
+        <div key={notification.id} className={`toast toast--${notification.type}`}>
+          <span style={{ flex: 1 }}>{notification.message}</span>
+          <button
+            className="alert__close"
+            onClick={() => removeNotification(notification.id)}
           >
-            {notification.message}
-          </Alert>
-        </Snackbar>
+            <IconX size={14} />
+          </button>
+        </div>
       ))}
-    </Stack>
+    </div>
   );
 }
