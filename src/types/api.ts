@@ -138,18 +138,18 @@ export interface ADOTestCaseListItem {
   };
 }
 
-export interface ConnectionConfig {
-  organization: string;      // https://dev.azure.com/your-org
-  project: string;           // Project name
-  patToken: string;          // Personal Access Token (encrypted)
-  apiVersion: string;        // e.g., "7.1"
-  connected: boolean;
-  lastConnected?: string;    // ISO timestamp
-}
+// export interface ConnectionConfig {
+//   organization: string;      // https://dev.azure.com/your-org
+//   project: string;           // Project name
+//   patToken: string;          // Personal Access Token (encrypted)
+//   apiVersion: string;        // e.g., "7.1"
+//   connected: boolean;
+//   lastConnected?: string;    // ISO timestamp
+// }
 
-export interface APIError {
-  message: string;
-  statusCode: number;
-  innerException?: string;
-  typeKey?: string;
-}
+// export interface APIError {
+//   message: string;
+//   statusCode: number;
+//   innerException?: string;
+//   typeKey?: string;
+// }

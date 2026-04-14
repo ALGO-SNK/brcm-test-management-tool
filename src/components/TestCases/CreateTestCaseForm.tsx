@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { StepsEditor } from './StepsEditor';
 import { TestCaseFormFields } from './TestCaseFormFields';
 import type { ParsedStep } from './StepsEditor';
@@ -20,8 +20,7 @@ interface CreateTestCaseFormProps {
 }
 
 export function CreateTestCaseForm({
-  suiteName,
-  isLoading = false,
+                                     isLoading = false,
   onCancel,
   onSubmit,
 }: CreateTestCaseFormProps) {

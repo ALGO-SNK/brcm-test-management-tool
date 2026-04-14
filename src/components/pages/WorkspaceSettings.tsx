@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { IconSave, IconX } from '../Common/Icons';
 import { useThemeContext } from '../../context/useThemeContext';
 import { useNotification } from '../../context/useNotification';

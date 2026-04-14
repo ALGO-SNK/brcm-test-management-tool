@@ -1,14 +1,14 @@
-import {useEffect, useMemo, useState } from 'react';
-import { MainLayout } from '../layouts/MainLayout';
-import { PageDetailLayout } from '../layouts/PageDetailLayout';
-import { IconEdit, IconX } from '../Common/Icons';
-import type { ADOTestPlan, ADOTestSuite, ADOTestCase } from '../../types';
-import type { WorkspaceSettingsValues } from './WorkspaceSettings';
-import { fetchTestCaseDetail, updateTestCase } from '../../services/adoApi';
-import { parseXMLSteps, serializeStepsToXML } from '../../utils/xmlParser';
-import { StepsEditor } from '../TestCases/StepsEditor';
-import type { ParsedStep } from '../TestCases/StepsEditor';
-import { ACTION_REGISTRY } from '../../utils/actionRegistry';
+import React, {useEffect, useMemo, useState} from 'react';
+import {MainLayout} from '../layouts/MainLayout';
+import {PageDetailLayout} from '../layouts/PageDetailLayout';
+import {IconEdit, IconX} from '../Common/Icons';
+import type {ADOTestCase, ADOTestPlan, ADOTestSuite} from '../../types';
+import type {WorkspaceSettingsValues} from './WorkspaceSettings';
+import {fetchTestCaseDetail, updateTestCase} from '../../services/adoApi';
+import {parseXMLSteps, serializeStepsToXML} from '../../utils/xmlParser';
+import type {ParsedStep} from '../TestCases/StepsEditor';
+import {StepsEditor} from '../TestCases/StepsEditor';
+import {ACTION_REGISTRY} from '../../utils/actionRegistry';
 
 interface TestCaseDetailProps {
   plan: ADOTestPlan;
@@ -244,16 +244,14 @@ function buildMainDetailRows(testCase: ADOTestCase): DetailRow[] {
   const pltpProcess = toDisplayValue(fields['Custom.PLTPProcessArea']) || 'Not set';
   const assignedLabel = testCase.assignedTo?.displayName || toIdentityDisplay(fields['System.AssignedTo']) || 'Unassigned';
 
-  const rows: DetailRow[] = [
-    { label: 'Status', value: testCase.state },
-    { label: 'Testing Method', value: testingMethod },
-    { label: 'Region', value: region },
-    { label: 'Executive Process', value: execProcess },
-    { label: 'PLTP Process', value: pltpProcess },
-    { label: 'Assigned To', value: assignedLabel },
+  return [
+    {label: 'Status', value: testCase.state},
+    {label: 'Testing Method', value: testingMethod},
+    {label: 'Region', value: region},
+    {label: 'Executive Process', value: execProcess},
+    {label: 'PLTP Process', value: pltpProcess},
+    {label: 'Assigned To', value: assignedLabel},
   ];
-
-  return rows;
 }
 
 function buildAdditionalDetailRows(testCase: ADOTestCase, plan: ADOTestPlan): DetailRow[] {
@@ -261,25 +259,23 @@ function buildAdditionalDetailRows(testCase: ADOTestCase, plan: ADOTestPlan): De
   const automationStatus = testCase.automationStatus || toDisplayValue(fields['Microsoft.VSTS.TCM.AutomationStatus']) || 'Unknown';
   const configuration = testCase.configurationName || 'Default configuration';
 
-  const rows: DetailRow[] = [
-    { label: 'Configuration', value: configuration },
-    { label: 'Automation', value: automationStatus },
-    { label: 'Priority', value: String(testCase.priority) },
-    { label: 'Iteration Path', value: toDisplayValue(fields['System.IterationPath']) || plan.iteration },
-    { label: 'Area Path', value: toDisplayValue(fields['System.AreaPath']) || plan.areaPath },
-    { label: 'Tester', value: testCase.tester?.displayName || '' },
-    { label: 'Automated Test Name', value: toDisplayValue(fields['Microsoft.VSTS.TCM.AutomatedTestName']) },
-    { label: 'Created Date', value: formatDateTime(fields['System.CreatedDate']) },
-    { label: 'Created By', value: toIdentityDisplay(fields['System.CreatedBy']) },
-    { label: 'Changed Date', value: formatDateTime(fields['System.ChangedDate']) },
-    { label: 'Changed By', value: toIdentityDisplay(fields['System.ChangedBy']) },
-    { label: 'Activated Date', value: formatDateTime(fields['Microsoft.VSTS.Common.ActivatedDate']) },
-    { label: 'Activated By', value: toIdentityDisplay(fields['Microsoft.VSTS.Common.ActivatedBy']) },
-    { label: 'Last Updated', value: formatDateTime(testCase.lastUpdatedDate) },
-    { label: 'Last Updated By', value: testCase.lastUpdatedBy?.displayName || '' },
+  return [
+    {label: 'Configuration', value: configuration},
+    {label: 'Automation', value: automationStatus},
+    {label: 'Priority', value: String(testCase.priority)},
+    {label: 'Iteration Path', value: toDisplayValue(fields['System.IterationPath']) || plan.iteration},
+    {label: 'Area Path', value: toDisplayValue(fields['System.AreaPath']) || plan.areaPath},
+    {label: 'Tester', value: testCase.tester?.displayName || ''},
+    {label: 'Automated Test Name', value: toDisplayValue(fields['Microsoft.VSTS.TCM.AutomatedTestName'])},
+    {label: 'Created Date', value: formatDateTime(fields['System.CreatedDate'])},
+    {label: 'Created By', value: toIdentityDisplay(fields['System.CreatedBy'])},
+    {label: 'Changed Date', value: formatDateTime(fields['System.ChangedDate'])},
+    {label: 'Changed By', value: toIdentityDisplay(fields['System.ChangedBy'])},
+    {label: 'Activated Date', value: formatDateTime(fields['Microsoft.VSTS.Common.ActivatedDate'])},
+    {label: 'Activated By', value: toIdentityDisplay(fields['Microsoft.VSTS.Common.ActivatedBy'])},
+    {label: 'Last Updated', value: formatDateTime(testCase.lastUpdatedDate)},
+    {label: 'Last Updated By', value: testCase.lastUpdatedBy?.displayName || ''},
   ];
-
-  return rows;
 }
 
 export function TestCaseDetail({
@@ -359,7 +355,7 @@ export function TestCaseDetail({
       }
     };
 
-    loadCase();
+    loadCase().then(() => console.log('[TestCaseDetail] Initial load completed', { caseId, caseDataLoaded: !!caseData, workspaceReady }));
     return () => {
       active = false;
     };
@@ -786,12 +782,14 @@ export function TestCaseDetail({
   return (
     <MainLayout title="Test Case Detail" onSettingsClick={onSettingsClick}>
       <PageDetailLayout
+
         breadcrumbs={[
           { label: 'Plans', onClick: onBackToCases, isLink: true },
           { label: plan.rootSuite.name, isLink: true, onClick: onBackToCases },
           { label: suite.name, isLink: true, onClick: onBackToCases },
           { label: testCase.name, isActive: true },
-        ]}
+        ]
+      }
         heading={{
           title: testCase.name,
           id: testCase.id,

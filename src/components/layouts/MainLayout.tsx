@@ -9,11 +9,11 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, title, onSettingsClick }: MainLayoutProps) {
   return (
-    <div className="flex flex-col" style={{ minHeight: '100vh', background: 'var(--dark-bg)' }}>
+    <div className="app-shell">
       <Header title={title} onSettingsClick={onSettingsClick} />
-      <div className="flex-1 overflow-y-auto" style={{ padding: 'var(--spacing-lg)' }}>
+      <main className="app-main app-main--scroll" style={{ padding: 'var(--space-5)' }}>
         {children}
-      </div>
+      </main>
     </div>
   );
 }

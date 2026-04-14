@@ -159,7 +159,7 @@ export function CaseTable({
       }
     };
 
-    loadCases();
+    loadCases().then();
     return () => {
       active = false;
     };

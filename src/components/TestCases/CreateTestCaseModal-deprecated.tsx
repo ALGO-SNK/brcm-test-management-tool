@@ -1,3 +1,4 @@
+/*
 import { useState } from 'react';
 import { IconX } from '../Common/Icons';
 import { CreateTestCaseForm } from './CreateTestCaseForm';
@@ -112,7 +113,7 @@ export function CreateTestCaseModal({
           width: '90%',
           maxHeight: '85vh',
           overflow: 'auto',
-          padding: 'var(--space-lg)',
+          padding: 'var(--space-5)',
           position: 'relative',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -124,12 +125,12 @@ export function CreateTestCaseModal({
           aria-label="Close"
           style={{
             position: 'absolute',
-            top: 'var(--space-md)',
-            right: 'var(--space-md)',
+            top: 'var(--space-4)',
+            right: 'var(--space-4)',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            padding: 'var(--space-xs)',
+            padding: 'var(--space-1)',
             color: 'var(--color-text)',
             display: 'flex',
             alignItems: 'center',
@@ -142,12 +143,12 @@ export function CreateTestCaseModal({
         {error && (
           <div
             style={{
-              marginBottom: 'var(--space-md)',
-              padding: 'var(--space-md)',
-              backgroundColor: 'var(--color-bg-danger-light)',
+              marginBottom: 'var(--space-4)',
+              padding: 'var(--space-4)',
+              backgroundColor: 'var(--color-danger-soft)',
               borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--color-border-danger)',
-              color: 'var(--color-text-danger)',
+              border: '1px solid var(--color-danger-border)',
+              color: 'var(--color-danger)',
             }}
           >
             <p style={{ margin: 0 }}>{error}</p>
@@ -164,3 +165,4 @@ export function CreateTestCaseModal({
     </div>
   );
 }
+*/

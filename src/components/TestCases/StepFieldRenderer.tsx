@@ -213,7 +213,7 @@ export function StepFieldRenderer({ step, onFieldChange }: StepFieldRendererProp
 
       {elementFields.showElementReplaceTextDataKey && step.isElementPathDynamic && (
         <div className="steps-editor__field steps-editor__field--replace-key-full">
-          <label className="steps-editor__label" style={{ color: !step.elementReplaceTextDataKey ? 'var(--accent-error-dark)' : 'var(--color-text-secondary)' }}>
+          <label className="steps-editor__label" style={{ color: !step.elementReplaceTextDataKey ? 'var(--color-danger)' : undefined }}>
             {getFieldLabel('elementReplaceTextDataKey')} *
           </label>
           <input
@@ -221,7 +221,7 @@ export function StepFieldRenderer({ step, onFieldChange }: StepFieldRendererProp
             className="steps-editor__input"
             style={{
               fontFamily: 'var(--font-mono)',
-              borderColor: !step.elementReplaceTextDataKey ? 'var(--accent-error-light)' : undefined
+              borderColor: !step.elementReplaceTextDataKey ? 'var(--color-danger-border)' : undefined
             }}
             value={step.elementReplaceTextDataKey || ''}
             onChange={(e) => onFieldChange('elementReplaceTextDataKey', e.target.value)}

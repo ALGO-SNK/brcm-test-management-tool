@@ -81,7 +81,7 @@ export function TestCaseList({
     : null;
 
   return (
-    <div className="flex flex-col" style={{ height: '100vh', overflow: 'hidden', background: 'var(--dark-bg)' }}>
+    <div className="app-shell" style={{ height: '100vh', overflow: 'hidden' }}>
       <Header title={plan.name} onSettingsClick={onSettingsClick} />
 
       <div className="split-pane" ref={containerRef}>
@@ -104,7 +104,7 @@ export function TestCaseList({
 
         {/* Main content */}
         <div className="split-pane__main">
-          <div className="container" style={{ padding: `${sidebarWidth ? 'var(--spacing-lg) clamp(10px, 1.8vw, 16px)' : '0'}` }}>
+          <div className="container" style={{ padding: `${sidebarWidth ? 'var(--space-5) clamp(10px, 1.8vw, 16px)' : '0'}` }}>
             {suite ? (
               <PageDetailLayout
                 breadcrumbs={[

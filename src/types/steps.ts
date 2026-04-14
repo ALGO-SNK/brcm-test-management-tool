@@ -4,16 +4,15 @@
  */
 
 export type ElementCategory =
-  | 'XPATH'
-  | 'ID'
-  | 'TAGNAME'
-  | 'CSSSELECTOR'
-  | 'LINKTEXT'
-  | 'NAME'
-  | 'URL'
-  | 'JSPATH'
-  | 'VERIFY'
-  | 'VERIFYERROR';
+    | 'ID'
+    | 'NAME'
+    | 'LINKTEXT'
+    | 'PARTIALLINKTEXT'
+    | 'CSSSELECTOR'
+    | 'XPATH'
+    | 'TAGNAME'
+    | 'JSPATH'
+    | 'URL';
 
 export interface StepData {
   // Core fields

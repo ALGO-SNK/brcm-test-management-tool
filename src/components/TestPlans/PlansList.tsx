@@ -18,9 +18,9 @@ export function PlansList({ onSelectPlan, workspaceSettings, onPlansLoaded }: Pl
   const [warning, setWarning] = useState<string | null>(null);
 
   const workspaceReady = Boolean(
-    workspaceSettings.organization.trim()
-      && workspaceSettings.projectName.trim()
-      && workspaceSettings.patToken.trim(),
+      workspaceSettings.organization.trim() &&
+      workspaceSettings.projectName.trim() &&
+      workspaceSettings.patToken.trim()
   );
 
   useEffect(() => {
@@ -61,17 +61,20 @@ export function PlansList({ onSelectPlan, workspaceSettings, onPlansLoaded }: Pl
         setRefreshing(hasCachedPlans);
         const data = await fetchPlans(workspaceSettings);
         if (!active) return;
+
         setPlans(data);
         setError(null);
         setWarning(null);
         onPlansLoaded?.(data);
       } catch (err) {
         if (!active) return;
+
         if (hasCachedPlans) {
           setWarning('Showing cached plans. Live data sync failed, retrying on next refresh.');
           setError(null);
           return;
         }
+
         setPlans([]);
         onPlansLoaded?.([]);
         setError(err instanceof Error ? err.message : 'Failed to load test plans');
@@ -83,81 +86,75 @@ export function PlansList({ onSelectPlan, workspaceSettings, onPlansLoaded }: Pl
       }
     };
 
-    loadPlans();
+    loadPlans().then();
 
     return () => {
       active = false;
     };
-  }, [
-    workspaceReady,
-    workspaceSettings,
-    onPlansLoaded,
-  ]);
+  }, [workspaceReady, workspaceSettings, onPlansLoaded]);
 
   if (loading) {
     return (
-      <div className="row" aria-hidden="true">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <article key={index} className="col s12 m6 l4">
-            <div className="card">
-              <div className="card-content">
-                <div className="flex items-center justify-between mb-md">
+        <div className="plans-skeleton-grid" aria-hidden="true">
+          {Array.from({ length: 3 }).map((_, index) => (
+              <article key={index} className="plan-skeleton-card">
+                <div className="plan-skeleton-row">
                   <span className="skeleton skeleton--pill" />
                   <span className="skeleton skeleton--pill skeleton--pill-sm" />
                 </div>
+
                 <span className="skeleton skeleton--title" />
                 <span className="skeleton skeleton--line" />
-                <div className="grid mt-md" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+
+                <div className="plan-skeleton-kv">
                   <span className="skeleton skeleton--tile" />
                   <span className="skeleton skeleton--tile" />
                 </div>
-              </div>
-              <div className="card-footer" style={{ justifyContent: 'space-between' }}>
-                <span className="skeleton skeleton--line-sm" style={{ width: '60%' }} />
-                <span className="skeleton skeleton--icon" />
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
+
+                <div className="plan-skeleton-row plan-skeleton-row--end">
+                  <span className="skeleton skeleton--line-sm" style={{ width: '120px' }} />
+                  <span className="skeleton skeleton--icon" />
+                </div>
+              </article>
+          ))}
+        </div>
     );
   }
 
   if (error) {
-    return (
-      <div className="alert alert--error">
-        {error}
-      </div>
-    );
+    return <div className="alert alert--error">{error}</div>;
   }
 
   if (plans.length === 0) {
     return (
-      <div className="empty-state">
-        <p>No test plans found</p>
-      </div>
+        <div className="empty-state">
+          <p className="empty-state__title">No test plans found</p>
+          <p className="empty-state__desc">
+            Check your workspace settings or refresh after confirming Azure DevOps access.
+          </p>
+        </div>
     );
   }
 
   return (
-    <>
-      {warning && <div className="alert alert--warning mb-md">{warning}</div>}
-      {refreshing && (
-        <p className="text-sm text-secondary mb-md" aria-live="polite">
-          Showing cached plans while syncing the latest updates.
-        </p>
-      )}
-      <div className="row">
-        {plans.map(plan => (
-          <div key={plan.id} className="col s12 m6 l4">
-            <PlanCard
-              plan={plan}
-              onSelect={onSelectPlan}
-              onOpenSuites={onSelectPlan}
-            />
-          </div>
-        ))}
-      </div>
-    </>
+      <>
+        {warning && <div className="alert alert--warning mb-md">{warning}</div>}
+
+        {refreshing && (
+            <p className="text-sm text-muted mb-md" aria-live="polite">
+              Showing cached plans while syncing the latest updates.
+            </p>
+        )}
+
+        <div className="plans-grid">
+          {plans.map((plan) => (
+              <PlanCard
+                  key={plan.id}
+                  plan={plan}
+                  onOpenSuites={onSelectPlan}
+              />
+          ))}
+        </div>
+      </>
   );
 }

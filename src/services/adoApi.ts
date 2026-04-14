@@ -513,7 +513,7 @@ export function getCachedTestCasesForSuite(
   return entry ? toCachedResource(entry) : null;
 }
 
-export function getCachedTestCaseById(
+/*export function getCachedTestCaseById(
   settings: WorkspaceConnectionSettings,
   caseId: number,
 ): CachedResource<ADOTestCase> | null {
@@ -527,7 +527,7 @@ export function clearTestCaseDetailCache(
   caseId: number,
 ): void {
   clearCacheEntry(getTestCaseDetailCacheKey(settings, caseId));
-}
+}*/
 
 export async function fetchPlans(settings: WorkspaceConnectionSettings): Promise<ADOTestPlan[]> {
   assertSettings(settings);
@@ -906,7 +906,7 @@ export async function createTestCase(
   // Try different API versions
   for (const apiVersion of apiVersions) {
     const encodedApiVersion = encodeURIComponent(apiVersion);
-    const url = `${baseApi}/wit/workitems/${"Test Case"}?api-version=${encodedApiVersion}`;
+    const url = `${baseApi}/wit/workitems/Test Case?api-version=${encodedApiVersion}`;
 
     try {
       const createdWorkItem = await postJson<ADOWorkItem>(url, settings.patToken.trim(), workItemPayload);

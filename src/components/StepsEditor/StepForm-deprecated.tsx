@@ -1,4 +1,4 @@
-import { useState } from 'react';
+/*import { useState } from 'react';
 import { IconSave, IconX } from '../Common/Icons';
 import type { StepData, ElementCategory } from '../../types';
 
@@ -9,16 +9,16 @@ interface StepFormProps {
 }
 
 const ELEMENT_CATEGORIES: ElementCategory[] = [
-  'XPATH', 'ID', 'TAGNAME', 'CSSSELECTOR', 'LINKTEXT', 'NAME', 'URL', 'JSPATH', 'VERIFY', 'VERIFYERROR',
+  'ID', 'NAME', 'LINKTEXT', 'PARTIALLINKTEXT', 'CSSSELECTOR', 'XPATH', 'TAGNAME', 'URL', 'JSPATH',
 ];
 
 const COMMON_ACTIONS = [
   'NAVIGATE', 'CLICK', 'ENTER_TEXT', 'CLEAR_TEXT', 'VERIFY_TEXT', 'VERIFY_ELEMENT_VISIBLE',
   'DELAY', 'TAKE_SCREENSHOT', 'HOVER', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'PRESS_KEY',
   'SELECT_OPTION', 'SWITCH_TO_FRAME', 'EXECUTE_SCRIPT',
-];
+];*/
 
-export function StepForm({ step, onSave, onCancel }: StepFormProps) {
+/*export function StepForm({ step, onSave, onCancel }: StepFormProps) {
   const [formData, setFormData] = useState<StepData>(step);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -131,7 +131,7 @@ export function StepForm({ step, onSave, onCancel }: StepFormProps) {
             />
           </div>
 
-          <div className="flex gap-sm justify-end" style={{ paddingTop: 'var(--space-md)' }}>
+          <div className="flex gap-sm justify-end" style={{ paddingTop: 'var(--space-4)' }}>
             <button className="btn btn--secondary" onClick={onCancel}>
               <IconX size={16} />
               Cancel
@@ -145,4 +145,4 @@ export function StepForm({ step, onSave, onCancel }: StepFormProps) {
       </div>
     </div>
   );
-}
+}*/

@@ -1,3 +1,4 @@
+/*
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { StepData, ADOTestCase } from '../../types';
@@ -178,7 +179,7 @@ export function StepsEditor({ testCase, onSaved }: StepsEditorProps) {
             />
           ) : (
             <div className="card">
-              <div className="card__body text-center" style={{ padding: 'var(--space-xl)' }}>
+              <div className="card__body text-center" style={{ padding: 'var(--space-6)' }}>
                 <p className="text-secondary mb-md">Select a step to edit or add a new one</p>
                 <button className="btn btn--primary" onClick={handleAddStep}>
                   <IconPlus size={16} />
@@ -192,3 +193,4 @@ export function StepsEditor({ testCase, onSaved }: StepsEditorProps) {
     </div>
   );
 }
+*/

@@ -1,4 +1,4 @@
-import {useState, useRef, useEffect} from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {IconChevronDown, IconX} from './Icons';
 
 interface SearchableSelectOption {
