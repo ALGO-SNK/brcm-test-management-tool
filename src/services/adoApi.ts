@@ -835,6 +835,7 @@ async function postJson<T>(
 /**
  * Create a new test case in Azure DevOps
  */
+/*
 export async function createTestCase(
   settings: WorkspaceConnectionSettings,
   planId: number,
@@ -920,6 +921,152 @@ export async function createTestCase(
         continue;
       }
       // All other errors should be thrown immediately (don't retry)
+      throw error;
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw new Error(`Failed to create test case in ADO: ${lastError.message}`);
+  }
+
+  throw new Error('Failed to create test case in ADO.');
+}
+*/
+export async function createTestCase(
+    settings: WorkspaceConnectionSettings,
+    planId: number,
+    suiteId: number,
+    newCaseData: {
+      title: string;
+      description?: string;
+      status?: string;
+      method?: string;
+      region?: string;
+      execProcess?: string;
+      pltpProcess?: string;
+      initialSteps?: string;
+      stepsXml?: string;
+    },
+): Promise<ADOTestCase> {
+  assertSettings(settings);
+
+  if (!newCaseData.title || !newCaseData.title.trim()) {
+    throw new Error('Test case title is required');
+  }
+
+  const apiVersions = getApiVersionCandidates(settings.apiVersion);
+  const baseApi = buildBaseApiUrl(settings);
+
+  let lastError: unknown = null;
+
+  for (const apiVersion of apiVersions) {
+    const encodedApiVersion = encodeURIComponent(apiVersion);
+
+    try {
+      // STEP 1: Create work item using same style as updateTestCase
+      const createUrl =
+          `${baseApi}/wit/workitems/$Test%20Case?api-version=${encodedApiVersion}`;
+
+      const operations: Array<{ op: string; path: string; value: unknown }> = [
+        { op: 'add', path: '/fields/System.Title', value: newCaseData.title },
+      ];
+
+      if (newCaseData.description) {
+        operations.push({
+          op: 'add',
+          path: '/fields/System.Description',
+          value: newCaseData.description,
+        });
+      }
+
+      if (newCaseData.status) {
+        operations.push({
+          op: 'add',
+          path: '/fields/System.State',
+          value: newCaseData.status,
+        });
+      }
+
+      if (newCaseData.method) {
+        operations.push({
+          op: 'add',
+          path: '/fields/Custom.TestingMethod',
+          value: newCaseData.method,
+        });
+      }
+
+      if (newCaseData.region) {
+        operations.push({
+          op: 'add',
+          path: '/fields/Custom.ApplicableRegions',
+          value: newCaseData.region,
+        });
+      }
+
+      if (newCaseData.execProcess) {
+        operations.push({
+          op: 'add',
+          path: '/fields/Custom.ExecutiveProcess',
+          value: newCaseData.execProcess,
+        });
+      }
+
+      if (newCaseData.pltpProcess) {
+        operations.push({
+          op: 'add',
+          path: '/fields/Custom.PLTPProcessArea',
+          value: newCaseData.pltpProcess,
+        });
+      }
+
+      if (newCaseData.initialSteps?.trim()) {
+        operations.push({
+          op: 'add',
+          path: '/fields/Custom.InitialStep',
+          value: newCaseData.initialSteps,
+        });
+      }
+
+      if (newCaseData.stepsXml) {
+        operations.push({
+          op: 'add',
+          path: '/fields/Microsoft.VSTS.TCM.Steps',
+          value: newCaseData.stepsXml,
+        });
+      }
+
+      const createdWorkItem = await patchJson<ADOWorkItem>(
+          createUrl,
+          settings.patToken.trim(),
+          operations,
+      );
+
+      // STEP 2: Add created work item to selected suite
+      const addToSuiteUrl =
+          `${baseApi}/testplan/Plans/${encodeURIComponent(String(planId))}` +
+          `/Suites/${encodeURIComponent(String(suiteId))}` +
+          `/TestCase?api-version=${encodedApiVersion}`;
+
+      await postJson(
+          addToSuiteUrl,
+          settings.patToken.trim(),
+          [
+            {
+              workItem: { id: createdWorkItem.id },
+              pointAssignments: [],
+            },
+          ],
+      );
+
+      const mappedCase = mapWorkItemToTestCase(createdWorkItem);
+      writeCacheEntry(getTestCaseDetailCacheKey(settings, createdWorkItem.id), mappedCase);
+
+      return mappedCase;
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
       throw error;
     }
   }
