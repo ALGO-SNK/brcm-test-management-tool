@@ -1,463 +1,576 @@
 /**
- * Step Validation
- * Validates steps against action registry with strict rules
+ * Step Field Validation
+ * Implements validation rules from STEP_FIELD_RENDERING_RULES.md
  */
+import type { ParsedStep } from '../components/TestCases/StepsEditor';
+import { getActionDefinition, validateElementAuthoringCombination } from './actionRegistry';
+import type { ParameterContract } from './actionRegistry';
 
-import type {
-  StepData,
-  ActionRegistry,
-  ActionContract,
-  StepValidationResult,
-  BulkValidationResult,
-  ValidationMessage,
-  ValidationContext,
-  ValidationConfig,
-} from '../types';
+type ContractField = keyof Pick<ParsedStep, keyof ParameterContract>;
 
-const DEFAULT_VALIDATION_CONFIG: ValidationConfig = {
-  strict: true,
-  allowUnused: false,
-  validateXPath: true,
-  validateRegex: true,
+const CONTRACT_FIELDS: ContractField[] = [
+  'element',
+  'elementCategory',
+  'value',
+  'expectedValue',
+  'key',
+  'headers',
+  'elementReplaceTextDataKey',
+  'isElementPathDynamic',
+  'isConcatenated',
+];
+
+const CSV_INPUT_KEY_ACTIONS = new Set([
+  'ADD_MULTIPLE_NUMBERS',
+  'CALCULATE_PERCENTAGE',
+  'CALCULATE_SUPERANNUATION',
+  'COMPARE_TWO_LISTS',
+  'COMPARE_TWO_TEXT',
+  'MATCH_FILTER_STATUS_COUNT',
+]);
+
+const UNION_VALUE_ACTIONS = new Set([
+  'SELECT_LIST_ITEM',
+  'TABLE_CLICK_ROW',
+]);
+
+const DICTIONARY_VALUE_ACTIONS = new Set([
+  'TABLE_CLICK_COLUMN_DIV_ICON',
+  'TABLE_CLICK_COLUMN_ICON',
+  'TABLE_COLUMN_DIV_CLICK',
+  'TABLE_COLUMN_DIV_DIV_ICON_CLICK',
+  'TABLE_COLUMN_DIV_UPDATE_INNERHTML',
+  'TABLE_COLUMN_IS_CHECKED',
+  'TABLE_SAVE_ROW_COLUMN_DIV_TEXT_IN_DICTIONARY',
+  'TABLE_SAVE_ROW_COLUMN_SPAN_TEXT_IN_DICTIONARY',
+  'TABLE_SAVE_ROW_COLUMN_WITH_MATCHED_STYLE',
+  'TABLE_SELECTED_ROW_NO',
+  'TABLE_SELECT_CHECKBOX',
+  'TABLE_VERIFY_ANY_ROW_WITH_COLUMN_HAS_MATCH_REGEX',
+  'TABLE_VERIFY_ATTRIBUTE_COLUMN_DIV_ICON',
+  'TABLE_VERIFY_COLUMN_ANY_ICON_HAS_ATTRIBUTE_WITH_VALUE',
+  'TABLE_VERIFY_COLUMN_DIV_HAS_STYLE',
+  'TABLE_VERIFY_COLUMN_DIV_HAS_TAG',
+  'TABLE_VERIFY_COLUMN_HEADER_HAS_ICON',
+  'TABLE_VERIFY_COLUMN_HEADER_HAS_ICON_WITH_CLASS_VALUE',
+  'TABLE_VERIFY_COLUMN_ICON_HAS_ATTRIBUTE_WITH_VALUE',
+  'TABLE_VERIFY_COLUMN_VALUE_WITH_REGEX',
+  'TABLE_VERIFY_ROW_COLUMN_DIV_TEXT_IN_DICTIONARY',
+  'TABLE_VERIFY_ROW_COLUMN_DIV_VALUE',
+  'TABLE_VERIFY_ROW_COLUMN_SPAN_TEXT_IN_DICTIONARY',
+  'TABLE_VERIFY_SELECTED_ROW_COLUMN_HAS_ATTRIBUTE_WITH_VALUE',
+  'TABLE_VERIFY_TEXT_BY_COLUMNS_DATA',
+  'MATCH_TABLE_COULMN_DATA_BY_TEXT',
+  'VERIFY_DICTIONARY_KEY_VALUE',
+  'COMPARE_DICTIONARY_VALUES',
+  'UPDATE_DICTIONARY_KEY_VALUE',
+]);
+
+const DICTIONARY_REQUIRED_FIELDS: Record<string, string[]> = {
+  TABLE_SELECTED_ROW_NO: ['rowno', 'attribute', 'findvalue'],
+  TABLE_COLUMN_IS_CHECKED: ['isfound'],
+  TABLE_SAVE_ROW_COLUMN_DIV_TEXT_IN_DICTIONARY: ['rownumber', 'columnnumber'],
+  TABLE_SAVE_ROW_COLUMN_SPAN_TEXT_IN_DICTIONARY: ['rownumber', 'columnnumber'],
+  TABLE_VERIFY_ROW_COLUMN_DIV_TEXT_IN_DICTIONARY: ['rownumber', 'columnnumber'],
+  TABLE_VERIFY_ROW_COLUMN_SPAN_TEXT_IN_DICTIONARY: ['rownumber', 'columnnumber'],
+  TABLE_VERIFY_ROW_COLUMN_DIV_VALUE: ['rownumber', 'columnnumber', 'comparisontype'],
 };
 
+export interface ValidationError {
+  field: keyof ParsedStep;
+  message: string;
+  severity: 'error' | 'warning';
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  errors: ValidationError[];
+}
+
 /**
- * Validate a single step against action registry
+ * XPath Validation
+ * Rules: Must start with //, /, or .
+ * Warn if > 150 chars
  */
-export function validateStep(
-  step: StepData,
-  registry: ActionRegistry,
-  context?: ValidationContext,
-  config: ValidationConfig = DEFAULT_VALIDATION_CONFIG
-): StepValidationResult {
-  const errors: ValidationMessage[] = [];
-  const warnings: ValidationMessage[] = [];
-  const suggestions: ValidationMessage[] = [];
+function validateXPath(xpath: string): ValidationError[] {
+  const errors: ValidationError[] = [];
 
-  // Check 1: Action exists in registry
-  const actionContract = registry.actions[step.action];
-  if (!actionContract) {
-    errors.push({
-      field: 'action',
-      message: `Action "${step.action}" not found in registry. Available actions: ${Object.keys(registry.actions).slice(0, 5).join(', ')}...`,
-      severity: 'error',
-    });
-
-    return {
-      stepId: step.id,
-      isValid: false,
-      errors,
-      warnings,
-      suggestions,
-    };
+  if (!xpath) {
+    return errors;
   }
 
-  // Check 2: Validate parameters against contract
-  const paramValidation = validateParameters(step, actionContract, registry, context, config);
-  errors.push(...paramValidation.errors);
-  warnings.push(...paramValidation.warnings);
-  suggestions.push(...paramValidation.suggestions);
+  // Must start with //, /, or .
+  if (!xpath.match(/^(\/\/|\/|\.)/)) {
+    errors.push({
+      field: 'element',
+      message: 'XPath must start with //, /, or .',
+      severity: 'error',
+    });
+  }
 
-  // Check 3: ElementCategory validation
-  if (step.element && !isValidElementCategoryForType(step.elementCategory, step.element)) {
-    warnings.push({
-      field: 'elementCategory',
-      message: `ElementCategory "${step.elementCategory}" may not match element value. Expected one of: ${getElementCategoriesForElement(step.element)}`,
+  // Basic XPath syntax validation
+  if (!xpath.match(/[@\[\]()='"].*?['"]/) && xpath.includes('[')) {
+    // Has brackets but might be malformed
+    const openBrackets = (xpath.match(/\[/g) || []).length;
+    const closeBrackets = (xpath.match(/\]/g) || []).length;
+    if (openBrackets !== closeBrackets) {
+      errors.push({
+        field: 'element',
+        message: 'XPath bracket mismatch',
+        severity: 'error',
+      });
+    }
+  }
+
+  // Warn if too complex
+  if (xpath.length > 150) {
+    errors.push({
+      field: 'element',
+      message: 'XPath is very long (>150 chars) - consider simplifying',
       severity: 'warning',
     });
   }
 
-  // Check 4: Action-specific validations
-  const actionSpecificValidation = validateActionSpecific(step, actionContract);
-  errors.push(...actionSpecificValidation.errors);
-  warnings.push(...actionSpecificValidation.warnings);
-
-  const isValid = errors.length === 0 && (!config.strict || warnings.length === 0);
-
-  return {
-    stepId: step.id,
-    isValid,
-    errors,
-    warnings,
-    suggestions,
-    details: generateValidationDetails(step, actionContract),
-  };
+  return errors;
 }
 
 /**
- * Validate all steps in an array
+ * Regex Validation
+ * Rules: Must be valid regex pattern
  */
-export function validateSteps(
-  steps: StepData[],
-  registry: ActionRegistry,
-  context?: ValidationContext,
-  config: ValidationConfig = DEFAULT_VALIDATION_CONFIG
-): BulkValidationResult {
-  const stepResults = steps.map((step) => validateStep(step, registry, context, config));
+function validateRegex(pattern: string): ValidationError[] {
+  const errors: ValidationError[] = [];
 
-  const summary = {
-    totalSteps: steps.length,
-    validSteps: stepResults.filter((r) => r.isValid).length,
-    stepsWithErrors: stepResults.filter((r) => r.errors.length > 0).length,
-    stepsWithWarnings: stepResults.filter((r) => r.warnings.length > 0).length,
-  };
-
-  const isValid = stepResults.every((r) => r.isValid);
-
-  return {
-    isValid,
-    stepResults,
-    summary,
-  };
-}
-
-/**
- * Validate step parameters against action contract
- */
-function validateParameters(
-  step: StepData,
-  actionContract: ActionContract,
-  _registry: ActionRegistry,
-  _context?: ValidationContext,
-  config: ValidationConfig = DEFAULT_VALIDATION_CONFIG
-): { errors: ValidationMessage[]; warnings: ValidationMessage[]; suggestions: ValidationMessage[] } {
-  const errors: ValidationMessage[] = [];
-  const warnings: ValidationMessage[] = [];
-  const suggestions: ValidationMessage[] = [];
-
-  const params = actionContract.params;
-
-  // Validate each parameter field
-  const paramFields = ['element', 'value', 'expectedValue', 'key', 'headers'] as const;
-
-  for (const fieldName of paramFields) {
-    const fieldValue = step[fieldName];
-    const paramContract = params[fieldName];
-
-    if (!paramContract) {
-      continue;
-    }
-
-    // Check: Required field is empty
-    if (paramContract.required && !fieldValue) {
-      errors.push({
-        field: fieldName,
-        message: `${fieldName} is required for action "${actionContract.label}"`,
-        severity: 'error',
-        code: 'REQUIRED_FIELD_MISSING',
-      });
-      continue;
-    }
-
-    // Check: Field is used but empty
-    if (paramContract.used && !fieldValue) {
-      suggestions.push({
-        field: fieldName,
-        message: `${fieldName} is expected for this action but is empty`,
-        severity: 'info',
-      });
-      continue;
-    }
-
-    // Check: Field is not used but has value
-    if (!paramContract.used && fieldValue) {
-      if (!config.allowUnused) {
-        warnings.push({
-          field: fieldName,
-          message: `${fieldName} is not used for action "${actionContract.label}" - consider removing it`,
-          severity: 'warning',
-          code: 'UNUSED_FIELD',
-        });
-      }
-      continue;
-    }
-
-    if (!fieldValue) {
-      continue; // Skip validation for empty fields that aren't required
-    }
-
-    // Validate parameter type
-    const typeValidation = validateParameterType(fieldValue, paramContract, fieldName);
-    if (typeValidation.error) {
-      errors.push({
-        field: fieldName,
-        message: typeValidation.error,
-        severity: 'error',
-        code: 'INVALID_TYPE',
-      });
-    }
-
-    // Check: Allowed values
-    if (paramContract.allowedValues && !paramContract.allowedValues.includes(fieldValue)) {
-      errors.push({
-        field: fieldName,
-        message: `${fieldName} must be one of: ${paramContract.allowedValues.join(', ')}. Got: "${fieldValue}"`,
-        severity: 'error',
-        code: 'INVALID_VALUE',
-        suggestedValue: paramContract.allowedValues[0],
-      });
-    }
-
-    // Check: Format/pattern matching for union types
-    if (paramContract.formats) {
-      if (!matchesFormat(fieldValue, paramContract.formats)) {
-        errors.push({
-          field: fieldName,
-          message: `${fieldName} format invalid. Expected one of: ${paramContract.formats.join(', ')}`,
-          severity: 'error',
-          code: 'FORMAT_MISMATCH',
-        });
-      }
-    }
-
-    // Check: Dictionary fields present
-    if (paramContract.fields && paramContract.type === 'dictionary') {
-      const dictValidation = validateDictionary(fieldValue, paramContract.fields);
-      if (!dictValidation.valid) {
-        warnings.push({
-          field: fieldName,
-          message: `Dictionary may be missing fields: ${dictValidation.missing.join(', ')}`,
-          severity: 'warning',
-        });
-      }
-    }
-  }
-
-  return { errors, warnings, suggestions };
-}
-
-/**
- * Validate parameter type
- */
-function validateParameterType(
-  value: string,
-  paramContract: any,
-  fieldName: string
-): { error?: string } {
-  const { type } = paramContract;
-
-  switch (type) {
-    case 'none':
-      if (value) {
-        return { error: `${fieldName} should be empty for this action` };
-      }
-      break;
-
-    case 'xpath':
-      if (!isValidXPath(value)) {
-        return { error: `${fieldName} appears to be invalid XPath syntax` };
-      }
-      break;
-
-    case 'boolean':
-      if (!['true', 'false', 'True', 'False'].includes(value)) {
-        return { error: `${fieldName} must be 'true' or 'false'` };
-      }
-      break;
-
-    case 'regex':
-      try {
-        new RegExp(value);
-      } catch {
-        return { error: `${fieldName} is not a valid regex pattern` };
-      }
-      break;
-
-    case 'text':
-    case 'saved-key':
-    case 'column-header':
-      if (typeof value !== 'string' || value.trim() === '') {
-        return { error: `${fieldName} must be a non-empty string` };
-      }
-      break;
-
-    case 'csv-saved-keys':
-      // Validate comma-separated keys
-      const keys = value.split(',').map((k) => k.trim());
-      if (keys.length === 0 || keys.some((k) => !k)) {
-        return { error: `${fieldName} must be comma-separated key names` };
-      }
-      break;
-
-    // Other types: allow any string
-    default:
-      break;
-  }
-
-  return {};
-}
-
-/**
- * Validate XPath syntax (basic check)
- */
-function isValidXPath(xpath: string): boolean {
-  if (!xpath) {
-    return true; // Empty is valid
+  if (!pattern) {
+    return errors;
   }
 
   try {
-    // Very basic check - just ensure it starts with // or / or contains [ or @
-    if (xpath.includes('//') || xpath.startsWith('/') || xpath.includes('[') || xpath.includes('@')) {
-      return true;
-    }
-    return xpath.length > 0;
-  } catch {
-    return false;
+    new RegExp(pattern);
+  } catch (e) {
+    errors.push({
+      field: 'expectedValue',
+      message: `Invalid regex: ${(e as Error).message}`,
+      severity: 'error',
+    });
   }
+
+  return errors;
 }
 
 /**
- * Check if value matches any of the allowed formats
+ * CSV Saved Keys Validation
+ * Rules: Comma-separated keys with count validation
+ * Example: "key1, key2, key3"
  */
-function matchesFormat(value: string, formats: string[]): boolean {
-  return formats.some((format) => {
+function validateCSVSavedKeys(value: string, expectedCount?: number): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  if (!value) {
+    return errors;
+  }
+
+  const keys = value
+    .split(',')
+    .map((k) => k.trim())
+    .filter((k) => k.length > 0);
+
+  // Validate each key format (alphanumeric, underscore, hyphen)
+  keys.forEach((key, index) => {
+    if (!key.match(/^[a-zA-Z0-9_-]+$/)) {
+      errors.push({
+        field: 'key',
+        message: `Key ${index + 1} ("${key}") contains invalid characters. Use alphanumeric, underscore, or hyphen only.`,
+        severity: 'error',
+      });
+    }
+  });
+
+  // Check count if expected
+  if (expectedCount && keys.length !== expectedCount) {
+    errors.push({
+      field: 'key',
+      message: `Expected ${expectedCount} comma-separated keys, got ${keys.length}`,
+      severity: 'error',
+    });
+  }
+
+  return errors;
+}
+
+/**
+ * Union Type Validation
+ * Rules: Must match one of the specified formats
+ * Examples: "count", "take:x,skip:y"
+ */
+function validateUnionType(
+  value: string,
+  formats: string[]
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  if (!value) {
+    return errors;
+  }
+
+  const isValid = formats.some(format => {
     if (format === 'count') {
       return /^\d+$/.test(value);
     }
-    if (format.startsWith('take:')) {
+    if (format === 'take:x,skip:y') {
       return /^take:\d+,skip:\d+$/.test(value);
     }
-    if (format === 'ascending' || format === 'descending') {
-      return value === format;
-    }
-    // For other formats, just check if exact match
-    return value === format;
+    return false;
   });
+
+  if (!isValid) {
+    errors.push({
+      field: 'value',
+      message: `Value must match one of: ${formats.join(' | ')}`,
+      severity: 'error',
+    });
+  }
+
+  return errors;
 }
 
 /**
- * Validate dictionary structure
+ * Dictionary-style payload validation.
+ * Expected format: key:value,key:value
  */
-function validateDictionary(
-  value: string,
-  expectedFields: string[]
-): { valid: boolean; missing: string[] } {
-  const missing: string[] = [];
+function validateDictionaryPayload(value: string, requiredFields: string[] = []): ValidationError[] {
+  const errors: ValidationError[] = [];
+  if (!value) return errors;
 
-  // Try to parse as key:value pairs
-  const pairs = value.split(',').map((p) => p.trim());
+  const parts = value.split(',').map((part) => part.trim()).filter(Boolean);
+  const parsedKeys = new Set<string>();
 
-  for (const field of expectedFields) {
-    const found = pairs.some((p) => p.startsWith(`${field}:`));
-    if (!found) {
-      missing.push(field);
+  parts.forEach((part) => {
+    const [key, ...rest] = part.split(':');
+    if (!key || rest.length === 0) {
+      errors.push({
+        field: 'value',
+        message: `Invalid dictionary token "${part}". Use key:value format.`,
+        severity: 'error',
+      });
+      return;
+    }
+
+    parsedKeys.add(key.trim().toLowerCase());
+  });
+
+  requiredFields.forEach((requiredField) => {
+    if (!parsedKeys.has(requiredField.toLowerCase())) {
+      errors.push({
+        field: 'value',
+        message: `Required dictionary field missing: ${requiredField}`,
+        severity: 'error',
+      });
+    }
+  });
+
+  return errors;
+}
+
+/**
+ * Required Field Validation
+ * Rules: Field cannot be empty if marked required in contract
+ */
+function validateRequired(
+  value: string | boolean | undefined,
+  field: ContractField,
+  isRequired: boolean
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  if (!isRequired) {
+    return errors;
+  }
+
+  if (value === undefined || value === null || value === '') {
+    const fieldNames: Record<string, string> = {
+      action: 'Action',
+      element: 'Locator',
+      elementCategory: 'Locator Type',
+      value: 'Value',
+      expectedValue: 'Expected Value',
+      key: 'Data Key',
+      headers: 'Headers',
+      elementReplaceTextDataKey: 'Dynamic Locator Key',
+      isElementPathDynamic: 'Dynamic Element Path',
+      isConcatenated: 'Concatenated Compare',
+    };
+
+    errors.push({
+      field,
+      message: `${fieldNames[String(field)] || String(field)} is required`,
+      severity: 'error',
+    });
+  }
+
+  return errors;
+}
+
+/**
+ * Element Category Specific Validation
+ */
+function validateElementByCategory(
+  element: string,
+  category: string
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  if (!element || !category) {
+    return errors;
+  }
+
+  switch (category) {
+    case 'XPATH':
+      return validateXPath(element);
+
+    case 'ID':
+      if (element.startsWith('#')) {
+        errors.push({
+          field: 'element',
+          message: 'ID field should not include # symbol - use raw id only',
+          severity: 'warning',
+        });
+      }
+      break;
+
+    case 'CSS':
+      // CSS selectors are flexible, minimal validation
+      if (element.length < 2) {
+        errors.push({
+          field: 'element',
+          message: 'CSS selector seems too short',
+          severity: 'warning',
+        });
+      }
+      break;
+
+    case 'JSPATH':
+      if (!element.includes('document') && !element.includes('window')) {
+        errors.push({
+          field: 'element',
+          message: 'JavaScript path should use document or window object',
+          severity: 'warning',
+        });
+      }
+      break;
+
+    case 'LINKTEXT':
+      // Link text should be human readable
+      if (element.length < 1) {
+        errors.push({
+          field: 'element',
+          message: 'Link text is empty',
+          severity: 'error',
+        });
+      }
+      break;
+  }
+
+  return errors;
+}
+
+/**
+ * Dynamic Locator Validation
+ * Rules: If isElementPathDynamic=true, elementReplaceTextDataKey must exist
+ * Element must contain $$ or Datakey tokens
+ */
+function validateDynamicLocator(step: ParsedStep): ValidationError[] {
+  const errors: ValidationError[] = [];
+
+  if (!step.isElementPathDynamic) {
+    return errors;
+  }
+
+  // Must have replacement key
+  if (!step.elementReplaceTextDataKey) {
+    errors.push({
+      field: 'elementReplaceTextDataKey',
+      message: 'Dynamic locator enabled but no replacement key provided',
+      severity: 'error',
+    });
+  }
+
+  // Element must contain replacement token
+  if (step.element) {
+    const hasToken = step.element.includes('$$') || /Datakey\d+/.test(step.element);
+    if (!hasToken) {
+      errors.push({
+        field: 'element',
+        message: 'Dynamic locator enabled but element contains no $$ or Datakey tokens',
+        severity: 'error',
+      });
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * CSV Save Keys Format Validation
+ * Used in actions like CALCULATE_PERCENTAGE with "two input keys"
+ */
+function parseCSVKeyCount(description?: string): number | null {
+  if (!description) return null;
+
+  const match = description.match(/(\d+|\w+)\s+(?:input\s+)?keys?/i);
+  if (!match) return null;
+
+  const words: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+  };
+
+  const token = match[1].toLowerCase();
+  if (/^\d+$/.test(token)) {
+    return Number(token);
+  }
+
+  return words[token] || null;
+}
+
+/**
+ * Main Validation Function
+ */
+export function validateStep(step: ParsedStep): ValidationResult {
+  const errors: ValidationError[] = [];
+  const actionDef = getActionDefinition(step.action);
+
+  if (!actionDef) {
+    return { isValid: true, errors: [] };
+  }
+
+  const contract = actionDef.contract;
+
+  // Validate required fields
+  CONTRACT_FIELDS.forEach((field) => {
+    if (contract[field] === 'required') {
+      errors.push(...validateRequired(step[field], field, true));
+    }
+  });
+
+  // Validate element-specific rules
+  if (step.element && step.elementCategory) {
+    errors.push(...validateElementByCategory(step.element, step.elementCategory));
+  }
+
+  // Validate element + ElementCategory authoring combinations
+  const combinationResult = validateElementAuthoringCombination(
+    step.action,
+    step.elementCategory ?? ''
+  );
+  if (!combinationResult.valid && combinationResult.message) {
+    errors.push({ field: 'element', message: combinationResult.message, severity: 'error' });
+  }
+
+  // Validate dynamic locator
+  errors.push(...validateDynamicLocator(step));
+
+  // Action-specific validation
+  if (step.action === 'COMPARE_ELEMENT_VALUE_WITH_REGEX' && step.expectedValue) {
+    errors.push(...validateRegex(step.expectedValue));
+  }
+
+  if (step.key && CSV_INPUT_KEY_ACTIONS.has(step.action)) {
+    const expectedCount = step.action === 'CALCULATE_PERCENTAGE'
+      ? 2
+      : parseCSVKeyCount(`${actionDef.description} ${actionDef.notes ?? ''}`) ?? undefined;
+    errors.push(...validateCSVSavedKeys(step.key, expectedCount));
+  }
+
+  if (step.value && UNION_VALUE_ACTIONS.has(step.action)) {
+    errors.push(...validateUnionType(step.value, ['count', 'take:x,skip:y']));
+  }
+
+  if (step.value && DICTIONARY_VALUE_ACTIONS.has(step.action)) {
+    errors.push(...validateDictionaryPayload(step.value, DICTIONARY_REQUIRED_FIELDS[step.action] ?? []));
+  }
+
+  if (
+    step.expectedValue
+    && contract.expectedValue === 'required'
+    && (
+      step.action.startsWith('IS')
+      || step.action.startsWith('CHECK_')
+      || step.action.includes('VERIFY_')
+    )
+  ) {
+    const normalized = step.expectedValue.trim().toLowerCase();
+    if (normalized !== 'true' && normalized !== 'false') {
+      errors.push({
+        field: 'expectedValue',
+        message: 'Expected Value should usually be "true" or "false" for this assertion action.',
+        severity: 'warning',
+      });
     }
   }
 
   return {
-    valid: missing.length === 0,
-    missing,
+    isValid: errors.filter(e => e.severity === 'error').length === 0,
+    errors,
   };
 }
 
 /**
- * Action-specific validation rules
+ * Validate all steps
  */
-function validateActionSpecific(
-  step: StepData,
-  _actionContract: ActionContract
-): { errors: ValidationMessage[]; warnings: ValidationMessage[] } {
-  const errors: ValidationMessage[] = [];
-  const warnings: ValidationMessage[] = [];
+export function validateAllSteps(steps: ParsedStep[]): Map<number, ValidationResult> {
+  const results = new Map<number, ValidationResult>();
 
-  const action = step.action.toUpperCase();
+  steps.forEach((step) => {
+    results.set(step.index, validateStep(step));
+  });
 
-  // Example specific rules
-  if (action === 'DRAG_DROP') {
-    if (!step.element) {
-      errors.push({
-        field: 'element',
-        message: 'DRAG_DROP requires source element (drag from this)',
-        severity: 'error',
-      });
-    }
-    if (!step.value) {
-      errors.push({
-        field: 'value',
-        message: 'DRAG_DROP requires target element in Value field (drag to this)',
-        severity: 'error',
-      });
-    }
-  }
-
-  if (action === 'FILTER_BY' || action === 'FILTER_BY_DYNAMIC_VALUE') {
-    if (!step.headers) {
-      errors.push({
-        field: 'headers',
-        message: `${action} requires column header in Headers field`,
-        severity: 'error',
-      });
-    }
-  }
-
-  if (action === 'VERIFY_DICTIONARY_KEY_VALUE' || action === 'COMPARE_TWO_TEXT') {
-    if (!step.key) {
-      errors.push({
-        field: 'key',
-        message: `${action} requires dictionary key in Key field`,
-        severity: 'error',
-      });
-    }
-  }
-
-  return { errors, warnings };
+  return results;
 }
 
 /**
- * Check if ElementCategory matches element format
+ * Get validation status summary
  */
-function isValidElementCategoryForType(category: string, element: string): boolean {
-  if (!element) {
-    return true;
-  }
+export function getValidationSummary(
+  validationResults: Map<number, ValidationResult>
+): {
+  totalSteps: number;
+  validSteps: number;
+  stepsWithErrors: number;
+  stepsWithWarnings: number;
+  totalErrors: number;
+  totalWarnings: number;
+} {
+  let validSteps = 0;
+  let stepsWithErrors = 0;
+  let stepsWithWarnings = 0;
+  let totalErrors = 0;
+  let totalWarnings = 0;
 
-  switch (category.toUpperCase()) {
-    case 'XPATH':
-      return element.includes('/') || element.includes('@');
-    case 'ID':
-      return !element.includes('/') && !element.includes('[');
-    case 'CSSSELECTOR':
-      return element.includes('.') || element.includes('#') || element.includes('[');
-    case 'TAGNAME':
-      return /^[a-z]+$/i.test(element);
-    default:
-      return true;
-  }
-}
+  validationResults.forEach((result) => {
+    if (result.isValid && result.errors.length === 0) {
+      validSteps++;
+    }
 
-/**
- * Get suggested element categories for a given element string
- */
-function getElementCategoriesForElement(element: string): string[] {
-  const suggestions: string[] = [];
+    const hasErrors = result.errors.some(e => e.severity === 'error');
+    const hasWarnings = result.errors.some(e => e.severity === 'warning');
 
-  if (element.includes('/') || element.includes('@')) {
-    suggestions.push('XPATH');
-  }
-  if (!element.includes('/')) {
-    suggestions.push('ID', 'CSSSELECTOR');
-  }
-  if (/^[a-z]+$/i.test(element)) {
-    suggestions.push('TAGNAME');
-  }
+    if (hasErrors) stepsWithErrors++;
+    if (hasWarnings) stepsWithWarnings++;
 
-  return suggestions.length > 0 ? suggestions : ['XPATH'];
-}
+    totalErrors += result.errors.filter(e => e.severity === 'error').length;
+    totalWarnings += result.errors.filter(e => e.severity === 'warning').length;
+  });
 
-/**
- * Generate human-readable validation details
- */
-function generateValidationDetails(step: StepData, actionContract: ActionContract): string {
-  return `Step: ${actionContract.label} (${step.action})
-  Element: ${step.element || '(none)'}
-  Category: ${step.elementCategory}
-  Category Notes: ${actionContract.notes}`;
-}
-
-/**
- * Get validation error summary
- */
-export function getValidationSummary(result: BulkValidationResult): string {
-  const { summary } = result;
-  return `Validation: ${summary.validSteps}/${summary.totalSteps} valid, ${summary.stepsWithErrors} errors, ${summary.stepsWithWarnings} warnings`;
+  return {
+    totalSteps: validationResults.size,
+    validSteps,
+    stepsWithErrors,
+    stepsWithWarnings,
+    totalErrors,
+    totalWarnings,
+  };
 }

@@ -3,8 +3,13 @@
  * Shows validation errors and warnings inline
  */
 
-import { ValidationError } from '../../utils/stepValidation';
+/**
+ * Step Validation Display Component
+ * Shows validation errors and warnings inline
+ */
+/*import type {ValidationError} from '../../utils/stepValidation';*/
 
+/*
 interface StepValidationDisplayProps {
   errors: ValidationError[];
   className?: string;
@@ -74,16 +79,17 @@ function getFieldLabel(field: string): string {
   };
   return labels[field] || field;
 }
+*/
 
 /**
  * Field-level validation indicator
  */
-interface FieldValidationIndicatorProps {
+/*interface FieldValidationIndicatorProps {
   hasError: boolean;
   hasWarning: boolean;
-}
+}*/
 
-export function FieldValidationIndicator({
+/*export function FieldValidationIndicator({
   hasError,
   hasWarning,
 }: FieldValidationIndicatorProps) {
@@ -96,16 +102,16 @@ export function FieldValidationIndicator({
       {hasError ? '✕' : '⚠'}
     </div>
   );
-}
+}*/
 
 /**
  * Inline field error message
  */
-interface FieldErrorMessageProps {
+/*interface FieldErrorMessageProps {
   error?: ValidationError;
-}
+}*/
 
-export function FieldErrorMessage({ error }: FieldErrorMessageProps) {
+/*export function FieldErrorMessage({ error }: FieldErrorMessageProps) {
   if (!error) {
     return null;
   }
@@ -115,4 +121,4 @@ export function FieldErrorMessage({ error }: FieldErrorMessageProps) {
       {error.message}
     </div>
   );
-}
+}*/

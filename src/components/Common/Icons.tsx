@@ -40,21 +40,21 @@ export function IconArrowRight(props: IconProps) {
   return <MaterialIcon name="arrow_forward" {...props} />;
 }
 
-export function IconPlus(props: IconProps) {
+/*export function IconPlus(props: IconProps) {
   return <MaterialIcon name="add" {...props} />;
-}
+}*/
 
 export function IconSave(props: IconProps) {
   return <MaterialIcon name="save" {...props} />;
 }
 
-export function IconDownload(props: IconProps) {
+/*export function IconDownload(props: IconProps) {
   return <MaterialIcon name="download" {...props} />;
-}
+}*/
 
-export function IconTrash(props: IconProps) {
+/*export function IconTrash(props: IconProps) {
   return <MaterialIcon name="delete" {...props} />;
-}
+}*/
 
 export function IconCopy(props: IconProps) {
   return <MaterialIcon name="content_copy" {...props} />;
@@ -83,11 +83,6 @@ export function IconEdit(props: IconProps) {
 export function IconHelp(props: IconProps) {
   return <MaterialIcon name="help" {...props} />;
 }
-
-export function IconExpandMore(props: IconProps) {
-  return <MaterialIcon name="keyboard_arrow_down" {...props} />;
-}
-
 export function IconChevronDown(props: IconProps) {
   return <MaterialIcon name="expand_more" {...props} />;
 }
@@ -99,11 +94,6 @@ export function IconFolder(props: IconProps) {
 export function IconFolderOpen(props: IconProps) {
   return <MaterialIcon name="folder_open" {...props} />;
 }
-
-export function IconDragHandle(props: IconProps) {
-  return <MaterialIcon name="drag_indicator" {...props} />;
-}
-
 export function IconFilterList(props: IconProps) {
   return <MaterialIcon name="filter_list" {...props} />;
 }

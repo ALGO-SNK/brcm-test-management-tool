@@ -5,7 +5,7 @@
 export interface ADOWorkItem {
   id: number;
   rev: number;
-  fields: Record<string, any>;
+  fields: Record<string, unknown>;
   _links: {
     self: { href: string };
     workItemUpdates: { href: string };
@@ -36,9 +36,11 @@ export interface ADOTestPlan {
   areaPath: string;
   iteration: string;
   _links: {
-    self: { href: string };
-    clientUrl: { href: string };
-    rootSuite: { href: string };
+    self?: { href: string };
+    _self?: { href: string };
+    clientUrl?: { href: string };
+    rootSuite?: { href: string };
+    [key: string]: { href: string } | undefined;
   };
 }
 
@@ -54,44 +56,100 @@ export interface ADOTestSuite {
   testCaseCount?: number;
   requirementId?: number;
   _links: {
-    self: { href: string };
-    testCases: { href: string };
-    childSuites: { href: string };
+    self?: { href: string };
+    _self?: { href: string };
+    testCases?: { href: string };
+    childSuites?: { href: string };
+    [key: string]: { href: string } | undefined;
   };
+}
+
+export interface ADOListResponse<T> {
+  value: T[];
+  count?: number;
+}
+
+export interface WorkspaceConnectionSettings {
+  organization: string;
+  projectName: string;
+  patToken: string;
+  apiVersion: string;
+}
+
+export interface ADOIdentity {
+  displayName: string;
+  uniqueName: string;
+  imageUrl?: string;
+  avatarUrl?: string;
 }
 
 export interface ADOTestCase {
   id: number;
   name: string;
-  state: 'Active' | 'Design' | 'Ready' | 'Inactive';
-  priority: 1 | 2 | 3 | 4;
-  assignedTo?: {
-    displayName: string;
-    uniqueName: string;
-  };
+  state: string;
+  priority: number;
+  testPlanName?: string;
+  testSuiteName?: string;
+  configurationName?: string;
+  automationStatus?: string;
+  assignedTo?: ADOIdentity;
+  tester?: ADOIdentity;
   lastUpdatedDate: string;
-  lastUpdatedBy?: {
-    displayName: string;
-    uniqueName: string;
-  };
-  fields: Record<string, any>;
+  lastUpdatedBy?: ADOIdentity;
+  fields: Record<string, unknown>;
   _links: {
-    self: { href: string };
+    self?: { href: string };
+    _self?: { href: string };
+    workItem?: { href: string };
+    [key: string]: { href: string } | undefined;
   };
 }
 
-export interface ConnectionConfig {
-  organization: string;      // https://dev.azure.com/your-org
-  project: string;           // Project name
-  patToken: string;          // Personal Access Token (encrypted)
-  apiVersion: string;        // e.g., "7.1"
-  connected: boolean;
-  lastConnected?: string;    // ISO timestamp
+export interface ADOTestCaseListItem {
+  testPlan?: {
+    id: number;
+    name: string;
+  };
+  testSuite?: {
+    id: number;
+    name: string;
+  };
+  workItem?: {
+    id: number;
+    name?: string;
+    workItemFields?: Record<string, unknown>[];
+  };
+  pointAssignments?: Array<{
+    id: number;
+    configurationName?: string;
+    configurationId?: number;
+    tester?: {
+      displayName?: string;
+      uniqueName?: string;
+      imageUrl?: string;
+      _links?: {
+        avatar?: { href?: string };
+      };
+    } | null;
+  }>;
+  links?: {
+    _self?: { href: string };
+    [key: string]: { href: string } | undefined;
+  };
 }
 
-export interface APIError {
-  message: string;
-  statusCode: number;
-  innerException?: string;
-  typeKey?: string;
-}
+// export interface ConnectionConfig {
+//   organization: string;      // https://dev.azure.com/your-org
+//   project: string;           // Project name
+//   patToken: string;          // Personal Access Token (encrypted)
+//   apiVersion: string;        // e.g., "7.1"
+//   connected: boolean;
+//   lastConnected?: string;    // ISO timestamp
+// }
+
+// export interface APIError {
+//   message: string;
+//   statusCode: number;
+//   innerException?: string;
+//   typeKey?: string;
+// }

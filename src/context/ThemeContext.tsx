@@ -9,69 +9,52 @@ import {
   type ThemeMode,
 } from './themeContext.shared';
 
-const THEME_MODE_KEY = 'theme-mode';
+const THEME_MODE_KEY   = 'theme-mode';
 const THEME_ACCENT_KEY = 'theme-accent';
-const THEME_FONT_KEY = 'theme-font';
+const THEME_FONT_KEY   = 'theme-font';
 
-const THEME_MODES: ThemeMode[] = [
-  'dark',
-  'midnight',
-  'slate',
-  'light',
-  'mist',
-  'dawn',
-  'oneui-dark',
-  'oneui-light',
-  'macos-dark',
-  'macos-light',
-];
+const THEME_MODES: ThemeMode[] = ['dark', 'light', 'paper', 'high-contrast'];
 
-const LIGHT_MODES: ThemeMode[] = ['light', 'mist', 'dawn', 'oneui-light', 'macos-light'];
+const LIGHT_MODES: ThemeMode[] = ['light'];
 
 const THEME_TOGGLE_MAP: Record<ThemeMode, ThemeMode> = {
-  dark: 'light',
-  light: 'dark',
-  midnight: 'mist',
-  mist: 'midnight',
-  slate: 'dawn',
-  dawn: 'slate',
-  'oneui-dark': 'oneui-light',
-  'oneui-light': 'oneui-dark',
-  'macos-dark': 'macos-light',
-  'macos-light': 'macos-dark',
+  dark:            'light',
+  light:           'dark',
+  paper:           'dark',
+  'high-contrast': 'dark',
 };
 
 function parseThemeMode(value: string | null): ThemeMode {
   if (value && THEME_MODES.includes(value as ThemeMode)) return value as ThemeMode;
-  return 'oneui-dark';
+  return 'dark';
 }
 
 function parseAccent(value: string | null): AccentMode {
-  if (value && ACCENT_OPTIONS.some((item) => item.value === value)) return value as AccentMode;
-  return 'blue';
+  if (value && ACCENT_OPTIONS.some((o) => o.value === value)) return value as AccentMode;
+  return 'indigo';
 }
 
 function parseFont(value: string | null): AppFontMode {
-  if (value && APP_FONT_OPTIONS.some((item) => item.value === value)) return value as AppFontMode;
-  return 'system-default';
+  if (value && APP_FONT_OPTIONS.some((o) => o.value === value)) return value as AppFontMode;
+  return 'ibm-plex-mono';
 }
 
 export function ThemeContextProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<ThemeMode>(() => {
-    return parseThemeMode(localStorage.getItem(THEME_MODE_KEY));
-  });
-  const [accent, setAccentMode] = useState<AccentMode>(() => {
-    return parseAccent(localStorage.getItem(THEME_ACCENT_KEY));
-  });
-  const [font, setFontMode] = useState<AppFontMode>(() => {
-    return parseFont(localStorage.getItem(THEME_FONT_KEY));
-  });
+  const [mode, setMode] = useState<ThemeMode>(() =>
+    parseThemeMode(localStorage.getItem(THEME_MODE_KEY)),
+  );
+  const [accent, setAccentMode] = useState<AccentMode>(() =>
+    parseAccent(localStorage.getItem(THEME_ACCENT_KEY)),
+  );
+  const [font, setFontMode] = useState<AppFontMode>(() =>
+    parseFont(localStorage.getItem(THEME_FONT_KEY)),
+  );
 
   const toggleTheme = useCallback(() => {
     setMode((prev) => {
-      const newMode: ThemeMode = THEME_TOGGLE_MAP[prev] ?? (LIGHT_MODES.includes(prev) ? 'dark' : 'light');
-      localStorage.setItem(THEME_MODE_KEY, newMode);
-      return newMode;
+      const next = THEME_TOGGLE_MAP[prev] ?? (LIGHT_MODES.includes(prev) ? 'dark' : 'light');
+      localStorage.setItem(THEME_MODE_KEY, next);
+      return next;
     });
   }, []);
 
@@ -90,6 +73,8 @@ export function ThemeContextProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(THEME_FONT_KEY, newFont);
   }, []);
 
+  // Apply [data-theme], [data-accent], [data-font] to <html>
+  // style.css uses these selectors for theming
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', mode);
   }, [mode]);
@@ -99,7 +84,8 @@ export function ThemeContextProvider({ children }: { children: ReactNode }) {
   }, [accent]);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-app-font', font);
+    // style.css uses [data-font="..."] (not data-app-font)
+    document.documentElement.setAttribute('data-font', font);
   }, [font]);
 
   return (

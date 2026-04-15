@@ -95,7 +95,7 @@ export function SuiteTreePanel({
       }
     };
 
-    load();
+    load().then();
     return () => { active = false; };
   }, [plan, workspaceSettings]);
 

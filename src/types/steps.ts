@@ -4,16 +4,17 @@
  */
 
 export type ElementCategory =
-  | 'XPATH'
-  | 'ID'
-  | 'TAGNAME'
-  | 'CSSSELECTOR'
-  | 'LINKTEXT'
-  | 'NAME'
-  | 'URL'
-  | 'JSPATH'
-  | 'VERIFY'
-  | 'VERIFYERROR';
+    | 'ID'
+    | 'NAME'
+    | 'LINKTEXT'
+    | 'PARTIALLINKTEXT'
+    | 'CSSSELECTOR'
+    | 'XPATH'
+    | 'TAGNAME'
+    | 'JSPATH'
+    | 'URL'
+    | 'VERIFY'
+    | 'VERIFYERROR';
 
 export interface StepData {
   // Core fields
@@ -37,12 +38,12 @@ export interface StepData {
   // Advanced fields
   isConcatenated?: boolean;     // Toggle concatenated compare logic
   isElementPathDynamic?: boolean; // Enable dynamic locator replacement
-  elementReplaceKey?: string;   // Dynamic locator replacement key
+  elementReplaceTextDataKey?: string; // Dynamic locator replacement key
 
   // Optional fields
   expectedResult?: string;
   variantId?: string;
-  extraFields?: Record<string, any>;
+  extraFields?: Record<string, unknown>;
 
   // UI state
   order?: number;               // Display order in list
@@ -50,39 +51,8 @@ export interface StepData {
   updatedAt?: string;           // ISO timestamp
 }
 
-export interface StepValidationError {
-  stepId: string;
-  field: string;
-  message: string;
-  severity: 'error' | 'warning';
-  suggestedValue?: string;
-}
-
-export interface StepEditorState {
-  steps: StepData[];
-  selectedStepId: string | null;
-  errors: StepValidationError[];
-  isLoading: boolean;
-  isDirty: boolean;
-}
-
-export interface StepTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  step: Partial<StepData>;
-  createdAt: string;
-  isBuiltIn: boolean;
-}
-
 export interface XMLParseResult {
   steps: StepData[];
   errors: string[];
   warnings: string[];
-}
-
-export interface XMLSerializeResult {
-  xml: string;
-  errors: string[];
 }

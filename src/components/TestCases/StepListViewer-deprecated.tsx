@@ -1,9 +1,14 @@
-/**
+/*
+/!**
  * Step List Viewer
  * Displays test steps in read-only view mode
- */
+ *!/
 
-import { ParsedStep } from './StepsEditor';
+/!**
+ * Step List Viewer
+ * Displays test steps in read-only view mode
+ *!/
+import type {ParsedStep} from './StepsEditor';
 import { ACTION_REGISTRY } from '../../utils/actionRegistry';
 
 interface StepListViewerProps {
@@ -15,14 +20,14 @@ function getActionLabel(actionName: string): string {
   return definition?.description || actionName;
 }
 
-function getActionCategory(actionName: string): string {
-  const definition = ACTION_REGISTRY[actionName];
-  return definition?.category || 'unknown';
-}
+// function getActionCategory(actionName: string): string {
+//   const definition = ACTION_REGISTRY[actionName];
+//   return definition?.category || 'unknown';
+// }
 
 function formatParameterValue(value: string | boolean | undefined): string {
   if (!value) return '—';
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'boolean') return value? 'Yes' : 'No';
   if (typeof value === 'string' && value.length > 50) {
     return value.substring(0, 47) + '...';
   }
@@ -45,7 +50,7 @@ export function StepListViewer({ steps }: StepListViewerProps) {
       <div className="steps-viewer__list">
         {steps.map((step) => (
           <div key={`step-${step.index}`} className="steps-viewer__step">
-            {/* Step Header */}
+            {/!* Step Header *!/}
             <div className="steps-viewer__step-header">
               <div className="steps-viewer__step-number">{step.index}</div>
 
@@ -65,9 +70,9 @@ export function StepListViewer({ steps }: StepListViewerProps) {
               )}
             </div>
 
-            {/* Step Details */}
+            {/!* Step Details *!/}
             <div className="steps-viewer__step-details">
-              {/* Element Information */}
+              {/!* Element Information *!/}
               {(step.element || step.elementCategory) && (
                 <div className="steps-viewer__detail-group">
                   <h4 className="steps-viewer__detail-label">Locator</h4>
@@ -96,7 +101,7 @@ export function StepListViewer({ steps }: StepListViewerProps) {
                 </div>
               )}
 
-              {/* Action Parameters */}
+              {/!* Action Parameters *!/}
               {(step.value || step.expectedValue) && (
                 <div className="steps-viewer__detail-group">
                   <h4 className="steps-viewer__detail-label">Parameters</h4>
@@ -115,7 +120,7 @@ export function StepListViewer({ steps }: StepListViewerProps) {
                 </div>
               )}
 
-              {/* Data Store Keys */}
+              {/!* Data Store Keys *!/}
               {(step.key || step.headers) && (
                 <div className="steps-viewer__detail-group">
                   <h4 className="steps-viewer__detail-label">Data & Headers</h4>
@@ -134,7 +139,7 @@ export function StepListViewer({ steps }: StepListViewerProps) {
                 </div>
               )}
 
-              {/* Flags */}
+              {/!* Flags *!/}
               {(step.isConcatenated) && (
                 <div className="steps-viewer__detail-group">
                   <h4 className="steps-viewer__detail-label">Flags</h4>
@@ -151,7 +156,7 @@ export function StepListViewer({ steps }: StepListViewerProps) {
         ))}
       </div>
 
-      {/* Summary */}
+      {/!* Summary *!/}
       <div className="steps-viewer__footer">
         <div className="steps-viewer__summary">
           <span className="steps-viewer__summary-label">Total Steps:</span>
@@ -161,3 +166,4 @@ export function StepListViewer({ steps }: StepListViewerProps) {
     </div>
   );
 }
+*/

@@ -11,69 +11,70 @@ interface LandingProps {
   workspaceSettings: WorkspaceSettingsValues;
 }
 
-export function Landing({ onSelectPlan, onSettingsClick, workspaceSettings }: LandingProps) {
+export function Landing({
+                          onSelectPlan,
+                          onSettingsClick,
+                          workspaceSettings,
+                        }: LandingProps) {
   const [planCount, setPlanCount] = useState(0);
-  const projectName = workspaceSettings.projectName.trim() || 'Azure Test Plans';
+
+  const projectName =
+      workspaceSettings.projectName.trim() || 'Azure Test Plans';
 
   return (
-    <MainLayout title={projectName} onSettingsClick={onSettingsClick}>
-      <div>
-        {/* Hero Section */}
-        <div className="hero">
-          <div className="hero__top mb-lg">
-            <div className="hero__intro">
-              <h1 className="hero__title text-3xl">
-                {projectName}
-              </h1>
-              <p className="hero__copy text-sm text-secondary">
-                Pick a plan to continue into the suite tree, then move through test cases and details without changing the app's visual language.
-              </p>
-            </div>
+      <MainLayout title={projectName} onSettingsClick={onSettingsClick}>
+        <div className="page-shell">
+          <div className="hero">
+            <div className="hero__top">
+              <div className="hero__intro">
+                <h1 className="hero__title">{projectName}</h1>
+                <p className="hero__copy">
+                  Pick a plan to continue into the suite tree, then move through
+                  test cases and details.
+                </p>
+              </div>
 
-            <div className="hero__stats-wrap">
-              {/* Stats Cards */}
-              <div className="hero__stats">
-                <div className="stat-card stat-card--primary">
-                  <div className="stat-card__label">Plans</div>
-                  <div className="stat-card__value text-primary">{planCount}</div>
-                </div>
-                <div className="stat-card stat-card--success">
-                  <div className="stat-card__label">Runtime</div>
-                  <div className="flex items-center gap-sm mt-sm">
-                    <span className="dot dot--green" />
-                    <span className="font-bold">Connected</span>
+              <div className="hero__stats-wrap">
+                <div className="hero__stats">
+                  <div className="stat-card">
+                    <div className="stat-card__label">Plans</div>
+                    <div className="stat-card__value">{planCount}</div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-card__label">Runtime</div>
+                    <div className="stat-card__value flex items-center gap-2">
+                      <span className="dot dot--green" />
+                      <span>Connected</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
+            <div className="flex gap-2 mt-4">
+              <button type="button" className="btn btn--secondary btn--sm">
+                <IconRefresh size={14} />
+                <span>Refresh plans</span>
+              </button>
+            </div>
           </div>
 
-          <p className="text-sm text-secondary mt-md">
-            Open a plan first. The suite tree and test list appear only after drill-down begins.
-          </p>
+          <section className="mt-6">
+            <div className="mb-4">
+              <h2 className="text-xl font-semibold text-primary mb-2">Plans</h2>
+              <p className="text-sm text-muted">
+                Choose a plan to open its suites, child suites, and test cases.
+              </p>
+            </div>
 
-          <div className="flex gap-sm mt-md">
-            <button className="btn btn--secondary btn--sm">
-              <IconRefresh size={14} />
-              Refresh plans
-            </button>
-          </div>
+            <PlansList
+                onSelectPlan={onSelectPlan}
+                workspaceSettings={workspaceSettings}
+                onPlansLoaded={(plans) => setPlanCount(plans.length)}
+            />
+          </section>
         </div>
-
-        <div>
-          <div className="section-header mb-md">
-            <h2 className="text-xl font-semibold text-primary uppercase">Plans</h2>
-            <p className="text-sm text-secondary">
-              Choose a plan to open its suites, child suites, and test cases.
-            </p>
-          </div>
-          <PlansList
-            onSelectPlan={onSelectPlan}
-            workspaceSettings={workspaceSettings}
-            onPlansLoaded={(plans) => setPlanCount(plans.length)}
-          />
-        </div>
-      </div>
-    </MainLayout>
+      </MainLayout>
   );
 }

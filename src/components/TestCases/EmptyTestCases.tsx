@@ -1,8 +1,9 @@
 interface EmptyTestCasesProps {
   suiteName: string;
+  onAddTestCase?: () => void;
 }
 
-export function EmptyTestCases({ suiteName }: EmptyTestCasesProps) {
+export function EmptyTestCases({ suiteName, onAddTestCase }: EmptyTestCasesProps) {
   return (
     <div className="empty-cases">
       <div className="empty-cases__illustration">
@@ -39,6 +40,15 @@ export function EmptyTestCases({ suiteName }: EmptyTestCasesProps) {
           <strong>{suiteName}</strong> is ready, but there are no test cases yet.
           Test cases will appear here once they are created or synced.
         </p>
+        {onAddTestCase && (
+          <button
+            type="button"
+            className="btn btn--primary mt-md"
+            onClick={onAddTestCase}
+          >
+            + Create First Test Case
+          </button>
+        )}
       </div>
     </div>
   );
