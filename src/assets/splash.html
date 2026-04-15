@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Bromcom Splash</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+    :root {
+      --bg: #0a101c;
+      --bg-2: #0d1628;
+      --brand: #5aa2ff;
+      --brand-2: #65d8c3;
+      --amber: #ffd166;
+      --text: #f6f8fc;
+      --muted: #8b99ae;
+      --soft: #c2cedd;
+      --panel: rgba(16,26,48,0.72);
+      --panel-border: rgba(154,167,191,0.13);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      font-family: 'JetBrains Mono', monospace, system-ui;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      position: relative;
+      min-height: 100vh;
+    }
+
+    /* ── Background layers ── */
+    .bg-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    /* Subtle grid */
+    .bg-layer::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+              linear-gradient(rgba(90,162,255,.05) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(90,162,255,.05) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+    }
+
+    /* Corner glows */
+    .bg-layer::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+              radial-gradient(ellipse 55% 42% at 18% 88%, rgba(101,216,195,.18) 0%, transparent 60%),
+              radial-gradient(ellipse 55% 42% at 82% 88%, rgba(90,162,255,.20) 0%, transparent 60%),
+              radial-gradient(ellipse 40% 30% at 50% 0%, rgba(90,162,255,.10) 0%, transparent 60%);
+    }
+
+    /* Scanlines */
+    .scanlines {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 3px,
+              rgba(0,0,0,.07) 3px,
+              rgba(0,0,0,.07) 4px
+      );
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Shell ── */
+    .shell {
+      position: relative;
+      z-index: 10;
+      width: min(400px, calc(100vw - 40px));
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      animation: shellIn .6s cubic-bezier(.16,1,.3,1) both;
+    }
+
+    @keyframes shellIn {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Top corner label ── */
+    .corner-label {
+      position: absolute;
+      top: 24px; right: 24px;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      opacity: .6;
+      z-index: 10;
+    }
+
+    /* ── Version badge ── */
+    .version-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 28px;
+      padding: 4px 10px 4px 8px;
+      border-radius: 999px;
+      background: rgba(90,162,255,.1);
+      border: 1px solid rgba(90,162,255,.22);
+      font-size: 10px;
+      color: var(--brand);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      width: fit-content;
+      animation: shellIn .6s .1s cubic-bezier(.16,1,.3,1) both;
+    }
+    .version-dot {
+      width: 6px; height: 6px;
+      border-radius: 999px;
+      background: var(--brand);
+      animation: ping 1.6s ease-out infinite;
+    }
+
+    /* ── Brand row ── */
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      animation: shellIn .6s .15s cubic-bezier(.16,1,.3,1) both;
+    }
+
+    .logo-wrap {
+      position: relative;
+      width: 72px; height: 72px;
+      flex-shrink: 0;
+    }
+
+    /* Glow ring around logo */
+    .logo-wrap::before {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 22px;
+      background: linear-gradient(135deg, rgba(90,162,255,.5), rgba(101,216,195,.3));
+      filter: blur(6px);
+      opacity: .7;
+      animation: logoGlow 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes logoGlow {
+      from { opacity: .5; filter: blur(5px); }
+      to   { opacity: .9; filter: blur(9px); }
+    }
+
+    .logo {
+      position: relative;
+      width: 72px; height: 72px;
+      border-radius: 20px;
+      overflow: hidden;
+      background: rgba(255,255,255,.97);
+      box-shadow: 0 12px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.6);
+    }
+
+    .logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      padding: 8px;
+    }
+
+    /* Fallback inline SVG styles */
+    .logo svg {
+      width: 100%; height: 100%;
+      padding: 10px;
+    }
+
+    .name {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -.04em;
+      line-height: 1;
+      background: linear-gradient(135deg, #f6f8fc 30%, #8fafd4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .sub {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .16em;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      margin: 28px 0 22px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--panel-border) 30%, var(--panel-border) 70%, transparent);
+      animation: shellIn .5s .25s both;
+    }
+
+    /* ── Status row ── */
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      animation: shellIn .5s .35s both;
+    }
+
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 11px;
+      color: var(--soft);
+    }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 999px;
+      background: var(--brand);
+      animation: ping 1.4s ease-out infinite;
+    }
+
+    .pct {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* ── Progress bar ── */
+    .bar-wrap {
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.07);
+      overflow: hidden;
+      animation: shellIn .5s .4s both;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      width: 38%;
+      background: linear-gradient(90deg, rgba(90,162,255,.3) 0%, var(--brand) 100%);
+      animation: loadSlide 1.4s ease-in-out infinite;
+    }
+
+    @keyframes loadSlide {
+      0%   { transform: translateX(-120%); opacity: .6; }
+      50%  { opacity: 1; }
+      100% { transform: translateX(310%); opacity: .6; }
+    }
+
+    /* ── Steps ── */
+    .steps {
+      margin-top: 20px;
+      display: flex;
+      gap: 6px;
+      animation: shellIn .5s .45s both;
+    }
+
+    .step {
+      flex: 1;
+      height: 3px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.09);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .step.done { background: rgba(90,162,255,.55); }
+    .step.active { background: rgba(90,162,255,.2); }
+    .step.active::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--brand);
+      border-radius: inherit;
+      animation: stepFill 2s ease-in-out infinite;
+    }
+
+    @keyframes stepFill {
+      0%        { transform: scaleX(0); transform-origin: left; }
+      50%       { transform: scaleX(1); transform-origin: left; }
+      50.01%    { transform: scaleX(1); transform-origin: right; }
+      100%      { transform: scaleX(0); transform-origin: right; }
+    }
+
+    @keyframes ping {
+      0%   { box-shadow: 0 0 0 0 rgba(90,162,255,.45); }
+      70%  { box-shadow: 0 0 0 8px rgba(90,162,255,0); }
+      100% { box-shadow: 0 0 0 0 rgba(90,162,255,0); }
+    }
+
+
+  </style>
+</head>
+<body>
+
+<div class="bg-layer"></div>
+<div class="scanlines"></div>
+
+<div class="corner-label">v2025.1</div>
+
+<div class="shell">
+
+  <div class="version-badge">
+    <span class="version-dot"></span>
+    Test Plan Builder
+  </div>
+
+  <div class="brand">
+    <div class="logo-wrap">
+      <div class="logo">
+          <img src="brand-logo.png" alt="Bromcom logo" />
+<!--        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">-->
+<!--          <clipPath id="cloudClip">-->
+<!--            <path d="M78,62 C86,62 92,56 92,48 C92,40.5 86.5,34.5 79.5,34-->
+<!--                     C78.5,26 71.5,20 63,20 C57,20 51.5,23 48,28-->
+<!--                     C45.5,26.5 42.5,25.5 39,25.5 C29.5,25.5 22,33 22,42.5-->
+<!--                     C22,43 22,43.5 22.1,44 C16.5,45.5 12,50.5 12,56.5-->
+<!--                     C12,63 17.5,68 24,68 L78,62 Z"/>-->
+<!--          </clipPath>-->
+<!--          <rect x="0"  y="0"  width="50" height="50" fill="#E8453C" clip-path="url(#cloudClip)"/>-->
+<!--          <rect x="50" y="0"  width="50" height="50" fill="#F5A623" clip-path="url(#cloudClip)"/>-->
+<!--          <rect x="0"  y="50" width="50" height="50" fill="#34A853" clip-path="url(#cloudClip)"/>-->
+<!--          <rect x="50" y="50" width="50" height="50" fill="#4A8EF0" clip-path="url(#cloudClip)"/>-->
+<!--          <line x1="52" y1="18" x2="52" y2="70" stroke="white" stroke-width="2.5" opacity=".9"/>-->
+<!--          <line x1="10" y1="50" x2="94" y2="50" stroke="white" stroke-width="2.5" opacity=".9"/>-->
+<!--        </svg>-->
+      </div>
+    </div>
+    <div class="brand-text">
+      <div class="name">Bromcom</div>
+      <div class="sub">Test Plan Builder</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="status-row">
+    <div class="status-left">
+      <span class="dot"></span>
+      <span id="status-msg">Preparing workspace…</span>
+    </div>
+    <span class="pct" id="pct-label">—</span>
+  </div>
+
+  <div class="bar-wrap">
+    <div class="bar-fill"></div>
+  </div>
+
+<!--  <div class="steps">-->
+<!--    <div class="step done"   id="s1"></div>-->
+<!--    <div class="step done"   id="s2"></div>-->
+<!--    <div class="step active" id="s3"></div>-->
+<!--    <div class="step"        id="s4"></div>-->
+<!--    <div class="step"        id="s5"></div>-->
+<!--    <div class="step"        id="s6"></div>-->
+<!--  </div>-->
+
+</div>
+
+<script>
+  const messages = [
+    [0,    "Initialising core modules…"],
+    [600,  "Loading test configurations…"],
+    [1400, "Connecting to test registry…"],
+    [2300, "Hydrating workspace state…"],
+    [3200, "Verifying session tokens…"],
+    [4100, "Applying user preferences…"],
+    [5000, "Almost ready…"],
+  ];
+
+  const steps = [
+    document.getElementById('s1'),
+    document.getElementById('s2'),
+    document.getElementById('s3'),
+    document.getElementById('s4'),
+    document.getElementById('s5'),
+    document.getElementById('s6'),
+  ];
+
+  const msgEl = document.getElementById('status-msg');
+  const pctEl = document.getElementById('pct-label');
+
+  const start = Date.now();
+  const total = 5800;
+
+  function tick() {
+    const elapsed = Date.now() - start;
+    const pct = Math.min(Math.round((elapsed / total) * 100), 99);
+    pctEl.textContent = pct + '%';
+
+    const stepIdx = Math.floor((elapsed / total) * steps.length);
+    steps.forEach((s, i) => {
+      s.classList.remove('done', 'active');
+      if (i < stepIdx)        s.classList.add('done');
+      else if (i === stepIdx) s.classList.add('active');
+    });
+
+    if (elapsed < total) requestAnimationFrame(tick);
+    else pctEl.textContent = '99%';
+  }
+
+  messages.forEach(([delay, msg]) => {
+    setTimeout(() => { msgEl.textContent = msg; }, delay);
+  });
+
+  requestAnimationFrame(tick);
+</script>
+</body>
+</html>
