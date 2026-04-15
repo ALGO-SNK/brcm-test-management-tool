@@ -26,7 +26,7 @@ const THEME_TOGGLE_MAP: Record<ThemeMode, ThemeMode> = {
 
 function parseThemeMode(value: string | null): ThemeMode {
   if (value && THEME_MODES.includes(value as ThemeMode)) return value as ThemeMode;
-  return 'dark';
+  return 'light';
 }
 
 function parseAccent(value: string | null): AccentMode {
@@ -36,7 +36,7 @@ function parseAccent(value: string | null): AccentMode {
 
 function parseFont(value: string | null): AppFontMode {
   if (value && APP_FONT_OPTIONS.some((o) => o.value === value)) return value as AppFontMode;
-  return 'ibm-plex-mono';
+  return 'system';
 }
 
 export function ThemeContextProvider({ children }: { children: ReactNode }) {

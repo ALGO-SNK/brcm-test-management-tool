@@ -89,7 +89,7 @@ export interface ValidationResult {
 
 /**
  * XPath Validation
- * Rules: Must start with //, /, or .
+ * Rules: Must start with //, /,or.
  * Warn if > 150 chars
  */
 function validateXPath(xpath: string): ValidationError[] {
@@ -109,10 +109,10 @@ function validateXPath(xpath: string): ValidationError[] {
   }
 
   // Basic XPath syntax validation
-  if (!xpath.match(/[@\[\]()='"].*?['"]/) && xpath.includes('[')) {
+  if (!xpath.match(/[@[\]()='"].*?['"]/) && xpath.includes('[')) {
     // Has brackets but might be malformed
     const openBrackets = (xpath.match(/\[/g) || []).length;
-    const closeBrackets = (xpath.match(/\]/g) || []).length;
+    const closeBrackets = (xpath.match(/]/g) || []).length;
     if (openBrackets !== closeBrackets) {
       errors.push({
         field: 'element',
@@ -136,7 +136,7 @@ function validateXPath(xpath: string): ValidationError[] {
 
 /**
  * Regex Validation
- * Rules: Must be valid regex pattern
+ * Rules: Must be a valid regex pattern
  */
 function validateRegex(pattern: string): ValidationError[] {
   const errors: ValidationError[] = [];
@@ -274,7 +274,7 @@ function validateDictionaryPayload(value: string, requiredFields: string[] = [])
 
 /**
  * Required Field Validation
- * Rules: Field cannot be empty if marked required in contract
+ * Rules: Field cannot be empty if marked required in the contract
  */
 function validateRequired(
   value: string | boolean | undefined,
@@ -360,7 +360,7 @@ function validateElementByCategory(
       break;
 
     case 'LINKTEXT':
-      // Link text should be human readable
+      // Link text should be human-readable
       if (element.length < 1) {
         errors.push({
           field: 'element',

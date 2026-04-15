@@ -1,40 +1,111 @@
 {
-  "name": "bcm-testbuilder",
+  "name": "bcm-test-builder",
   "private": true,
-  "version": "0.0.0",
+  "version": "2026.4.1",
+  "author": "Bromcom",
+  "description": "Bromcom Test Builder desktop app",
   "type": "module",
   "main": "electron/main.cjs",
   "build": {
-    "appId": "com.bromcom.desktop",
+    "appId": "com.bromcom.testbuilder",
     "productName": "Bromcom Test Builder",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://your-domain.com/bromcom-test-builder/"
+      }
+    ],
     "directories": {
-      "buildResources": "electron/assets"
+      "buildResources": "src/assets",
+      "output": "releases"
     },
     "win": {
-      "icon": "electron/assets/app-icon.ico"
+      "target": "nsis",
+      "icon": "src/assets/app-icon.ico",
+      "executableName": "Bromcom Test Builder",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "src/assets/app-icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Bromcom Test Builder",
+      "runAfterFinish": false,
+      "perMachine": true
     },
     "linux": {
-      "icon": "electron/assets/brand-logo.png"
-    }
+      "target": "AppImage",
+      "category": "Utility",
+      "desktop": {
+        "entry": {
+          "Name": "Bromcom Test Builder",
+          "Comment": "Test Builder Application",
+          "Icon": "src/assets/app-icon.png"
+        }
+      }
+    },
+    "mac": {
+      "icon": "src/assets/app-icon.icns",
+      "target": "dmg",
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "src/assets/entitlements.mac.plist",
+      "entitlementsInherit": "src/assets/entitlements.mac.plist",
+      "extendInfo": {
+        "NSAppleScriptEnabled": true,
+        "NSMainNibFile": "src/assets/MainMenu.nib",
+        "NSPrincipalClass": "NSApplication"
+      }
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "src/assets/**/*",
+      "main.cjs",
+      "preload.cjs"
+    ]
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:dev": "node electron/dev-runner.cjs",
-    "electron:start": "npm run build && electron ."
+    "electron:start": "npm run build && electron .",
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "dist": "npm run typecheck && electron-builder -mwl",
+    "dist:win": "npm run typecheck && electron-builder --win",
+    "dist:linux": "npm run typecheck && electron-builder --linux",
+    "dist:mac": "npm run typecheck && electron-builder --mac"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^9.0.0",
+    "electron-squirrel-startup": "^1.0.1",
+    "electron-updater": "^6.8.3",
     "materialize-css": "^1.0.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-deb": "^7.11.1",
+    "@electron-forge/maker-rpm": "^7.11.1",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
+    "@electron-forge/plugin-fuses": "^7.11.1",
+    "@electron/fuses": "^1.8.0",
     "@eslint/js": "^9.39.4",
     "@types/materialize-css": "^1.0.9",
     "@types/node": "^24.12.2",
@@ -43,6 +114,7 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^6.0.1",
     "electron": "^41.2.0",
+    "electron-builder": "^26.8.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",

@@ -269,32 +269,6 @@
     }
 
     /* ── Steps ── */
-    .steps {
-      margin-top: 20px;
-      display: flex;
-      gap: 6px;
-      animation: shellIn .5s .45s both;
-    }
-
-    .step {
-      flex: 1;
-      height: 3px;
-      border-radius: 999px;
-      background: rgba(255,255,255,.09);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .step.done { background: rgba(90,162,255,.55); }
-    .step.active { background: rgba(90,162,255,.2); }
-    .step.active::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: var(--brand);
-      border-radius: inherit;
-      animation: stepFill 2s ease-in-out infinite;
-    }
 
     @keyframes stepFill {
       0%        { transform: scaleX(0); transform-origin: left; }
@@ -317,7 +291,7 @@
 <div class="bg-layer"></div>
 <div class="scanlines"></div>
 
-<div class="corner-label">v2025.1</div>
+<div class="corner-label" id="app-version">v</div>
 
 <div class="shell">
 
@@ -425,6 +399,15 @@
   });
 
   requestAnimationFrame(tick);
+
+  const params = new URLSearchParams(window.location.search);
+  const version = params.get('version');
+  const versionEl = document.getElementById('app-version');
+  if (version) {
+    versionEl.textContent = `v${version}`;
+  } else {
+    versionEl.style.display = 'none';
+  }
 </script>
 </body>
 </html>
