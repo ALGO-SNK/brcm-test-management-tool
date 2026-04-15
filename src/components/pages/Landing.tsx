@@ -37,6 +37,7 @@ export function Landing({
               <div className="hero__stats-wrap">
                 <div className="hero__stats">
                   <div className="stat-card">
+
                     <div className="stat-card__label">Plans</div>
                     <div className="stat-card__value">{planCount}</div>
                   </div>

@@ -1,10 +1,10 @@
-import { useThemeContext } from '../../context/useThemeContext';
+/*import { useThemeContext } from '../../context/useThemeContext';*/
 import {
-  IconHelp,
+ /* IconHelp,
   IconMoon,
-  IconSearch,
+  IconSearch,*/
   IconSettings,
-  IconSun,
+ /* IconSun,*/
 } from '../Common/Icons';
 import brandLogo from '../../assets/brand-logo.png';
 
@@ -14,34 +14,35 @@ interface HeaderProps {
 }
 
 export function Header({ title = 'ADO Test Case Editor', onSettingsClick }: HeaderProps) {
-  const { mode, toggleTheme } = useThemeContext();
+ /* const { mode, toggleTheme } = useThemeContext();*/
   const canOpenSettings = typeof onSettingsClick === 'function';
-  const isLightMode = mode === 'light';
+  /*const isLightMode = mode === 'light';*/
 
   return (
     <header className="app-header" title={title}>
       <div className="app-header__brand-group">
         <img src={brandLogo} alt="BromCom" className="app-header__logo" />
         <div className="app-header__brand-copy">
-          <span className="app-header__brand">BromCom</span>
-          <span className="app-header__subtitle">Test Plan Builder</span>
+          <span className="app-header__brand">Bromcom</span>
+          <span className="app-header__subtitle">Automation Test Case Builder</span>
         </div>
       </div>
 
       <div className="app-header__actions">
-        <button className="app-header__icon-btn" title="Search">
+        {/*Hiiden for now*/}
+        {/*<button className="app-header__icon-btn" title="Search">
           <IconSearch size={18} />
         </button>
         <button className="app-header__icon-btn" title="Help">
           <IconHelp size={18} />
-        </button>
-        <button
+        </button>*/}
+        {/*<button
           className="app-header__icon-btn"
           onClick={toggleTheme}
           title={`Switch to ${isLightMode ? 'dark' : 'light'} mode`}
         >
           {isLightMode ? <IconMoon size={18} /> : <IconSun size={18} />}
-        </button>
+        </button>*/}
         <button
           className="app-header__icon-btn"
           onClick={onSettingsClick}

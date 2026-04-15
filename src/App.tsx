@@ -20,7 +20,7 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
     organization: '',
     projectName: '',
     patToken: '',
-    apiVersion: '7.2',
+    apiVersion: '7.1',
   };
   try {
     const raw = localStorage.getItem(WORKSPACE_SETTINGS_KEY);
@@ -48,11 +48,11 @@ function MuiThemeAdapter({ children }: { children: ReactNode }) {
     const isLight        = mode === 'light';
     const isPaper        = mode === 'paper';
     const isHighContrast = mode === 'high-contrast';
-    const muiMode        = (isLight || isPaper) ? 'light' : 'dark';
+    // const muiMode        = (isLight || isPaper) ? 'light' : 'dark';
 
     return createTheme({
       palette: {
-        mode: muiMode,
+        // mode: muiMode,
         primary:   { main: '#1a237e', light: '#3949ab', dark: '#0d47a1', contrastText: '#ffffff' },
         secondary: { main: '#004d40', light: '#00695c', dark: '#00251a', contrastText: '#ffffff' },
         error:     { main: '#bf360c' },

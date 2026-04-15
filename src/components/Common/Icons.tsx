@@ -97,3 +97,6 @@ export function IconFolderOpen(props: IconProps) {
 export function IconFilterList(props: IconProps) {
   return <MaterialIcon name="filter_list" {...props} />;
 }
+export function IconDragHandle(props: IconProps) {
+  return <MaterialIcon name="drag_handle" {...props} />;
+}
