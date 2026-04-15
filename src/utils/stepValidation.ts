@@ -462,18 +462,13 @@ export function validateStep(step: ParsedStep): ValidationResult {
   }
 
   // Validate element + ElementCategory authoring combinations
-  const combinationErrors = validateElementAuthoringCombination(
+  const combinationResult = validateElementAuthoringCombination(
     step.action,
-    step.element,
-    step.elementCategory,
-    step.isElementPathDynamic,
-    step.elementReplaceTextDataKey
+    step.elementCategory ?? ''
   );
-  errors.push(...combinationErrors.map(msg => ({
-    field: 'element',
-    message: msg,
-    severity: 'error' as const,
-  })));
+  if (!combinationResult.valid && combinationResult.message) {
+    errors.push({ field: 'element', message: combinationResult.message, severity: 'error' });
+  }
 
   // Validate dynamic locator
   errors.push(...validateDynamicLocator(step));

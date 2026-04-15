@@ -20,7 +20,15 @@
       "Bash(grep -n \"CreateTestCaseForm\" src/components/**/*.tsx src/components/**/**/*.tsx)",
       "Bash(ls -la /c/Users/snkjh/WebstormProjects/bcm-testbuilder/src/utils/action*)",
       "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
-      "Bash(pkill -f \"vite\\\\|node\")"
+      "Bash(pkill -f \"vite\\\\|node\")",
+      "Bash(npx vite:*)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(cd C:\\\\\\\\Users\\\\\\\\snkjh\\\\\\\\WebstormProjects\\\\\\\\bcm-testbuilder)",
+      "Bash(cat)",
+      "Bash(chmod +x /tmp/fix_concatenated.sh)",
+      "Bash(/tmp/fix_concatenated.sh)",
+      "Bash(kill %1)",
+      "Bash(wait)"
     ]
   }
 }

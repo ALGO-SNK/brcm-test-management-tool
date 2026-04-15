@@ -11,7 +11,7 @@ export function MainLayout({ children, title, onSettingsClick }: MainLayoutProps
   return (
     <div className="app-shell">
       <Header title={title} onSettingsClick={onSettingsClick} />
-      <main className="app-main app-main--scroll" style={{ padding: 'var(--space-5)' }}>
+      <main className="app-main app-main--scroll">
         {children}
       </main>
     </div>

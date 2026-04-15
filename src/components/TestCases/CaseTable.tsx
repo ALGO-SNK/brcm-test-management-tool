@@ -4,7 +4,8 @@ import type { ADOTestCase } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { EmptyTestCases } from './EmptyTestCases';
 import { CreateTestCaseForm } from './CreateTestCaseForm';
-import { fetchTestCasesForSuite, getCachedTestCasesForSuite } from '../../services/adoApi';
+import { fetchTestCasesForSuite, getCachedTestCasesForSuite, createTestCase } from '../../services/adoApi';
+import { buildTestCaseData } from '../../utils/testCaseBuilder';
 
 function getInitials(name: string): string {
   const parts = name.split(/\s+/).filter(Boolean);
@@ -73,6 +74,7 @@ export function CaseTable({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterByAssignees, setFilterByAssignees] = useState<Set<string>>(new Set());
@@ -340,55 +342,77 @@ export function CaseTable({
   // Show create form instead of table when in create mode
   if (isCreateMode) {
     return (
-      <CreateTestCaseForm
+      <div>
+        {successMessage && (
+          <div className="alert alert--success" style={{ marginBottom: '16px' }}>
+            {successMessage}
+          </div>
+        )}
+        <CreateTestCaseForm
         suiteName={suiteName}
         isLoading={false}
-        onCancel={() => setIsCreateMode(false)}
+        apiError={error}
+        onCancel={() => {
+          setIsCreateMode(false);
+          setError(null);
+        }}
         onSubmit={async (formData) => {
           try {
-            const { serializeStepsToXML } = await import('../../utils/xmlParser');
+            const testCaseData = buildTestCaseData(formData, formData.steps);
+            const newCase = await createTestCase(
+              workspaceSettings,
+              planId,
+              suiteId,
+              {
+                ...testCaseData,
+                title: testCaseData.title!,
+              }
+            );
 
-            let stepsXml: string | undefined;
-            if (formData.steps.length > 0) {
-              stepsXml = serializeStepsToXML(
-                formData.steps.map((step, idx) => ({
-                  id: String(idx + 1),
-                  action: step.action,
-                  element: step.element,
-                  elementCategory: step.elementCategory,
-                  value: step.value,
-                  expectedValue: step.expectedValue,
-                  key: step.key,
-                  headers: step.headers,
-                  description: step.description,
-                  isConcatenated: step.isConcatenated,
-                  isElementPathDynamic: step.isElementPathDynamic,
-                  elementReplaceTextDataKey: step.elementReplaceTextDataKey,
-                  order: idx + 1,
-                })),
+            // Success: show message and refresh test list
+            setSuccessMessage(`✅ Test case "${newCase.name}" created successfully!`);
+            setError(null);
+            setWarning(null);
+            onTestCaseCreated?.(newCase);
+
+            // Refresh test cases list to show the newly created case
+            try {
+              const updatedCases = await fetchTestCasesForSuite(
+                workspaceSettings,
+                planId,
+                suiteId,
+                suiteTestCasesHref,
+                suiteSelfHref,
               );
+              setCases(updatedCases);
+            } catch (err) {
+              console.warn('Failed to refresh test cases after creation:', err);
+              // Still add the new case locally even if refresh fails
+              setCases([...cases, newCase]);
             }
 
-            const { createTestCase } = await import('../../services/adoApi');
-            const newCase = await createTestCase(workspaceSettings, {
-              title: formData.title,
-              status: formData.status,
-              method: formData.method,
-              region: formData.region,
-              execProcess: formData.execProcess,
-              pltpProcess: formData.pltpProcess,
-              initialSteps: formData.initialSteps,
-              stepsXml,
-            });
-
-            setCases([...cases, newCase]);
-            onTestCaseCreated?.(newCase);
-            setIsCreateMode(false);
+            // Auto-exit create mode after showing success
+            setTimeout(() => {
+              setIsCreateMode(false);
+              setSuccessMessage(null);
+            }, 2000);
           } catch (error) {
+            // Extract error message from API response
+            let errorMessage = 'Failed to create test case';
+
+            if (error instanceof Error) {
+              errorMessage = error.message;
+            } else if (typeof error === 'object' && error !== null && 'message' in error) {
+              errorMessage = (error as { message: string }).message;
+            }
+
+            // Display validation error to user
+            setError(errorMessage);
             console.error('Failed to create test case:', error);
           }
         }}
       />
+      </div>
     );
   }
 

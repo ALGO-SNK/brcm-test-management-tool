@@ -18,7 +18,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_BAND_DATA": {
@@ -35,7 +35,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_DAYS": {
@@ -52,7 +52,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_EDIT_PHONE_EMAIL": {
@@ -69,7 +69,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_GROUP_DETAIL_DATA_IF_NOT_EXIST": {
@@ -86,7 +86,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_INTERVENTION_DATA": {
@@ -103,7 +103,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_MULTIPLE_NUMBERS": {
@@ -120,7 +120,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_OR_TRANSFER_BALANCE_TO_MAKE_POSITIVE": {
@@ -137,7 +137,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_ORDER_IF_NOT_PRESENT": {
@@ -154,7 +154,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_SCHEDULE_DATA_IF_NOT_EXIST": {
@@ -171,7 +171,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_TIME": {
@@ -188,7 +188,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ADD_WITHDRAWAL_DATA": {
@@ -205,7 +205,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ALL_DATA_EXIST_IN_LIST": {
@@ -222,7 +222,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ALL_TABLE_FILTER_ICON_VISIBLE": {
@@ -239,7 +239,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ARITHMETIC_OPERATION_ON_NUMBER_AND_VERIFY": {
@@ -256,7 +256,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CALCULATE_ALLOWANCE": {
@@ -273,7 +273,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CALCULATE_BASIC": {
@@ -290,7 +290,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CALCULATE_PERCENTAGE": {
@@ -307,7 +307,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CALCULATE_SALARY_PROJECTION_AMOUNT": {
@@ -324,7 +324,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CALCULATE_SALARY_TOTAL": {
@@ -341,7 +341,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CALCULATE_SAVE_DATE": {
@@ -358,7 +358,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CALCULATE_SUPERANNUATION": {
@@ -375,7 +375,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CANCEL_ALERT": {
@@ -392,7 +392,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHANGE_INNER_HTML": {
@@ -409,7 +409,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_BULK_GROUP_COLUMN_CHECKED": {
@@ -426,7 +426,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_CUSTOM_CHECKBOX": {
@@ -443,7 +443,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_DELETE_STUDENT_LIST_SORTED": {
@@ -460,7 +460,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_DELETED_LIST_SORTED": {
@@ -477,7 +477,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_DELETED_STUDENT_LIST_SORTED": {
@@ -494,7 +494,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_IF_UNCHECKED": {
@@ -511,7 +511,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_LIST_ORDER": {
@@ -528,7 +528,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_MANAGE_ATTENDANCE_CELL_SELECTED": {
@@ -545,7 +545,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_MANAGE_ATTENDANCE_ROW__PERIODS_ARE_SELECTED": {
@@ -562,7 +562,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_STAFF_DELETED_ITEMS": {
@@ -579,7 +579,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECK_URL": {
@@ -596,7 +596,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CHECKED": {
@@ -613,7 +613,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CLASS_VERIFY_ON_WHOLE_TABLE_BODY": {
@@ -630,7 +630,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CLEAR_KEYS": {
@@ -647,7 +647,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CLEAR_TEXT": {
@@ -664,7 +664,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CLICK": {
@@ -681,7 +681,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CLICK_DELAY": {
@@ -698,7 +698,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CLICK_IF_PRESENT": {
@@ -715,7 +715,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CLICK_INVISIBLE_ELEMENT": {
@@ -732,7 +732,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CLOSE_TAB": {
@@ -749,7 +749,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "COMPARE_DICTIONARY_VALUES": {
@@ -766,7 +766,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "COMPARE_ELEMENT_VALUE_WITH_REGEX": {
@@ -783,7 +783,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "COMPARE_SAVED_ATTENDANCE_MARKS_OF_STUDENT": {
@@ -800,7 +800,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "COMPARE_SEARCH_COUNT": {
@@ -811,13 +811,13 @@ export const DOC_ACTION_DEFINITIONS = {
     "contract": {
       "element": "required",
       "elementCategory": "optional",
-      "value": "optional",
+      "value": "required",
       "expectedValue": "not-used",
       "key": "required",
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "COMPARE_TWO_DATE": {
@@ -834,7 +834,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "COMPARE_TWO_LISTS": {
@@ -851,7 +851,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "COMPARE_TWO_TEXT": {
@@ -868,7 +868,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "CURRENT_TAB": {
@@ -885,7 +885,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DATA_EXIST_IN_LIST": {
@@ -902,7 +902,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DATE_PICKER_SELCT_CUSTOM_DATE": {
@@ -919,7 +919,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DATE_PICKER_SELECT_DATE": {
@@ -936,7 +936,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DELAY": {
@@ -953,7 +953,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DELETED_STUDENT_ROW_IS_SELECTED": {
@@ -970,7 +970,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DELETED_STUDENT_ROW_IS_UNSELECTED": {
@@ -987,7 +987,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DOES_NOT_CONTAIN": {
@@ -1004,7 +1004,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DOUBLE_CLICK": {
@@ -1021,7 +1021,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DOWNLOAD_FILE": {
@@ -1038,7 +1038,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DRAG_DROP": {
@@ -1055,7 +1055,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "DRAG_DROP_BY_OFFSET": {
@@ -1072,7 +1072,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "EDIT_MEAL_DEFINITION": {
@@ -1089,7 +1089,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ELEMENTS_TO_BE_CLICKABLE": {
@@ -1106,7 +1106,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ENTER_MARK": {
@@ -1123,7 +1123,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ENTER_MARK_IF_NOT_ENTERED": {
@@ -1140,7 +1140,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ENTER_SAVED_DATE": {
@@ -1157,7 +1157,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "EQUAL": {
@@ -1174,7 +1174,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "EQUAL_DELAY": {
@@ -1191,7 +1191,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "FETCH_SHARED_STEPS": {
@@ -1208,7 +1208,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "FILTER_BY": {
@@ -1219,13 +1219,13 @@ export const DOC_ACTION_DEFINITIONS = {
     "contract": {
       "element": "required",
       "elementCategory": "optional",
-      "value": "optional",
+      "value": "required",
       "expectedValue": "not-used",
       "key": "not-used",
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "FILTER_BY_DYNAMIC_VALUE": {
@@ -1242,7 +1242,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "FILTER_BY_MARK_MEANING": {
@@ -1259,7 +1259,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "FILTER_ICON_CLICK": {
@@ -1276,7 +1276,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "GO_BACK": {
@@ -1293,7 +1293,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "HAS_AMMEND_ATTENDANCE_ICON": {
@@ -1310,7 +1310,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "HAS_COMMENT_ADDED": {
@@ -1327,7 +1327,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "HIDE_COLUMN_IF_VISIBLE": {
@@ -1344,7 +1344,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "HOVER": {
@@ -1361,7 +1361,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "HOVER_DELAY": {
@@ -1378,7 +1378,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IN_DATE_RANGE": {
@@ -1395,7 +1395,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "INVERT_SELECTION_COUNT": {
@@ -1412,7 +1412,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IS_CHECKBOX": {
@@ -1429,7 +1429,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IS_COLUMN_DATA_EMPTY": {
@@ -1446,7 +1446,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IS_COLUMN_EMPTY": {
@@ -1463,7 +1463,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IS_COLUMN_VISIBLE": {
@@ -1480,7 +1480,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IS_DATEPICKER": {
@@ -1497,7 +1497,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IS_ENABLED": {
@@ -1514,7 +1514,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IS_MULTIPLE_ELEMENT_VISIBLE": {
@@ -1531,7 +1531,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IS_ROW_SELECTED": {
@@ -1548,7 +1548,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IS_SCROLL_BAR": {
@@ -1565,7 +1565,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "IS_SORTED": {
@@ -1582,7 +1582,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ISEMPTY": {
@@ -1599,7 +1599,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ISENABLED": {
@@ -1616,7 +1616,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ISPASSWORD": {
@@ -1633,7 +1633,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ISVISIBLE": {
@@ -1650,7 +1650,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ISVISIBLE_DELAY": {
@@ -1667,7 +1667,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "LIST_HAS_FUTURE_DATE_DATA": {
@@ -1684,7 +1684,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "LIST_HAS_PREVIOUS_DATE_DATA": {
@@ -1701,7 +1701,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MARK_ALL_PERIODS_FOR_ROW": {
@@ -1718,7 +1718,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_ADMISSION_NO_FROM_SAVED_DATA": {
@@ -1735,7 +1735,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_ATTENDANCE_PERIOD_STRUCTURE": {
@@ -1752,7 +1752,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_FILTER_STATUS_COUNT": {
@@ -1769,7 +1769,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_LIST_COUNT": {
@@ -1786,7 +1786,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_MANAGE_ATTENDANCE_GROUP_NAME": {
@@ -1803,7 +1803,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_PERIOD_DATA_WITH_CLASS": {
@@ -1820,7 +1820,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_RECIPIENT_DATA_BY_STUDENT": {
@@ -1837,7 +1837,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_SELECTED_TABLE_ROW_COUNT": {
@@ -1854,7 +1854,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_STUDENT_DELETED_LIST": {
@@ -1871,7 +1871,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_TABLE_COULMN_DATA": {
@@ -1888,7 +1888,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_TABLE_COULMN_DATA_BY_TEXT": {
@@ -1905,7 +1905,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_TABLE_COUNT": {
@@ -1922,7 +1922,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_TABLE_DROPOWN_DATA": {
@@ -1939,7 +1939,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_TABLE_VALUE": {
@@ -1956,7 +1956,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MATCH_UNSELECTED_TABLE_ROW_COUNT": {
@@ -1973,7 +1973,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MAXIMIZE_WINDOW": {
@@ -1990,7 +1990,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MULTIPLE_CLICK": {
@@ -2007,7 +2007,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MULTIPLE_CLICK_DELAY": {
@@ -2024,7 +2024,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "MULTIPLE_TIMES_PRESS_KEY": {
@@ -2041,7 +2041,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "NO_NEW_BOX_ADDED": {
@@ -2058,7 +2058,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "NOTSELECTED": {
@@ -2075,7 +2075,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "OPEN_NEW_TAB": {
@@ -2092,7 +2092,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "OVERVIEW_EMAIL_SENT_VERIFY": {
@@ -2109,7 +2109,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "POPUP_TEXT": {
@@ -2126,7 +2126,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "PREFIX_CHECK": {
@@ -2143,7 +2143,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "PRESS_KEY": {
@@ -2160,7 +2160,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "PRESS_KEY_ON_TABLE_ROW": {
@@ -2177,7 +2177,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "REFRESH_CACHE": {
@@ -2194,7 +2194,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "REFRESH_PAGE": {
@@ -2211,7 +2211,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "RELOGIN_INTO_SAGEPAY_IF_LOGGEDOUT": {
@@ -2228,7 +2228,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "REMOVE_TRANSACTION_TO_MAKE_BALANCE_NEGATIVE": {
@@ -2245,7 +2245,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "RIGHT_CLICK": {
@@ -2262,7 +2262,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_ATTENDANCE_MARKS_OF_STUDENT": {
@@ -2279,7 +2279,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_CLASS_OF_ELEMENT": {
@@ -2296,7 +2296,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_CURRENT_PERIOD": {
@@ -2313,7 +2313,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_DATE_TIME": {
@@ -2330,7 +2330,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_DELETED_STUDENTS_TABLE_DATA": {
@@ -2347,7 +2347,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_DELETED_TABLE_DATA": {
@@ -2364,7 +2364,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_DROPDOWN_LIST": {
@@ -2381,7 +2381,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_DROPDOWN_LIST_COUNT": {
@@ -2398,7 +2398,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_ELEMENT_ATTRIBUTES": {
@@ -2415,7 +2415,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_ELEMENT_TITLE": {
@@ -2432,7 +2432,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_ELEMENTS_ATTRIBUTE": {
@@ -2449,7 +2449,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_ELEMENTS_COUNT": {
@@ -2466,7 +2466,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_FILTER_LIST": {
@@ -2483,7 +2483,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_GRID_COLUMN_DATA": {
@@ -2500,7 +2500,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_HARDCODE_DATA": {
@@ -2517,7 +2517,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_LIST_COUNT": {
@@ -2534,7 +2534,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_MID_DATE_FROM_DATE_MIN_MAX": {
@@ -2551,7 +2551,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_SELECTED_ROW_IN_DICTIONARY": {
@@ -2568,7 +2568,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_SEPERATED_TEXT_IN_DICTIONARY": {
@@ -2585,7 +2585,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_SPECIFIC_LIST_ITEMS": {
@@ -2602,7 +2602,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_SPECIFIC_ROW_COUNT": {
@@ -2619,7 +2619,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_SPECIFIC_TEXT": {
@@ -2636,7 +2636,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_SPECIFIC_TEXT_OR_DEFAULT": {
@@ -2653,7 +2653,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_STAFF_CODE": {
@@ -2670,7 +2670,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_TABLE": {
@@ -2687,7 +2687,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_TABLE_COUNT": {
@@ -2704,7 +2704,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_TABLE_DATA": {
@@ -2721,7 +2721,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_TABLE_ROW_COUNT": {
@@ -2738,7 +2738,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_TEXTBOX_VALUE_FROM_TABLE": {
@@ -2755,7 +2755,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_WEEK_NAME": {
@@ -2772,7 +2772,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVE_XML_DATA_TO_LIST": {
@@ -2789,7 +2789,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SAVEDATA": {
@@ -2806,7 +2806,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SCHEDULE_EMAIL_SUBJECT_BODY_CHECK": {
@@ -2823,7 +2823,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SCROLL_TO_HORIZONTAL": {
@@ -2840,7 +2840,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SCROLL_TO_LEFT": {
@@ -2857,7 +2857,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SCROLL_TO_RIGHT": {
@@ -2874,7 +2874,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SCROLL_TO_TOP": {
@@ -2891,7 +2891,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SCROLL_TO_VERTICAL": {
@@ -2908,7 +2908,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SCROLL_UNTIL_VISIBLE": {
@@ -2925,7 +2925,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SEARCH_BY_SEARCH_FILTER": {
@@ -2936,13 +2936,13 @@ export const DOC_ACTION_DEFINITIONS = {
     "contract": {
       "element": "required",
       "elementCategory": "optional",
-      "value": "optional",
+      "value": "required",
       "expectedValue": "not-used",
       "key": "not-used",
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT": {
@@ -2959,7 +2959,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT_BY_INDEX": {
@@ -2976,7 +2976,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT_DELAY": {
@@ -2993,7 +2993,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT_DELETED_STUDENT_ROW": {
@@ -3010,7 +3010,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT_INCREMENTED_INDEX": {
@@ -3027,7 +3027,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT_IS_SELECTED": {
@@ -3044,7 +3044,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT_LIST_ITEM": {
@@ -3061,7 +3061,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT_LIST_ITEM_BY_TEXT": {
@@ -3078,7 +3078,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT_NEXT_INDEX": {
@@ -3095,7 +3095,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT_SAVE_SELECTED_OPTION_TEXT": {
@@ -3112,7 +3112,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECT_UNIQUE_MARK": {
@@ -3129,7 +3129,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SELECTED": {
@@ -3146,7 +3146,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SEND_KEYS_WITHOUT_ELEMENT": {
@@ -3163,7 +3163,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SORT_BY": {
@@ -3174,13 +3174,13 @@ export const DOC_ACTION_DEFINITIONS = {
     "contract": {
       "element": "required",
       "elementCategory": "optional",
-      "value": "optional",
+      "value": "required",
       "expectedValue": "not-used",
       "key": "required",
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SWITCH_FRAME": {
@@ -3197,7 +3197,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SWITCH_TAB": {
@@ -3214,7 +3214,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "SWITCH_TO_PARENT_FRAME": {
@@ -3231,7 +3231,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_CHECK_DROPDOWN_STATUS": {
@@ -3248,7 +3248,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_CHECK_HEADERS_TEXT": {
@@ -3265,7 +3265,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_CLICK_COLUMN_DIV_ICON": {
@@ -3282,7 +3282,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_CLICK_COLUMN_HEADER": {
@@ -3299,7 +3299,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_CLICK_COLUMN_ICON": {
@@ -3316,7 +3316,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_CLICK_ROW": {
@@ -3333,7 +3333,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_CLICK_ROWS": {
@@ -3350,7 +3350,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_COLUMN_DIV_CLICK": {
@@ -3367,7 +3367,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_COLUMN_DIV_DIV_ICON_CLICK": {
@@ -3384,7 +3384,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_COLUMN_DIV_UPDATE_INNERHTML": {
@@ -3401,7 +3401,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_COLUMN_IS_CHECKED": {
@@ -3418,7 +3418,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_COUNT_AFTER_DELETE": {
@@ -3435,7 +3435,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_HEADER_COMPARE_COUNT": {
@@ -3452,7 +3452,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_HEADER_ICON_HAS_STYLE": {
@@ -3469,7 +3469,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_HOVER_COLUMN_DIV_ICON": {
@@ -3486,7 +3486,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_HOVER_COLUMN_ICON": {
@@ -3503,7 +3503,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_MATCHES_ANY_ROW_VALUE": {
@@ -3520,7 +3520,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_ROW_SELECT": {
@@ -3537,7 +3537,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_SAVE_COLUMN_CLASS": {
@@ -3554,7 +3554,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_SAVE_COLUMN_DATA": {
@@ -3571,7 +3571,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_SAVE_COLUMN_DIV_STYLE": {
@@ -3588,7 +3588,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_SAVE_ROW_COLUMN_DIV_TEXT_IN_DICTIONARY": {
@@ -3605,7 +3605,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_SAVE_ROW_COLUMN_SPAN_TEXT_IN_DICTIONARY": {
@@ -3622,7 +3622,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_SAVE_ROW_COLUMN_WITH_MATCHED_STYLE": {
@@ -3639,7 +3639,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_SAVE_ROW_DATA": {
@@ -3656,7 +3656,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_SAVE_VISIBLE_ROWS_COUNT": {
@@ -3673,7 +3673,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_SELECT_CHECKBOX": {
@@ -3690,7 +3690,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_SELECTED_ROW_NO": {
@@ -3707,7 +3707,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_ANY_ROW_WITH_COLUMN_HAS_MATCH_REGEX": {
@@ -3724,7 +3724,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_ATTRIBUTE_COLUMN_DIV_ICON": {
@@ -3741,7 +3741,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_CHECKBOX_CLASS": {
@@ -3758,7 +3758,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_CHECKBOXES_STATUS": {
@@ -3775,7 +3775,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_ANY_ICON_HAS_ATTRIBUTE_WITH_VALUE": {
@@ -3792,7 +3792,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_DATA_HAS_DIV_ICON": {
@@ -3809,7 +3809,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_DATA_HAS_ICON": {
@@ -3826,7 +3826,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_DIV_HAS_STYLE": {
@@ -3843,7 +3843,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_DIV_HAS_TAG": {
@@ -3860,7 +3860,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_DIV_STYLE": {
@@ -3877,7 +3877,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_HEADER_HAS_ICON": {
@@ -3894,7 +3894,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_HEADER_HAS_ICON_WITH_CLASS_VALUE": {
@@ -3911,7 +3911,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_ICON_HAS_ATTRIBUTE_WITH_VALUE": {
@@ -3928,7 +3928,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_STYLE": {
@@ -3945,7 +3945,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_COLUMN_VALUE_WITH_REGEX": {
@@ -3962,7 +3962,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_HEADER_ROWS_COLUMN_DIV_TEXT": {
@@ -3979,7 +3979,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_HEADERS_ROW_COLUMN_TEXT": {
@@ -3996,7 +3996,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_HEADERS_ROWS_COUNT": {
@@ -4013,7 +4013,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_HEADERS_STYLE": {
@@ -4030,7 +4030,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_ROW_COLUMN_DIV_TEXT_IN_DICTIONARY": {
@@ -4047,7 +4047,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_ROW_COLUMN_DIV_VALUE": {
@@ -4064,7 +4064,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_ROW_COLUMN_SPAN_TEXT_IN_DICTIONARY": {
@@ -4081,7 +4081,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_SELECTED_ROW_COLUMN_HAS_ATTRIBUTE_WITH_VALUE": {
@@ -4098,7 +4098,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_TEXT_BY_COLUMNS_DATA": {
@@ -4115,7 +4115,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_VISIBLE_AG_ROWS_COUNT": {
@@ -4132,7 +4132,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_VISIBLE_ROWS_COUNT": {
@@ -4149,7 +4149,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TABLE_VERIFY_VISIBLE_ROWS_COUNT_CHANGE": {
@@ -4166,7 +4166,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TOGGLE_CHECKBOX": {
@@ -4183,7 +4183,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TOGGLE_PROJECTOR_MODE": {
@@ -4200,7 +4200,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TOOL_TIP_COLOR": {
@@ -4217,7 +4217,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TOOL_TIP_COMPARE_TABLE": {
@@ -4251,7 +4251,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TOOL_TIP_EQUAL": {
@@ -4268,7 +4268,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TRANSFER_BALANCE_TO_SIBLING": {
@@ -4285,7 +4285,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TRIGGER_SQL_QUERY": {
@@ -4302,7 +4302,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TYPE": {
@@ -4319,7 +4319,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TYPE_DATE": {
@@ -4336,7 +4336,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TYPE_DELAY": {
@@ -4353,7 +4353,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TYPE_INVISIBLE_ELEMENT": {
@@ -4370,7 +4370,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "TYPE_RANDOM_STRING": {
@@ -4387,7 +4387,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "UNCHECK_IF_CHECKED": {
@@ -4404,7 +4404,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "UNCHECKED": {
@@ -4421,7 +4421,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "UPDATE_DICTIONARY_KEY_VALUE": {
@@ -4438,7 +4438,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "UPLOAD_FILE": {
@@ -4455,7 +4455,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALIDATE_ACTIVE_DATE_FILTER": {
@@ -4472,7 +4472,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALIDATE_AGE": {
@@ -4489,7 +4489,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALIDATE_AGE_NUMBER": {
@@ -4506,7 +4506,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALIDATE_AGE_SHORT": {
@@ -4523,7 +4523,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALIDATE_DATE_TIME_FORMAT": {
@@ -4540,7 +4540,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALIDATE_LEAVERS": {
@@ -4557,7 +4557,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALIDATE_LIST_COUNT": {
@@ -4574,7 +4574,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALIDATE_SAVE_DROPDOWN_LIST_COUNT": {
@@ -4591,7 +4591,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALIDATE_STICKY_NODE_ADD": {
@@ -4608,7 +4608,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALIDATE_STUDENT_DELETED_SUCCESSFULLY": {
@@ -4625,7 +4625,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALUE_EXIST_IN_ALL_ITEMS_OF_LIST": {
@@ -4642,7 +4642,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VALUE_EXIST_IN_LIST": {
@@ -4659,7 +4659,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_ACTUALS": {
@@ -4676,7 +4676,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_ALL_PERIODS_FOR_ROW": {
@@ -4693,7 +4693,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_ATTENDANCE_MARK_COUNT_FOR_SELECTED_STUDENT": {
@@ -4710,7 +4710,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_CANCEL_MARK": {
@@ -4727,7 +4727,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_CLASS_EQUAL": {
@@ -4744,7 +4744,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_CR_DR": {
@@ -4761,7 +4761,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_DATE": {
@@ -4778,7 +4778,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_DATE_EQUAL_TO_CURRENT_DD_MM_YY": {
@@ -4795,7 +4795,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_DELAY": {
@@ -4812,7 +4812,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_DICTIONARY_KEY_VALUE": {
@@ -4829,7 +4829,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_DYNAMIC_STRING": {
@@ -4846,7 +4846,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_ELEMENT_TYPE_ATTRIBUTE": {
@@ -4863,7 +4863,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_ELEMENT_VALUE_EQUAL_CURRENT_DATE": {
@@ -4880,7 +4880,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_LIST_IS_SORTED": {
@@ -4891,13 +4891,13 @@ export const DOC_ACTION_DEFINITIONS = {
     "contract": {
       "element": "not-used",
       "elementCategory": "not-used",
-      "value": "optional",
+      "value": "required",
       "expectedValue": "not-used",
       "key": "required",
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_PERCENTAGE_VALUE": {
@@ -4914,7 +4914,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_SELECT_LAST": {
@@ -4931,7 +4931,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_SELECT_OPTIONS_DISPLAYTEXT": {
@@ -4948,7 +4948,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_SELECTED_COLUMN_VALUE_WITH_ELEMENT_TEXT": {
@@ -4965,7 +4965,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_SELECTED_LIST_ITEM_COUNT": {
@@ -4982,7 +4982,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_SELECTED_RADIO_BUTTON": {
@@ -4999,7 +4999,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_STYLE": {
@@ -5016,7 +5016,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_STYLE_EQUAL": {
@@ -5033,7 +5033,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_TABLE_COLUMN_ATTRIBUTE": {
@@ -5050,7 +5050,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_TABLE_COLUMN_DATA_CONTAINS": {
@@ -5067,7 +5067,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "required",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFY_XML_TAG": {
@@ -5084,7 +5084,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "optional",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "VERIFYDATA": {
@@ -5101,7 +5101,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   },
   "ZOOM_IN_OUT": {
@@ -5118,7 +5118,7 @@ export const DOC_ACTION_DEFINITIONS = {
       "headers": "not-used",
       "elementReplaceTextDataKey": "optional",
       "isElementPathDynamic": "optional",
-      "isConcatenated": "optional"
+      "isConcatenated": "not-used"
     }
   }
 } as const;

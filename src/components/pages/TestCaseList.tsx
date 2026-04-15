@@ -81,7 +81,7 @@ export function TestCaseList({
     : null;
 
   return (
-    <div className="app-shell" style={{ height: '100vh', overflow: 'hidden' }}>
+    <div className="app-shell">
       <Header title={plan.name} onSettingsClick={onSettingsClick} />
 
       <div className="split-pane" ref={containerRef}>
@@ -104,13 +104,12 @@ export function TestCaseList({
 
         {/* Main content */}
         <div className="split-pane__main">
-          <div className="container" style={{ padding: `${sidebarWidth ? 'var(--space-5) clamp(10px, 1.8vw, 16px)' : '0'}` }}>
+          <div className="split-pane__content" style={{ padding: sidebarWidth ? 'var(--space-5) clamp(10px, 1.8vw, 16px)' : '0' }}>
             {suite ? (
               <PageDetailLayout
                 breadcrumbs={[
                   { label: 'Plans', onClick: onBackToPlan, isLink: true },
-                  { label: plan.rootSuite.name, isActive: !selectedCase },
-                  ...(selectedCase ? [{ label: selectedCase.name, isActive: true }] : []),
+                  { label: plan.rootSuite.name, isActive: true },
                 ]}
                 heading={{
                   title: selectedCase ? selectedCase.name : suite.name,

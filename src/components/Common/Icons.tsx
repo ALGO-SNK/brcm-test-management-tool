@@ -40,21 +40,21 @@ export function IconArrowRight(props: IconProps) {
   return <MaterialIcon name="arrow_forward" {...props} />;
 }
 
-export function IconPlus(props: IconProps) {
+/*export function IconPlus(props: IconProps) {
   return <MaterialIcon name="add" {...props} />;
-}
+}*/
 
 export function IconSave(props: IconProps) {
   return <MaterialIcon name="save" {...props} />;
 }
 
-export function IconDownload(props: IconProps) {
+/*export function IconDownload(props: IconProps) {
   return <MaterialIcon name="download" {...props} />;
-}
+}*/
 
-export function IconTrash(props: IconProps) {
+/*export function IconTrash(props: IconProps) {
   return <MaterialIcon name="delete" {...props} />;
-}
+}*/
 
 export function IconCopy(props: IconProps) {
   return <MaterialIcon name="content_copy" {...props} />;

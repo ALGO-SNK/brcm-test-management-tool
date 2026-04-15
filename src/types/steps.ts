@@ -12,7 +12,9 @@ export type ElementCategory =
     | 'XPATH'
     | 'TAGNAME'
     | 'JSPATH'
-    | 'URL';
+    | 'URL'
+    | 'VERIFY'
+    | 'VERIFYERROR';
 
 export interface StepData {
   // Core fields

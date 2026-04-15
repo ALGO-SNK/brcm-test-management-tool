@@ -141,7 +141,7 @@ function parsePipeDelimitedAction(content: string, order: number, stepId?: strin
 
   // Build StepData object - preserve original step ID from ADO
   const step: StepData = {
-    id: stepId, // Keep original step ID from ADO XML (e.g., "15", "14", "2", etc.)
+    id: stepId ?? '', // Keep original step ID from ADO XML (e.g., "15", "14", "2", etc.)
     action: action.toUpperCase(),
     element: attributes['Element'] || '',
     elementCategory: normalizeElementCategory(attributes['ElementCategory'] || 'XPATH'),
@@ -384,7 +384,7 @@ export function serializeStepsToXML(
   ];
 
   steps.forEach(step => {
-    const stepId = String(step.id ?? step.order + 1);
+    const stepId = String(step.id ?? (step.order ?? 0) + 1);
     const commandText = buildStepCommandText(step);
 
     // Wrap in DIV/P tags and escape

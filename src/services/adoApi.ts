@@ -61,23 +61,13 @@ function normalizeProjectName(input: string): string {
 
 function normalizeApiVersion(input: string): string {
   const version = input.trim();
-  return version || '7.2';
+  return version || '7.1';
 }
 
 function getApiVersionCandidates(input: string): string[] {
-  const normalized = normalizeApiVersion(input);
-  const candidates = [normalized];
-
-  const previewMatch = normalized.match(/^(\d+(?:\.\d+)?)-preview(?:\.\d+)?$/i);
-  if (previewMatch?.[1]) {
-    candidates.push(previewMatch[1]);
-  }
-
-  if (!candidates.includes('7.2')) {
-    candidates.push('7.2');
-  }
-
-  return candidates;
+  // Use only the configured API version, no fallback attempts
+  // User should configure the correct version in workspace settings
+  return [normalizeApiVersion(input)];
 }
 
 function buildWorkspaceCacheScope(settings: WorkspaceConnectionSettings): string {
@@ -847,6 +837,8 @@ async function postJson<T>(
  */
 export async function createTestCase(
   settings: WorkspaceConnectionSettings,
+  planId: number,
+  suiteId: number,
   newCaseData: {
     title: string;
     description?: string;
@@ -868,48 +860,53 @@ export async function createTestCase(
   const apiVersions = getApiVersionCandidates(settings.apiVersion);
   const baseApi = buildBaseApiUrl(settings);
 
-  // Build the work item fields
-  const fields: Record<string, unknown> = {
-    'System.Title': newCaseData.title,
-    'System.Description': newCaseData.description || '',
+  // Build test case work item for Test Plan API (uses standard JSON format, not JSON Patch)
+  const workItem = {
+    fields: {
+      'System.Title': newCaseData.title,
+      'System.Description': newCaseData.description || '',
+    } as Record<string, unknown>,
   };
 
   // Add custom fields if provided
   if (newCaseData.status) {
-    fields['System.State'] = newCaseData.status;
+    workItem.fields['System.State'] = newCaseData.status;
   }
   if (newCaseData.method) {
-    fields['Custom.TestingMethod'] = newCaseData.method;
+    workItem.fields['Custom.TestingMethod'] = newCaseData.method;
   }
   if (newCaseData.region) {
-    fields['Custom.ApplicableRegions'] = newCaseData.region;
+    workItem.fields['Custom.ApplicableRegions'] = newCaseData.region;
   }
   if (newCaseData.execProcess) {
-    fields['Custom.ExecutiveProcess'] = newCaseData.execProcess;
+    workItem.fields['Custom.ExecutiveProcess'] = newCaseData.execProcess;
   }
   if (newCaseData.pltpProcess) {
-    fields['Custom.PLTPProcessArea'] = newCaseData.pltpProcess;
+    workItem.fields['Custom.PLTPProcessArea'] = newCaseData.pltpProcess;
   }
   if (newCaseData.initialSteps) {
-    fields['Custom.InitialStep'] = newCaseData.initialSteps;
+    workItem.fields['Custom.InitialStep'] = newCaseData.initialSteps;
   }
   if (newCaseData.stepsXml) {
-    fields['Microsoft.VSTS.TCM.Steps'] = newCaseData.stepsXml;
+    workItem.fields['Microsoft.VSTS.TCM.Steps'] = newCaseData.stepsXml;
   }
-
-  const workItemPayload = {
-    fields,
-  };
 
   let lastError: unknown = null;
 
-  // Try different API versions
+  // Try different API versions using Test Plan API endpoint
   for (const apiVersion of apiVersions) {
     const encodedApiVersion = encodeURIComponent(apiVersion);
-    const url = `${baseApi}/wit/workitems/Test Case?api-version=${encodedApiVersion}`;
+    const url = `${baseApi}/testplan/Plans/${planId}/Suites/${suiteId}/TestCase?api-version=${encodedApiVersion}`;
 
     try {
-      const createdWorkItem = await postJson<ADOWorkItem>(url, settings.patToken.trim(), workItemPayload);
+      // Test Plan API accepts standard application/json (not JSON Patch)
+      const response = await postJson<ADOWorkItem>(url, settings.patToken.trim(), workItem);
+
+      // Success! Use response directly - Test Plan API returns work item with id field
+      const createdWorkItem = response;
+
+      console.log('[createTestCase] Success:', { id: createdWorkItem.id, title: createdWorkItem.fields?.['System.Title'] });
+
       const mappedCase = mapWorkItemToTestCase(createdWorkItem);
 
       // Cache the newly created case
@@ -918,9 +915,11 @@ export async function createTestCase(
       return mappedCase;
     } catch (error) {
       lastError = error;
+      // Only retry on 404 Not Found
       if (error instanceof ADORequestError && error.status === 404) {
         continue;
       }
+      // All other errors should be thrown immediately (don't retry)
       throw error;
     }
   }

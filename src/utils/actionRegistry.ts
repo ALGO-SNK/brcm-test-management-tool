@@ -36,11 +36,25 @@ export function getActionDefinition(actionName: string): ActionDefinition | unde
   return ACTION_REGISTRY[actionName.toUpperCase()];
 }
 
+const ELEMENT_CATEGORY_HINTS: Record<string, string> = {
+  XPATH: 'e.g., //div[@id="summary"]',
+  ID: 'e.g., submitButton',
+  CLASS: 'e.g., btn-primary',
+  CSSSELECTOR: 'e.g., .form-group > input',
+  TAGNAME: 'e.g., button',
+  LINKTEXT: 'e.g., Click here',
+  NAME: 'e.g., username',
+  JSPATH: 'e.g., document.querySelector(...)',
+  URL: 'https://example.com or #savedURLKey',
+  VERIFY: 'e.g., //span[@class="status"]',
+  VERIFYERROR: 'Expected error text',
+};
+
 /**
  * Get element authoring fields for an action and element category
  */
 export function getElementAuthoringFields(
-  actionDef: ActionDefinition,
+  actionDef: ActionDefinition | undefined,
   elementCategory: string
 ): {
   showElement: boolean;
@@ -48,7 +62,21 @@ export function getElementAuthoringFields(
   showElementPath: boolean;
   showIsElementPathDynamic: boolean;
   showElementReplaceTextDataKey: boolean;
+  showValue: boolean;
+  elementCategoryHint: string;
 } {
+  if (!actionDef) {
+    return {
+      showElement: false,
+      showElementCategory: false,
+      showElementPath: false,
+      showIsElementPathDynamic: false,
+      showElementReplaceTextDataKey: false,
+      showValue: false,
+      elementCategoryHint: '',
+    };
+  }
+
   const contract = actionDef.contract;
 
   return {
@@ -57,6 +85,8 @@ export function getElementAuthoringFields(
     showElementPath: contract.element !== 'not-used',
     showIsElementPathDynamic: contract.isElementPathDynamic !== 'not-used',
     showElementReplaceTextDataKey: contract.elementReplaceTextDataKey !== 'not-used',
+    showValue: contract.value !== 'not-used',
+    elementCategoryHint: ELEMENT_CATEGORY_HINTS[elementCategory] ?? '',
   };
 }
 
@@ -91,7 +121,7 @@ export function inferElementCategory(element: string): string | null {
  */
 export function validateElementAuthoringCombination(
   action: string,
-  elementCategory: string
+  _elementCategory: string
 ): { valid: boolean; message?: string } {
   const actionDef = getActionDefinition(action);
 

@@ -6,6 +6,7 @@ import type { ParsedStep } from './StepsEditor';
 interface CreateTestCaseFormProps {
   suiteName: string;
   isLoading?: boolean;
+  apiError?: string | null;
   onCancel: () => void;
   onSubmit: (formData: {
     title: string;
@@ -20,7 +21,8 @@ interface CreateTestCaseFormProps {
 }
 
 export function CreateTestCaseForm({
-                                     isLoading = false,
+  isLoading = false,
+  apiError = null,
   onCancel,
   onSubmit,
 }: CreateTestCaseFormProps) {
@@ -40,10 +42,25 @@ export function CreateTestCaseForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate form
+    // Validate required fields
     const errors: string[] = [];
     if (!formData.title.trim()) {
-      errors.push('Test case title is required');
+      errors.push('❌ Test case title is required');
+    }
+    if (!formData.status.trim()) {
+      errors.push('❌ Status is required');
+    }
+    if (!formData.method.trim()) {
+      errors.push('❌ Testing method is required');
+    }
+    if (!formData.region.trim()) {
+      errors.push('❌ Region is required');
+    }
+    if (!formData.execProcess.trim()) {
+      errors.push('❌ Executive process is required');
+    }
+    if (!formData.pltpProcess.trim()) {
+      errors.push('❌ PLTP process area is required');
     }
 
     if (errors.length > 0) {
@@ -60,8 +77,11 @@ export function CreateTestCaseForm({
 
   return (
     <form onSubmit={handleSubmit} className="case-detail-pane case-detail-pane--edit">
-      {validationErrors.length > 0 && (
+      {(validationErrors.length > 0 || apiError) && (
         <div className="case-detail-edit-errors">
+          {apiError && (
+            <p className="case-detail-edit-error">❌ API Error: {apiError}</p>
+          )}
           {validationErrors.map((error, idx) => (
             <p key={idx} className="case-detail-edit-error">{error}</p>
           ))}

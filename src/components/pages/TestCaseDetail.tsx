@@ -5,7 +5,8 @@ import {IconEdit, IconX} from '../Common/Icons';
 import type {ADOTestCase, ADOTestPlan, ADOTestSuite} from '../../types';
 import type {WorkspaceSettingsValues} from './WorkspaceSettings';
 import {fetchTestCaseDetail, updateTestCase} from '../../services/adoApi';
-import {parseXMLSteps, serializeStepsToXML} from '../../utils/xmlParser';
+import {parseXMLSteps} from '../../utils/xmlParser';
+import {buildTestCaseData} from '../../utils/testCaseBuilder';
 import type {ParsedStep} from '../TestCases/StepsEditor';
 import {StepsEditor} from '../TestCases/StepsEditor';
 import {ACTION_REGISTRY} from '../../utils/actionRegistry';
@@ -531,24 +532,17 @@ export function TestCaseDetail({
 
                       setIsSaving(true);
                       try {
-                        // Serialize steps to XML format
-                        const stepsXml = serializeStepsToXML(editSteps);
+                        // Build test case data (reusable for create/update)
+                        const testCaseData = buildTestCaseData(editFormData, editSteps);
+
                         console.log('[TestCaseDetail Save] Steps being saved:', {
                           stepCount: editSteps.length,
-                          xmlLength: stepsXml.length,
-                          xmlPreview: stepsXml.substring(0, 200),
+                          xmlLength: testCaseData.stepsXml?.length || 0,
+                          xmlPreview: testCaseData.stepsXml?.substring(0, 200),
                         });
 
-                        // Call update API
-                        await updateTestCase(workspaceSettings, testCase.id, {
-                          status: editFormData.status,
-                          method: editFormData.method,
-                          region: editFormData.region,
-                          execProcess: editFormData.execProcess,
-                          pltpProcess: editFormData.pltpProcess,
-                          initialSteps: editFormData.initialSteps,
-                          stepsXml,
-                        }, testCase._links?.workItem?.href ?? testCase._links?.self?.href);
+                        // Call update API with shared data format
+                        await updateTestCase(workspaceSettings, testCase.id, testCaseData, testCase._links?.workItem?.href ?? testCase._links?.self?.href);
 
                         // Reload test case data with fresh API call
                         console.log('[TestCaseDetail] Fetching updated test case after save...');
@@ -786,8 +780,7 @@ export function TestCaseDetail({
         breadcrumbs={[
           { label: 'Plans', onClick: onBackToCases, isLink: true },
           { label: plan.rootSuite.name, isLink: true, onClick: onBackToCases },
-          { label: suite.name, isLink: true, onClick: onBackToCases },
-          { label: testCase.name, isActive: true },
+          { label: suite.name, isActive: true },
         ]
       }
         heading={{

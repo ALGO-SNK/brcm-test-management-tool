@@ -1218,10 +1218,11 @@ blockquote {
    -------------------------------------------------------------------------- */
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   background: transparent;
+  overflow: hidden;
 }
 
 .app-main {
@@ -1870,6 +1871,8 @@ blockquote {
   padding: var(--space-4);
   text-align: center;
   overflow: hidden;
+  background: linear-gradient(135deg, var(--dark-bg) 0%, var(--color-bg-soft) 100%);
+  border-radius: var(--radius-lg);
 }
 
 .empty-cases__illustration {
@@ -1882,6 +1885,7 @@ blockquote {
   justify-content: center;
   align-items: center;
   pointer-events: none;
+  animation: float 3s ease-in-out infinite;
 }
 
 .empty-cases__svg {
@@ -1889,7 +1893,7 @@ blockquote {
   width: 100%;
   max-width: 500px;
   height: auto;
-  opacity: 0.9;
+  opacity: 0.85;
 }
 
 .empty-cases__content {
@@ -1901,13 +1905,14 @@ blockquote {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 .empty-cases__title {
   color: var(--color-text-heading);
-  font-size: clamp(1.08rem, 0.98rem + 0.32vw, 1.35rem);
+  font-size: clamp(1.15rem, 1rem + 0.32vw, 1.5rem);
   font-weight: 700;
+  margin: 0;
 }
 
 .empty-cases__desc {
@@ -1915,6 +1920,17 @@ blockquote {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   line-height: var(--line-relaxed);
+  margin: 0;
+  padding: 0 var(--space-2);
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(-50%, -56%);
+  }
+  50% {
+    transform: translate(-50%, -52%);
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -2848,8 +2864,21 @@ input[type="radio"] {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--color-bg);
+}
+
+/* Inner content wrapper — fills the full height of split-pane__main,
+   preserving the flex height chain so page-detail-layout can scroll */
+.split-pane__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* --------------------------------------------------------------------------
@@ -6064,9 +6093,38 @@ input[type="radio"] {
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-border-soft);
-  background: var(--color-surface-raised);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+/* ── Drag handle – restrict dragging to this handle only ─────────────────── */
+.steps-editor__drag-handle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   cursor: grab;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--transition-fast), color var(--transition-fast), scale 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  padding: 4px;
+}
+
+.steps-editor__drag-handle:hover {
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  cursor: grab;
+  scale: 1.1;
+}
+
+.steps-editor__drag-handle:active {
+  cursor: grabbing;
+  scale: 0.95;
+}
+
+.steps-editor__drag-handle .material-symbols {
+  font-size: 18px;
 }
 
 .steps-editor__step-number {
@@ -6134,10 +6192,11 @@ input[type="radio"] {
 }
 
 .steps-editor__step-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
   padding: var(--space-3);
+  align-items: flex-start;
 }
 
 .steps-editor__field {
@@ -6146,9 +6205,96 @@ input[type="radio"] {
   gap: var(--space-1);
 }
 
-.steps-editor__field--summary-inline,
+/* ── Flexbox sizing rules ────────────────────────────────────────────────── */
+
+/* Action + Summary row: action smaller, summary larger */
+.steps-editor__field--action {
+  flex: 0 1 calc(30% - var(--space-3) * 0.3);
+  min-width: 120px;
+}
+
+.steps-editor__field--summary-inline {
+  flex: 0 1 calc(70% - var(--space-3) * 0.7);
+  min-width: 200px;
+}
+
+/* Locator Type + Locator row: type smaller, locator larger (bigger size) */
+.steps-editor__field--locator-type {
+  flex: 0 1 calc(25% - var(--space-3) * 0.25);
+  min-width: 100px;
+}
+
+.steps-editor__field--locator {
+  flex: 0 1 calc(75% - var(--space-3) * 0.75);
+  min-width: 250px;
+}
+
+/* Dynamic toggle: auto/small width */
+.steps-editor__field--dynamic-toggle-row {
+  flex: 0 1 auto;
+  min-width: 140px;
+}
+
+/* Replacement Key: full width, bigger size */
 .steps-editor__field--replace-key-full {
-  grid-column: 1 / -1;
+  flex: 0 1 100%;
+  min-width: 100%;
+}
+
+/* Value: full width, bigger size */
+.steps-editor__field--value {
+  flex: 0 1 100%;
+  min-width: 100%;
+}
+
+/* Optional/advanced fields: smaller width, ~48% two per row */
+.steps-editor__field--expected-value,
+.steps-editor__field--key,
+.steps-editor__field--headers,
+.steps-editor__field--concatenated {
+  flex: 0 1 calc(50% - var(--space-3) * 0.5);
+  min-width: 160px;
+}
+
+/* Advanced toggle button in step header */
+.steps-editor__advanced-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.steps-editor__advanced-toggle:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.steps-editor__advanced-toggle.is-active {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+/* Dot indicator: optional fields have values but toggle is hidden */
+.steps-editor__advanced-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  pointer-events: none;
 }
 
 .steps-editor__label {
@@ -6276,10 +6422,6 @@ input[type="radio"] {
 .searchable-select {
   position: relative;
   width: 100%;
-}
-
-.searchable-select__trigger {
-  position: relative;
   display: flex;
   align-items: center;
 }
