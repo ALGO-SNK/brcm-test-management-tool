@@ -1,4 +1,4 @@
-import type { ADOTestPlan, ADOTestSuite, ADOTestCase, StepData } from '../types';
+import type { ADOTestPlan, ADOTestSuite, ADOTestCase, StepData } from '../src/types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Mock Test Plans (based on ADO API samples)
@@ -264,7 +264,7 @@ export function getCaseById(caseId: number): ADOTestCase | undefined {
 export function getMockStepsForCase(): StepData[] {
   return mockSteps.map((step, idx) => ({
     ...step,
-    id: uuidv4(),
+    id: uuidv4( ),
     order: idx,
   }));
 }

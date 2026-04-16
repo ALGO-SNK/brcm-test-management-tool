@@ -1,22 +1,22 @@
-import type { ADOTestPlan, ADOTestSuite, ADOTestCase, StepData } from '../types';
-import { mockTestPlans, getCaseById, getSuiteById, getCasesBySuite, getMockStepsForCase } from './data';
+/*import type { ADOTestSuite, ADOTestCase, StepData } from '../types';
+import { getCaseById, getSuiteById, getCasesBySuite, getMockStepsForCase } from './data';
 import { parseXMLSteps } from '../utils/xmlParser';
 
 // Simulate API delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));*/
 
-// Test Plans
-export async function fetchTestPlans(): Promise<ADOTestPlan[]> {
-  await delay(500);
-  return mockTestPlans;
-}
+// // Test Plans
+// export async function fetchTestPlans(): Promise<ADOTestPlan[]> {
+//   await delay(500);
+//   return mockTestPlans;
+// }
 
-export async function fetchTestPlanById(planId: number): Promise<ADOTestPlan | null> {
-  await delay(300);
-  return mockTestPlans.find(p => p.id === planId) || null;
-}
+// export async function fetchTestPlanById(planId: number): Promise<ADOTestPlan | null> {
+//   await delay(300);
+//   return mockTestPlans.find(p => p.id === planId) || null;
+// }
 
-export async function fetchTestSuiteById(suiteId: number): Promise<ADOTestSuite | null> {
+/*export async function fetchTestSuiteById(suiteId: number): Promise<ADOTestSuite | null> {
   await delay(300);
   return getSuiteById(suiteId) || null;
 }
@@ -64,4 +64,4 @@ export async function saveSteps(caseId: number, steps: StepData[]): Promise<void
   // 3. Update work item
 
   console.log(`[MOCK] Saved ${steps.length} steps for case ${caseId}:`, steps);
-}
+}*/

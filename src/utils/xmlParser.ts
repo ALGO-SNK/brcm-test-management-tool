@@ -5,7 +5,7 @@
  * Handles malformed XML with error recovery
  */
 
-import type { StepData, XMLParseResult, ElementCategory } from '../types';
+import type {ElementCategory, StepData, XMLParseResult} from '../types';
 
 /**
  * Parse XML steps string from ADO custom field
@@ -129,8 +129,8 @@ function parsePipeDelimitedAction(content: string, order: number, stepId?: strin
   for (const pair of pairs) {
     const [key, ...valueParts] = pair.split('=');
     if (key && valueParts.length > 0) {
-      const value = valueParts.join('=').trim(); // Handle values with = in them
-      attributes[key.trim()] = value;
+       // Handle values with = in them
+      attributes[key.trim()] = valueParts.join('=').trim();
     }
   }
 
@@ -140,7 +140,7 @@ function parsePipeDelimitedAction(content: string, order: number, stepId?: strin
   }
 
   // Build StepData object - preserve original step ID from ADO
-  const step: StepData = {
+  return {
     id: stepId ?? '', // Keep original step ID from ADO XML (e.g., "15", "14", "2", etc.)
     action: action.toUpperCase(),
     element: attributes['Element'] || '',
@@ -157,19 +157,17 @@ function parsePipeDelimitedAction(content: string, order: number, stepId?: strin
     extraFields: {
       // Store any extra fields not in the standard contract
       ...Object.keys(attributes)
-        .filter(k => !['Action', 'Element', 'ElementCategory', 'Value', 'ExpectedVl', 'DataKey', 'Headers', 'Description', 'Key', 'ExpectedValue', 'IsConcatenated', 'IsElementPathDynamic', 'ElementPathReplaceKey', 'ElementReplaceTextDataKey'].includes(k))
-        .reduce((acc, k) => ({ ...acc, [k]: attributes[k] }), {})
+          .filter(k => !['Action', 'Element', 'ElementCategory', 'Value', 'ExpectedVl', 'DataKey', 'Headers', 'Description', 'Key', 'ExpectedValue', 'IsConcatenated', 'IsElementPathDynamic', 'ElementPathReplaceKey', 'ElementReplaceTextDataKey'].includes(k))
+          .reduce((acc, k) => ({...acc, [k]: attributes[k]}), {})
     },
     order,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-
-  return step;
 }
 
 /**
- * Recover steps from pipe-delimited format (fallback)
+ * Recover steps from a pipe-delimited format (fallback)
  */
 function recoverFromPipeDelimited(xmlString: string): StepData[] {
   const steps: StepData[] = [];
@@ -244,57 +242,57 @@ function unescapeHTML(text: string): string {
 
 
 /**
- * Extract steps from ADO work item custom field
+ * Extract steps from the ADO work item custom field
  */
-export function extractStepsFromWorkItem(
-  workItem: { fields?: Record<string, unknown> },
-  fieldName: string = 'Microsoft.VSTS.TCM.Steps',
-): XMLParseResult {
-  const stepsField = workItem.fields?.[fieldName];
-
-  if (typeof stepsField !== 'string') {
-    return {
-      steps: [],
-      errors: [`Field ${fieldName} not found in work item`],
-      warnings: [],
-    };
-  }
-
-  return parseXMLSteps(stepsField);
-}
+// export function extractStepsFromWorkItem(
+//   workItem: { fields?: Record<string, unknown> },
+//   fieldName: string = 'Microsoft.VSTS.TCM.Steps',
+// ): XMLParseResult {
+//   const stepsField = workItem.fields?.[fieldName];
+//
+//   if (typeof stepsField !== 'string') {
+//     return {
+//       steps: [],
+//       errors: [`Field ${fieldName} not found in work item`],
+//       warnings: [],
+//     };
+//   }
+//
+//   return parseXMLSteps(stepsField);
+// }
 
 /**
  * Validate XML structure (basic check)
  */
-export function isValidXML(xmlString: string): boolean {
-  if (!xmlString || xmlString.trim() === '') {
-    return true; // Empty is valid
-  }
-
-  try {
-    // Check for matching < and >
-    const openCount = (xmlString.match(/</g) || []).length;
-    const closeCount = (xmlString.match(/>/g) || []).length;
-
-    if (openCount !== closeCount) {
-      return false;
-    }
-
-    // Try to parse
-    const result = parseXMLSteps(xmlString);
-    return result.errors.length === 0;
-  } catch {
-    return false;
-  }
-}
+// export function isValidXML(xmlString: string): boolean {
+//   if (!xmlString || xmlString.trim() === '') {
+//     return true; // Empty is valid
+//   }
+//
+//   try {
+//     // Check for matching < and >
+//     const openCount = (xmlString.match(/</g) || []).length;
+//     const closeCount = (xmlString.match(/>/g) || []).length;
+//
+//     if (openCount !== closeCount) {
+//       return false;
+//     }
+//
+//     // Try to parse
+//     const result = parseXMLSteps(xmlString);
+//     return result.errors.length === 0;
+//   } catch {
+//     return false;
+//   }
+// }
 
 /**
  * Count steps in XML without full parsing
  */
-export function countStepsInXML(xmlString: string): number {
-  const matches = xmlString.match(/Action=/g) || [];
-  return matches.length;
-}
+// export function countStepsInXML(xmlString: string): number {
+//   const matches = xmlString.match(/Action=/g) || [];
+//   return matches.length;
+// }
 
 /**
  * Escape HTML/XML special characters

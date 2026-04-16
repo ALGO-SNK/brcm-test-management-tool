@@ -3,10 +3,8 @@ import { IconSave, IconX } from '../Common/Icons';
 import { useThemeContext } from '../../context/useThemeContext';
 import { useNotification } from '../../context/useNotification';
 import {
-  ACCENT_OPTIONS,
   APP_FONT_OPTIONS,
   THEME_MODE_OPTIONS,
-  type AccentMode,
   type AppFontMode,
   type ThemeMode,
 } from '../../context/themeContext.shared';
@@ -38,7 +36,7 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
   const [section, setSection] = useState<SettingsSection>('appearance');
   const [validationState, setValidationState] = useState<ValidationState>('idle');
   const [validationMessage, setValidationMessage] = useState('Fill organization, project, and PAT before validating the connection.');
-  const { mode, accent, font, setTheme, setAccent, setFont } = useThemeContext();
+  const { mode, font, setTheme, setFont } = useThemeContext();
   const { addNotification } = useNotification();
 
   useEffect(() => {
@@ -61,10 +59,6 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
   const selectedTheme = useMemo(
     () => THEME_MODE_OPTIONS.find((item) => item.value === mode) ?? THEME_MODE_OPTIONS[0],
     [mode],
-  );
-  const selectedAccent = useMemo(
-    () => ACCENT_OPTIONS.find((item) => item.value === accent) ?? ACCENT_OPTIONS[0],
-    [accent],
   );
   const selectedFont = useMemo(
     () => APP_FONT_OPTIONS.find((item) => item.value === font) ?? APP_FONT_OPTIONS[0],
@@ -101,11 +95,6 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
   const handleThemeChange = (nextTheme: ThemeMode) => {
     if (nextTheme === mode) return;
     setTheme(nextTheme);
-  };
-
-  const handleAccentChange = (nextAccent: AccentMode) => {
-    if (nextAccent === accent) return;
-    setAccent(nextAccent);
   };
 
   const handleFontChange = (value: string) => {
@@ -184,10 +173,6 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                       <strong>{selectedTheme.label}</strong>
                     </div>
                     <div className="settings-summary-chip">
-                      <span>Accent</span>
-                      <strong>{selectedAccent.label}</strong>
-                    </div>
-                    <div className="settings-summary-chip">
                       <span>Font</span>
                       <strong>{selectedFont.label}</strong>
                     </div>
@@ -217,29 +202,6 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                       ))}
                     </div>
                   </div>
-
-                  <div className="settings-panel">
-                    <div className="settings-panel__head">
-                      <h3 className="settings-panel__title">Accent color</h3>
-                      <p className="settings-panel__sub">
-                        Accents drive action buttons, focus rings, highlights, and active navigation states.
-                      </p>
-                    </div>
-                    <div className="settings-accent-grid">
-                      {ACCENT_OPTIONS.map((item) => (
-                        <button
-                          key={item.value}
-                          type="button"
-                          className={`settings-accent-tile${accent === item.value ? ' is-active' : ''}`}
-                          onClick={() => handleAccentChange(item.value)}
-                        >
-                          <span className="settings-accent-chip" style={{ background: item.gradient }} />
-                          <span>{item.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   <div className="settings-panel">
                     <div className="settings-panel__head">
                       <h3 className="settings-panel__title">App font</h3>

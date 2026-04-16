@@ -2,57 +2,63 @@ import { useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import {
   APP_FONT_OPTIONS,
-  ACCENT_OPTIONS,
   ThemeContext,
-  type AccentMode,
   type AppFontMode,
   type ThemeMode,
 } from './themeContext.shared';
 
-const THEME_MODE_KEY   = 'theme-mode';
-const THEME_ACCENT_KEY = 'theme-accent';
-const THEME_FONT_KEY   = 'theme-font';
+const THEME_MODE_KEY = 'theme-mode';
+const THEME_FONT_KEY = 'theme-font';
 
-const THEME_MODES: ThemeMode[] = ['dark', 'light', 'paper', 'high-contrast'];
+const THEME_MODES: ThemeMode[] = [
+  'dark',
+  'light',
+  'paper',
+  'high-contrast',
+  'dark-cyan',
+  'light-cyan',
+  'light-orange',
+  'light-blue-grey',
+  'black-soft',
+];
 
-const LIGHT_MODES: ThemeMode[] = ['light'];
-
-const THEME_TOGGLE_MAP: Record<ThemeMode, ThemeMode> = {
-  dark:            'light',
-  light:           'dark',
-  paper:           'dark',
+const THEME_TOGGLE_MAP: Partial<Record<ThemeMode, ThemeMode>> = {
+  dark: 'light',
+  light: 'dark',
+  paper: 'dark',
   'high-contrast': 'dark',
+  'dark-teal': 'light',
+  'dark-cyan': 'light',
+  'black-soft': 'white-soft',
+  'white-soft': 'black-soft',
 };
 
 function parseThemeMode(value: string | null): ThemeMode {
-  if (value && THEME_MODES.includes(value as ThemeMode)) return value as ThemeMode;
+  if (value && THEME_MODES.includes(value as ThemeMode)) {
+    return value as ThemeMode;
+  }
   return 'light';
 }
 
-function parseAccent(value: string | null): AccentMode {
-  if (value && ACCENT_OPTIONS.some((o) => o.value === value)) return value as AccentMode;
-  return 'indigo';
-}
-
 function parseFont(value: string | null): AppFontMode {
-  if (value && APP_FONT_OPTIONS.some((o) => o.value === value)) return value as AppFontMode;
+  if (value && APP_FONT_OPTIONS.some((o) => o.value === value)) {
+    return value as AppFontMode;
+  }
   return 'system';
 }
 
 export function ThemeContextProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<ThemeMode>(() =>
-    parseThemeMode(localStorage.getItem(THEME_MODE_KEY)),
+      parseThemeMode(localStorage.getItem(THEME_MODE_KEY)),
   );
-  const [accent, setAccentMode] = useState<AccentMode>(() =>
-    parseAccent(localStorage.getItem(THEME_ACCENT_KEY)),
-  );
+
   const [font, setFontMode] = useState<AppFontMode>(() =>
-    parseFont(localStorage.getItem(THEME_FONT_KEY)),
+      parseFont(localStorage.getItem(THEME_FONT_KEY)),
   );
 
   const toggleTheme = useCallback(() => {
     setMode((prev) => {
-      const next = THEME_TOGGLE_MAP[prev] ?? (LIGHT_MODES.includes(prev) ? 'dark' : 'light');
+      const next = THEME_TOGGLE_MAP[prev] ?? (prev === 'light' ? 'dark' : 'light');
       localStorage.setItem(THEME_MODE_KEY, next);
       return next;
     });
@@ -63,34 +69,22 @@ export function ThemeContextProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(THEME_MODE_KEY, newMode);
   }, []);
 
-  const setAccent = useCallback((newAccent: AccentMode) => {
-    setAccentMode(newAccent);
-    localStorage.setItem(THEME_ACCENT_KEY, newAccent);
-  }, []);
-
   const setFont = useCallback((newFont: AppFontMode) => {
     setFontMode(newFont);
     localStorage.setItem(THEME_FONT_KEY, newFont);
   }, []);
 
-  // Apply [data-theme], [data-accent], [data-font] to <html>
-  // style.css uses these selectors for theming
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', mode);
   }, [mode]);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-accent', accent);
-  }, [accent]);
-
-  useEffect(() => {
-    // style.css uses [data-font="..."] (not data-app-font)
     document.documentElement.setAttribute('data-font', font);
   }, [font]);
 
   return (
-    <ThemeContext.Provider value={{ mode, accent, font, toggleTheme, setTheme, setAccent, setFont }}>
-      {children}
-    </ThemeContext.Provider>
+      <ThemeContext.Provider value={{ mode, font, toggleTheme, setTheme, setFont }}>
+        {children}
+      </ThemeContext.Provider>
   );
 }
