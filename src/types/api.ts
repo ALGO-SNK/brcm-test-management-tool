@@ -138,6 +138,16 @@ export interface ADOTestCaseListItem {
   };
 }
 
+export interface ADOGlobalSearchResult {
+  key: string;
+  kind: 'plan' | 'suite' | 'case';
+  label: string;
+  meta: string;
+  plan: ADOTestPlan;
+  suite?: ADOTestSuite;
+  testCase?: ADOTestCase;
+}
+
 // export interface ConnectionConfig {
 //   organization: string;      // https://dev.azure.com/your-org
 //   project: string;           // Project name

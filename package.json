@@ -23,13 +23,14 @@
     "win": {
       "target": "nsis",
       "icon": "src/assets/app-icon.ico",
-      "executableName": "Bromcom Test Builder",
-      "signAndEditExecutable": false
+      "executableName": "Bromcom Test Builder"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "src/assets/app-icon.ico",
+      "uninstallerIcon": "src/assets/app-icon.ico",
+      "installerHeaderIcon": "src/assets/app-icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Bromcom Test Builder",

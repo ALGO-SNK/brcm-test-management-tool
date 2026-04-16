@@ -1,18 +1,45 @@
+const fs = require('node:fs');
 const path = require('node:path');
-const { app, BrowserWindow, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
-const version = app.getVersion();
-const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
-const assetsDir = path.join(__dirname, '..', 'src', 'assets');
-const appIconPath = path.join(assetsDir, 'app-icon.png');
-const brandLogoPath = path.join(assetsDir, 'brand-logo.png');
-const splashHtml = path.join(assetsDir, 'splash.html');
+const APP_ID = 'com.bromcom.testbuilder';
+const PRODUCT_NAME = 'Bromcom Test Builder';
 const SPLASH_MIN_MS = 2000;
+const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
+const version = app.getVersion();
 
 let mainWindow = null;
 let splashWindow = null;
 let splashStartTime = 0;
+
+function resolveAssetFile(fileNames) {
+  const names = Array.isArray(fileNames) ? fileNames : [fileNames];
+  const assetDirs = [
+    path.join(__dirname, '..', 'src', 'assets'),
+    path.join(process.resourcesPath || '', 'src', 'assets'),
+    path.join(process.cwd(), 'src', 'assets'),
+  ];
+
+  for (const dir of assetDirs) {
+    for (const name of names) {
+      const fullPath = path.join(dir, name);
+      if (fs.existsSync(fullPath)) {
+        return fullPath;
+      }
+    }
+  }
+
+  return null;
+}
+
+const iconCandidates = process.platform === 'win32'
+  ? ['app-icon.ico', 'app-icon.png', 'brand-logo.png']
+  : ['app-icon.png', 'brand-logo.png', 'app-icon.ico'];
+
+const appIconPath = resolveAssetFile(iconCandidates);
+const brandLogoPath = resolveAssetFile(['brand-logo.png', 'Bromcom_logo.svg', 'app-icon.png', 'app-icon.ico']);
+const splashHtmlPath = resolveAssetFile('splash.html');
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
@@ -26,7 +53,7 @@ function createSplashWindow() {
     show: false,
     alwaysOnTop: true,
     skipTaskbar: true,
-    icon: appIconPath,
+    icon: appIconPath || undefined,
     backgroundColor: '#0b1220',
     webPreferences: {
       devTools: false,
@@ -37,7 +64,12 @@ function createSplashWindow() {
     splashWindow.show();
   });
 
-  splashWindow.loadFile(splashHtml, {query: {version}}).then();
+  if (splashHtmlPath) {
+    splashWindow.loadFile(splashHtmlPath, { query: { version } }).catch(() => {});
+  } else {
+    splashWindow.loadURL('data:text/html,<body style="background:#0b1220;color:#fff;font-family:Segoe UI,sans-serif;display:flex;align-items:center;justify-content:center;">Loading...</body>').catch(() => {});
+  }
+
   splashStartTime = Date.now();
 }
 
@@ -49,6 +81,7 @@ function closeSplashAndShowMain() {
     if (splashWindow && !splashWindow.isDestroyed()) {
       splashWindow.close();
     }
+
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show();
     }
@@ -63,7 +96,7 @@ function createWindow() {
     minHeight: 700,
     show: false,
     autoHideMenuBar: true,
-    icon: appIconPath,
+    icon: appIconPath || undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -77,14 +110,14 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL).then();
+    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL).catch(() => {});
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html')).then();
+    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html')).catch(() => {});
   }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url).then();
+    shell.openExternal(url).catch(() => {});
     return { action: 'deny' };
   });
 
@@ -92,34 +125,6 @@ function createWindow() {
     closeSplashAndShowMain();
   });
 }
-
-app.whenReady().then(() => {
-  app.setName('BromCom Desktop');
-
-  if (process.platform === 'darwin' && app.dock) {
-    app.dock.setIcon(brandLogoPath);
-  }
-
-  createSplashWindow();
-  createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-autoUpdater.checkForUpdatesAndNotify().then();
-
-ipcMain.handle('app:get-version', () => app.getVersion());
-
 
 function setupAutoUpdate() {
   autoUpdater.logger = console;
@@ -154,7 +159,7 @@ function setupAutoUpdate() {
       cancelId: 1,
       title: 'Update ready',
       message: `Version ${info.version} has been downloaded.`,
-      detail: 'Restart the app to install the update.'
+      detail: 'Restart the app to install the update.',
     });
 
     if (result.response === 0) {
@@ -163,9 +168,34 @@ function setupAutoUpdate() {
   });
 }
 
+app.setAppUserModelId(APP_ID);
+
 app.whenReady().then(() => {
+  app.setName(PRODUCT_NAME);
+
+  if (process.platform === 'darwin' && app.dock && brandLogoPath) {
+    app.dock.setIcon(brandLogoPath);
+  }
+
+  createSplashWindow();
+  createWindow();
+
   setupAutoUpdate();
-  autoUpdater.checkForUpdatesAndNotify().then();
+  autoUpdater.checkForUpdatesAndNotify().catch((error) => {
+    console.error('Initial auto-update check failed:', error);
+  });
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
 });
 
-app.setAppUserModelId('com.bromcom.testbuilder');
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+ipcMain.handle('app:get-version', () => app.getVersion());
