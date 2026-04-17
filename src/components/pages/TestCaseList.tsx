@@ -104,23 +104,18 @@ export function TestCaseList({
   const resolvedSuitePath = suitePath.length > 0
     ? suitePath
     : (suite ? [suite] : []);
+  const breadcrumbSuitePath = selectedCase
+    ? resolvedSuitePath
+    : resolvedSuitePath.slice(0, -1);
   const breadcrumbs = [
     { label: 'Plans', onClick: onBackToPlan, isLink: true, title: 'Plans' },
     { label: planBreadcrumbLabel, onClick: onBackToPlan, isLink: true, title: planBreadcrumbLabel },
-    ...resolvedSuitePath.map((pathSuite, index, array) => {
-      const isActive = index === array.length - 1;
-      return {
-        label: pathSuite.name,
-        title: pathSuite.name,
-        isActive,
-        ...(isActive
-          ? {}
-          : {
-              isLink: true,
-              onClick: () => onSelectSuite(pathSuite, array.slice(0, index + 1)),
-            }),
-      };
-    }),
+    ...breadcrumbSuitePath.map((pathSuite, index) => ({
+      label: pathSuite.name,
+      title: pathSuite.name,
+      isLink: true,
+      onClick: () => onSelectSuite(pathSuite, breadcrumbSuitePath.slice(0, index + 1)),
+    })),
   ];
 
   return (

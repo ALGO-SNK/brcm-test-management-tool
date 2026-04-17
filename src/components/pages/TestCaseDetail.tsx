@@ -702,10 +702,20 @@ export function TestCaseDetail({
     );
   }
 
-  const parentSuiteName = suite.parent?.name || plan.rootSuite.name;
-  [plan.name, parentSuiteName, suite.name, testCase.name]
+  const planBreadcrumbLabel = plan.name.trim() || `Plan ${plan.id}`;
+  const parentSuiteName = suite.parent?.name?.trim() ?? '';
+  const detailBreadcrumbs = [
+    { label: 'Plans', onClick: () => requestExitEdit('back'), isLink: true },
+    { label: planBreadcrumbLabel, onClick: () => requestExitEdit('back'), isLink: true },
+    ...[parentSuiteName, suite.name]
       .filter((item) => item.trim().length > 0)
-      .filter((item, index, arr) => index === 0 || item !== arr[index - 1]);
+      .filter((item, index, arr) => index === 0 || item !== arr[index - 1])
+      .map((label) => ({
+        label,
+        isLink: true,
+        onClick: () => requestExitEdit('back'),
+      })),
+  ];
   const content = (
     <>
       <div className={`case-detail-pane${isEditMode ? ' case-detail-pane--edit' : ''}`}>
@@ -945,12 +955,7 @@ export function TestCaseDetail({
   return (
     <MainLayout title="Test Case Detail" onSettingsClick={onSettingsClick}>
       <PageDetailLayout
-        breadcrumbs={[
-          { label: 'Plans', onClick: () => requestExitEdit('back'), isLink: true },
-          { label: plan.rootSuite.name, isLink: true, onClick: () => requestExitEdit('back') },
-          { label: suite.name, isActive: true },
-        ]
-      }
+        breadcrumbs={detailBreadcrumbs}
         heading={{
           title: testCase.name,
           id: testCase.id,
