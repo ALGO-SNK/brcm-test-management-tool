@@ -6641,6 +6641,13 @@ input[type="radio"] {
     flex-shrink: 0;
     color: transparent;
     font-size: var(--text-sm);
+    transition: width var(--transition-fast), color var(--transition-fast);
+}
+
+.plan-card__secondary-btn:hover {
+    width: auto;
+    padding-inline: 8px;
+    color: inherit;
 }
 
 .plan-card__secondary-btn svg {
