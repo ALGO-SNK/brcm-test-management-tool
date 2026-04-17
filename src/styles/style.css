@@ -6571,7 +6571,7 @@ input[type="radio"] {
     font-size: 13px;
     background: var(--color-primary);
     border-color: var(--color-primary);
-    color: white;
+    color: var(--color-text-inverse);
     transition: all var(--transition-fast);
 }
 
@@ -6595,6 +6595,10 @@ input[type="radio"] {
     justify-content: center;
     font-size: 16px;
     font-weight: 600;
+    color: var(--color-text);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
     transition: all var(--transition-fast);
 }
 
