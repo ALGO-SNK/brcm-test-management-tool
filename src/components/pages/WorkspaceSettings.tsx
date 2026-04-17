@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { IconSave, IconX } from '../Common/Icons';
 import { useThemeContext } from '../../context/useThemeContext';
 import { useNotification } from '../../context/useNotification';
+import { getAppVersions } from '../../utils/appVersion';
 import {
   APP_FONT_OPTIONS,
   THEME_MODE_OPTIONS,
@@ -22,7 +23,7 @@ interface WorkspaceSettingsProps {
   onBack: () => void;
 }
 
-type SettingsSection = 'appearance' | 'workspace';
+type SettingsSection = 'appearance' | 'workspace' | 'about';
 type ValidationState = 'idle' | 'success' | 'error';
 
 const API_VERSION_OPTIONS = ['7.2', '7.1', '7.0', '6.0'];
@@ -64,10 +65,12 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
     () => APP_FONT_OPTIONS.find((item) => item.value === font) ?? APP_FONT_OPTIONS[0],
     [font],
   );
-  const sectionLabel = section === 'appearance' ? 'Appearance' : 'Workspace';
+  const sectionLabel = section === 'appearance' ? 'Appearance' : section === 'workspace' ? 'Workspace' : 'About';
   const sectionSubtitle = section === 'appearance'
     ? 'Theme modes, accent palettes, and typography controls.'
-    : 'Manage saved workspace connection and API defaults.';
+    : section === 'workspace'
+    ? 'Manage saved workspace connection and API defaults.'
+    : 'About Bromcom Test Builder and system information.';
 
   const updateField = (field: keyof WorkspaceSettingsValues, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -161,6 +164,15 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
               >
                 <span className="settings-nav-item__title">Workspace</span>
                 <span className="settings-nav-item__sub">Connection and API defaults</span>
+              </button>
+              <p className="settings-nav-label" style={{ marginTop: '20px' }}>Other</p>
+              <button
+                type="button"
+                className={sectionItemClassName('about')}
+                onClick={() => setSection('about')}
+              >
+                <span className="settings-nav-item__title">About</span>
+                <span className="settings-nav-item__sub">App version and information</span>
               </button>
             </aside>
 
@@ -332,6 +344,40 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                       </div>
                     </div>
                   </form>
+                </section>
+              )}
+
+              {section === 'about' && (
+                <section className="settings-pane">
+                  <div className="settings-panel">
+                    <div className="settings-panel__head">
+                      <h3 className="settings-panel__title">Information</h3>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: '32px', padding: '20px 16px' }}>
+                      <div className="about-item">
+                        <label className="about-label">Version</label>
+                        <p className="about-value about-value--mono">v{getAppVersions().app}</p>
+                      </div>
+
+                      <div className="about-item">
+                        <label className="about-label">Developer</label>
+                        <p className="about-value">Bromcom</p>
+                      </div>
+
+                      <div className="about-item">
+                        <label className="about-label">Application ID</label>
+                        <p className="about-value about-value--mono">com.bromcom.testbuilder</p>
+                      </div>
+
+                      <div className="about-item">
+                        <label className="about-label">Description</label>
+                        <p className="about-value about-value--description">
+                          Test case and plan management for Azure DevOps. Create, edit, and organize test cases with full XML step support.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </section>
               )}
             </div>

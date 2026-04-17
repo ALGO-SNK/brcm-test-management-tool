@@ -1,7 +1,7 @@
 {
   "name": "bcm-test-builder",
   "private": true,
-  "version": "2026.4.1",
+  "version": "2026.4.3",
   "author": "Bromcom",
   "description": "Bromcom Test Builder desktop app",
   "type": "module",
@@ -77,15 +77,18 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
+    "bump-version": "node scripts/bump-version.cjs",
+    "bump-version:major": "node scripts/bump-version.cjs major",
+    "bump-version:minor": "node scripts/bump-version.cjs minor",
     "electron:dev": "node electron/dev-runner.cjs",
     "electron:start": "npm run build && electron .",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
-    "dist": "npm run typecheck && electron-builder -mwl",
-    "dist:win": "npm run typecheck && electron-builder --win",
-    "dist:linux": "npm run typecheck && electron-builder --linux",
-    "dist:mac": "npm run typecheck && electron-builder --mac"
+    "dist": "npm run typecheck && npm run bump-version && npm run build && electron-builder -mwl",
+    "dist:win": "npm run typecheck && npm run bump-version && npm run build && electron-builder --win",
+    "dist:linux": "npm run typecheck && npm run bump-version && npm run build && electron-builder --linux",
+    "dist:mac": "npm run typecheck && npm run bump-version && npm run build && electron-builder --mac"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

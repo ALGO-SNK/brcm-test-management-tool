@@ -60,7 +60,7 @@ function extractAdoErrorText(body: string): string {
   return trimmed;
 }
 
-function buildAdoErrorMessage(action: string, status: number, body: string, statusText: string): string {
+function buildAdoErrorMessage(action: string, status: number, body: string): string {
   const details = extractAdoErrorText(body).toLowerCase();
 
   if (status === 400) {
@@ -312,10 +312,6 @@ export function buildWorkItemAdoUrl(settings: WorkspaceConnectionSettings, workI
   return `${buildBaseWebUrl(settings)}/_workitems/edit/${encodeURIComponent(String(workItemId))}`;
 }
 
-async function fetchJson<T>(url: string, patToken: string, signal?: AbortSignal): Promise<T> {
-  return fetchJsonWithAction<T>(url, patToken, 'load data from Azure DevOps', signal);
-}
-
 async function fetchJsonWithAction<T>(
   url: string,
   patToken: string,
@@ -341,7 +337,7 @@ async function fetchJsonWithAction<T>(
 
   if (!response.ok) {
     const body = await response.text();
-    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body, response.statusText));
+    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body));
   }
 
   return (await response.json()) as T;
@@ -373,7 +369,7 @@ async function patchJson<T>(
 
   if (!response.ok) {
     const body = await response.text();
-    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body, response.statusText));
+    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body));
   }
 
   return (await response.json()) as T;
@@ -398,7 +394,7 @@ async function deleteRequest(url: string, patToken: string, action = 'remove the
 
   if (!response.ok) {
     const body = await response.text();
-    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body, response.statusText));
+    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body));
   }
 }
 
@@ -1101,7 +1097,7 @@ async function postJson<T>(
 
   if (!response.ok) {
     const body = await response.text();
-    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body, response.statusText));
+    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body));
   }
 
   return (await response.json()) as T;
