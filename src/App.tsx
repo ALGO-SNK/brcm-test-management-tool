@@ -108,6 +108,7 @@ export function App() {
   const [previousPage, setPreviousPage]   = useState<ContentPage>('landing');
   const [selectedPlan, setSelectedPlan]   = useState<ADOTestPlan | null>(null);
   const [selectedSuite, setSelectedSuite] = useState<ADOTestSuite | null>(null);
+  const [selectedSuitePath, setSelectedSuitePath] = useState<ADOTestSuite[]>([]);
   const [selectedCase, setSelectedCase]   = useState<ADOTestCase | null>(null);
   const [planSuiteCreateRequest, setPlanSuiteCreateRequest] = useState(0);
   const [workspaceSettings, setWorkspaceSettings] =
@@ -117,6 +118,7 @@ export function App() {
     setSelectedPlan(plan);
     setCurrentPage('cases');
     setSelectedSuite(null);
+    setSelectedSuitePath([]);
     setSelectedCase(null);
     setPlanSuiteCreateRequest(0);
   };
@@ -124,11 +126,13 @@ export function App() {
     setSelectedPlan(plan);
     setCurrentPage('cases');
     setSelectedSuite(null);
+    setSelectedSuitePath([]);
     setSelectedCase(null);
     setPlanSuiteCreateRequest((value) => value + 1);
   };
-  const handleSelectSuite = (suite: ADOTestSuite) => {
+  const handleSelectSuite = (suite: ADOTestSuite, path: ADOTestSuite[] = [suite]) => {
     setSelectedSuite(suite);
+    setSelectedSuitePath(path);
     setSelectedCase(null);
   };
   const handleSelectCase = (testCase: ADOTestCase) => {
@@ -139,6 +143,7 @@ export function App() {
     setCurrentPage('landing');
     setSelectedPlan(null);
     setSelectedSuite(null);
+    setSelectedSuitePath([]);
     setSelectedCase(null);
   };
   const handleBackToCases = () => {
@@ -177,6 +182,7 @@ export function App() {
             <TestCaseList
               plan={selectedPlan}
               suite={selectedSuite}
+              suitePath={selectedSuitePath}
               selectedCase={selectedCase}
               onSelectSuite={handleSelectSuite}
               onSelectCase={handleSelectCase}

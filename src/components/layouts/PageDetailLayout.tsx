@@ -5,6 +5,7 @@ interface BreadcrumbItem {
   onClick?: () => void;
   isLink?: boolean;
   isActive?: boolean;
+  title?: string;
 }
 
 interface HeadingData {
@@ -45,11 +46,20 @@ export function PageDetailLayout({
         {breadcrumbs.map((item, idx) => (
           <React.Fragment key={idx}>
             {item.isLink && item.onClick ? (
-              <button className="breadcrumbs__link" onClick={item.onClick}>
+              <button
+                type="button"
+                className="breadcrumbs__link"
+                onClick={item.onClick}
+                title={item.title ?? item.label}
+              >
                 {item.label}
               </button>
             ) : (
-              <span className={item.isActive ? 'breadcrumbs__current' : 'breadcrumbs__item'}>
+              <span
+                className={item.isActive ? 'breadcrumbs__current' : 'breadcrumbs__item'}
+                title={item.title ?? item.label}
+                aria-current={item.isActive ? 'page' : undefined}
+              >
                 {item.label}
               </span>
             )}

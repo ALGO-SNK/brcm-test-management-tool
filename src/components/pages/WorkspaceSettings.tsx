@@ -9,6 +9,7 @@ import {
   type AppFontMode,
   type ThemeMode,
 } from '../../context/themeContext.shared';
+import { NOT_SELECTED_LABEL } from '../../utils/selectLabels';
 
 export interface WorkspaceSettingsValues {
   organization: string;
@@ -65,6 +66,7 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
     () => APP_FONT_OPTIONS.find((item) => item.value === font) ?? APP_FONT_OPTIONS[0],
     [font],
   );
+  const selectedFontValue = APP_FONT_OPTIONS.some((item) => item.value === font) ? font : '';
   const sectionLabel = section === 'appearance' ? 'Appearance' : section === 'workspace' ? 'Workspace' : 'About';
   const sectionSubtitle = section === 'appearance'
     ? 'Theme modes, accent palettes, and typography controls.'
@@ -227,9 +229,14 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                         <select
                           id="appFont"
                           className="settings-input settings-font-select"
-                          value={font}
+                          value={selectedFontValue}
                           onChange={(event) => handleFontChange(event.target.value)}
                         >
+                          {!selectedFontValue && (
+                            <option value="" disabled>
+                              {NOT_SELECTED_LABEL}
+                            </option>
+                          )}
                           {APP_FONT_OPTIONS.map((item) => (
                             <option key={item.value} value={item.value}>
                               {item.label}

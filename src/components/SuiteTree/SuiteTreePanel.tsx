@@ -20,8 +20,8 @@ import { useNotification } from '../../context/useNotification';
 interface SuiteTreePanelProps {
   plan: ADOTestPlan;
   selectedSuiteId: number | null;
-  onSelectSuite: (suite: ADOTestSuite) => void;
-  onAddTestCase: (suite: ADOTestSuite) => void;
+  onSelectSuite: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
+  onAddTestCase: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
   onBackToPlan: () => void;
   workspaceSettings: WorkspaceSettingsValues;
   createPlanSuiteRequest?: number;
@@ -71,6 +71,22 @@ function findSuiteById(suites: ADOTestSuite[], suiteId: number): ADOTestSuite | 
     const match = suite.children ? findSuiteById(suite.children, suiteId) : null;
     if (match) return match;
   }
+  return null;
+}
+
+function findSuitePathById(
+  suites: ADOTestSuite[],
+  suiteId: number,
+  ancestry: ADOTestSuite[] = [],
+): ADOTestSuite[] | null {
+  for (const suite of suites) {
+    const nextPath = [...ancestry, suite];
+    if (suite.id === suiteId) return nextPath;
+
+    const match = suite.children ? findSuitePathById(suite.children, suiteId, nextPath) : null;
+    if (match) return match;
+  }
+
   return null;
 }
 
@@ -201,7 +217,7 @@ export function SuiteTreePanel({
   useEffect(() => {
     if (selectedSuiteId != null) return;
     if (visibleSuites.length === 0) return;
-    onSelectSuite(visibleSuites[0]);
+    onSelectSuite(visibleSuites[0], [visibleSuites[0]]);
   }, [selectedSuiteId, visibleSuites, onSelectSuite]);
 
   const isExpanded = expandSignal > 0;
@@ -267,8 +283,8 @@ export function SuiteTreePanel({
     openAdoUrl(buildSuiteAdoUrl(workspaceSettings, plan.id, suite.id));
   };
 
-  const handleAddTestCase = (suite: ADOTestSuite) => {
-    onAddTestCase(suite);
+  const handleAddTestCase = (suite: ADOTestSuite, path: ADOTestSuite[]) => {
+    onAddTestCase(suite, path);
   };
 
   const handleCreateSuite = async () => {
@@ -309,9 +325,10 @@ export function SuiteTreePanel({
       suitesRef.current = refreshedTree;
 
       const createdSuiteInTree = findSuiteById(refreshedTree, createdSuite.id) ?? createdSuite;
+      const createdSuitePath = findSuitePathById(refreshedTree, createdSuite.id) ?? [createdSuiteInTree];
 
       if (createdSuiteInTree) {
-        onSelectSuite(createdSuiteInTree);
+        onSelectSuite(createdSuiteInTree, createdSuitePath);
       }
 
       setFilterText('');
@@ -407,6 +424,7 @@ export function SuiteTreePanel({
                   key={`${suite.id}:${expandSignal}`}
                   suite={suite}
                   depth={0}
+                  ancestry={[]}
                   selectedSuiteId={selectedSuiteId}
                   onSelect={onSelectSuite}
                   onAddSuite={(selectedSuite) => openCreateSuiteModal(selectedSuite)}

@@ -10,8 +10,9 @@ import type { WorkspaceSettingsValues } from './WorkspaceSettings';
 interface TestCaseListProps {
   plan: ADOTestPlan;
   suite: ADOTestSuite | null;
+  suitePath: ADOTestSuite[];
   selectedCase: ADOTestCase | null;
-  onSelectSuite: (suite: ADOTestSuite) => void;
+  onSelectSuite: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
   onSelectCase: (testCase: ADOTestCase) => void;
   onBackToCases: () => void;
   onBackToPlan: () => void;
@@ -27,6 +28,7 @@ const DEFAULT_SIDEBAR = 300;
 export function TestCaseList({
   plan,
   suite,
+  suitePath,
   selectedCase,
   onSelectSuite,
   onSelectCase,
@@ -88,15 +90,38 @@ export function TestCaseList({
     setIsCreateMode(false);
   }, [suite?.id]);
 
-  const handleAddTestCaseFromSuite = useCallback((targetSuite: ADOTestSuite) => {
+  const handleAddTestCaseFromSuite = useCallback((targetSuite: ADOTestSuite, path: ADOTestSuite[]) => {
     preserveCreateModeOnSuiteChangeRef.current = true;
-    onSelectSuite(targetSuite);
+    onSelectSuite(targetSuite, path);
     setIsCreateMode(true);
   }, [onSelectSuite]);
 
   const currentSuiteCount = suite
     ? suiteCaseCountBySuiteId[suite.id] ?? (typeof suite.testCaseCount === 'number' ? suite.testCaseCount : null)
     : null;
+
+  const planBreadcrumbLabel = plan.name.trim() || `Plan ${plan.id}`;
+  const resolvedSuitePath = suitePath.length > 0
+    ? suitePath
+    : (suite ? [suite] : []);
+  const breadcrumbs = [
+    { label: 'Plans', onClick: onBackToPlan, isLink: true, title: 'Plans' },
+    { label: planBreadcrumbLabel, onClick: onBackToPlan, isLink: true, title: planBreadcrumbLabel },
+    ...resolvedSuitePath.map((pathSuite, index, array) => {
+      const isActive = index === array.length - 1;
+      return {
+        label: pathSuite.name,
+        title: pathSuite.name,
+        isActive,
+        ...(isActive
+          ? {}
+          : {
+              isLink: true,
+              onClick: () => onSelectSuite(pathSuite, array.slice(0, index + 1)),
+            }),
+      };
+    }),
+  ];
 
   return (
     <div className="app-shell">
@@ -127,10 +152,7 @@ export function TestCaseList({
           <div className="split-pane__content" style={{ padding: sidebarWidth ? 'var(--space-5) clamp(10px, 1.8vw, 16px)' : '0' }}>
             {suite ? (
               <PageDetailLayout
-                breadcrumbs={[
-                  { label: 'Plans', onClick: onBackToPlan, isLink: true },
-                  { label: plan.rootSuite.name, isActive: true },
-                ]}
+                breadcrumbs={breadcrumbs}
                 heading={{
                   title: selectedCase ? selectedCase.name : suite.name,
                   id: selectedCase ? selectedCase.id : suite.id,

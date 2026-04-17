@@ -19,6 +19,7 @@ import { supportsDynamicLocatorControls } from '../../utils/actionRegistry';
 import type { ParameterContract } from '../../utils/actionRegistry';
 import type { ReactNode } from 'react';
 import type { OptionalStepField, ParsedStep } from './StepsEditor';
+import { NOT_SELECTED_LABEL } from '../../utils/selectLabels';
 
 interface StepFieldRendererProps {
   step: ParsedStep;
@@ -115,7 +116,7 @@ function getFieldLabel(fieldName: string): string {
 function getFieldPlaceholder(fieldName: string): string {
   const placeholders: Record<string, string> = {
     element: 'e.g., //div[@id="summary"]',
-    elementCategory: 'Select locator type',
+    elementCategory: NOT_SELECTED_LABEL,
     value: 'Enter value',
     expectedValue: 'e.g., true',
     key: 'e.g., step_result_1',
@@ -216,7 +217,7 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
             title={elementFields.elementCategoryHint}
           >
             <option value="" disabled>
-              Select locator type
+              {NOT_SELECTED_LABEL}
             </option>
             {ELEMENT_CATEGORY_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>

@@ -12,10 +12,11 @@ import type { ADOTestSuite } from '../../types';
 interface SuiteTreeNodeProps {
   suite: ADOTestSuite;
   depth: number;
+  ancestry: ADOTestSuite[];
   selectedSuiteId: number | null;
-  onSelect: (suite: ADOTestSuite) => void;
+  onSelect: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
   onAddSuite: (suite: ADOTestSuite) => void;
-  onAddTestCase: (suite: ADOTestSuite) => void;
+  onAddTestCase: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
   onOpenInAdo: (suite: ADOTestSuite) => void;
   filterText: string;
   expandSignal: number;
@@ -39,6 +40,7 @@ function containsSuiteId(suite: ADOTestSuite, suiteId: number): boolean {
 export function SuiteTreeNode({
   suite,
   depth,
+  ancestry,
   selectedSuiteId,
   onSelect,
   onAddSuite,
@@ -104,7 +106,7 @@ export function SuiteTreeNode({
   };
 
   const handleSelect = () => {
-    onSelect(suite);
+    onSelect(suite, [...ancestry, suite]);
   };
 
   return (
@@ -172,7 +174,7 @@ export function SuiteTreeNode({
                 className="action-menu__item"
                 onClick={() => {
                   setMenuOpen(false);
-                  onAddTestCase(suite);
+                  onAddTestCase(suite, [...ancestry, suite]);
                 }}
                 disabled={!canAddTestCase}
               >
@@ -204,6 +206,7 @@ export function SuiteTreeNode({
               key={child.id}
               suite={child}
               depth={depth + 1}
+              ancestry={[...ancestry, suite]}
               selectedSuiteId={selectedSuiteId}
               onSelect={onSelect}
               onAddSuite={onAddSuite}

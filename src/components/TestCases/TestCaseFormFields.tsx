@@ -1,4 +1,6 @@
 
+import { NOT_SELECTED_LABEL } from '../../utils/selectLabels';
+
 interface TestCaseFormFieldsProps {
   formData: {
     title?: string;
@@ -25,6 +27,7 @@ interface TestCaseFormFieldsProps {
 }
 
 const DEFAULT_STATUS_OPTIONS = ['Design', 'Ready', 'Closed', 'Removed'];
+const DEFAULT_METHOD_OPTIONS = ['Appium', 'Manual', 'Selenium', 'Testim'];
 
 export function TestCaseFormFields({
   formData,
@@ -41,6 +44,10 @@ export function TestCaseFormFields({
   const statusOptions = DEFAULT_STATUS_OPTIONS.includes(formData.status)
     ? DEFAULT_STATUS_OPTIONS
     : [formData.status, ...DEFAULT_STATUS_OPTIONS].filter((value, index, arr) => value && arr.indexOf(value) === index);
+
+  const methodOptions = DEFAULT_METHOD_OPTIONS.includes(formData.method)
+    ? DEFAULT_METHOD_OPTIONS
+    : [formData.method, ...DEFAULT_METHOD_OPTIONS].filter((value, index, arr) => value && arr.indexOf(value) === index);
 
   return (
     <>
@@ -90,10 +97,15 @@ export function TestCaseFormFields({
             <label className="case-detail-edit-form__label">Status</label>
             <select
               className="steps-editor__select"
-              value={formData.status}
+              value={formData.status || ''}
               onChange={(e) => handleChange('status', e.target.value)}
               disabled={isLoading}
             >
+              {!formData.status && (
+                <option value="" disabled>
+                  {NOT_SELECTED_LABEL}
+                </option>
+              )}
               {statusOptions.map((status) => (
                 <option key={status} value={status}>
                   {status}
@@ -103,14 +115,23 @@ export function TestCaseFormFields({
           </div>
           <div className="case-detail-edit-form__field" style={{ flex: 1 }}>
             <label className="case-detail-edit-form__label">Testing Method</label>
-            <input
-              type="text"
+            <select
               className="case-detail-edit-form__input"
-              value={formData.method}
+              value={formData.method || ''}
               onChange={(e) => handleChange('method', e.target.value)}
-              placeholder="e.g., Selenium, Manual"
               disabled={isLoading}
-            />
+            >
+              {!formData.method && (
+                <option value="" disabled>
+                  {NOT_SELECTED_LABEL}
+                </option>
+              )}
+              {methodOptions.map((method) => (
+                <option key={method} value={method}>
+                  {method}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="case-detail-edit-form__field" style={{ flex: 1 }}>
             <label className="case-detail-edit-form__label">Region</label>

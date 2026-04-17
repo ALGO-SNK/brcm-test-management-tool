@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   IconArrowDownward,
-  IconArrowRight,
   IconArrowUpward,
   IconChevronDown,
   IconCopy,
@@ -13,6 +12,7 @@ import { SearchableSelect } from '../Common/SearchableSelect';
 import { StepFieldRenderer } from './StepFieldRenderer';
 import { parseXMLSteps } from '../../utils/xmlParser';
 import { ACTION_REGISTRY, type ParameterContract } from '../../utils/actionRegistry';
+import { NOT_SELECTED_LABEL } from '../../utils/selectLabels';
 
 export interface ParsedStep {
   id?: string;
@@ -409,6 +409,7 @@ function StepItem({
             value={step.action}
             onChange={(value) => onFieldChange('action', value)}
             placeholder="Search actions…"
+            emptyLabel={NOT_SELECTED_LABEL}
             className="steps-editor__input"
           />
         </div>
@@ -621,7 +622,7 @@ export function StepsEditor({ rawSteps, onChange, errors = [] }: StepsEditorProp
 
         {steps.length === 0 && (
           <div className="steps-editor__empty">
-            <p>No steps yet. Click <strong>+ Add Step</strong> to begin.</p>
+            <p>No steps yet.</p>
           </div>
         )}
       </div>
@@ -629,22 +630,16 @@ export function StepsEditor({ rawSteps, onChange, errors = [] }: StepsEditorProp
       <button
         type="button"
         className="steps-editor__add-step"
-      onClick={() => {
+        onClick={() => {
           publishChanges([...steps, createBlankStep(steps.length + 1)]);
         }}
-        aria-label="Add a new step"
-        title="Add a new step"
+        aria-label="Add step"
+        title="Add step"
       >
         <span className="steps-editor__add-step-icon" aria-hidden="true">
-          <IconPlus size={16} />
+          <IconPlus size={14} />
         </span>
-        <span className="steps-editor__add-step-copy">
-          <strong>Add step</strong>
-          <span>Insert a new action at the end</span>
-        </span>
-        <span className="steps-editor__add-step-chevron" aria-hidden="true">
-          <IconArrowRight size={14} />
-        </span>
+        <span>Add step</span>
       </button>
 
       {deleteTargetIndex !== null && steps[deleteTargetIndex] && (

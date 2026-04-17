@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { IconChevronDown, IconX } from './Icons';
+import { NOT_SELECTED_LABEL } from '../../utils/selectLabels';
 
 interface SearchableSelectOption {
   value: string;
@@ -12,6 +13,7 @@ interface SearchableSelectProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  emptyLabel?: string;
   className?: string;
 }
 
@@ -20,6 +22,7 @@ export function SearchableSelect({
   value,
   onChange,
   placeholder = 'Select…',
+  emptyLabel = NOT_SELECTED_LABEL,
   className = '',
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -123,7 +126,7 @@ export function SearchableSelect({
         ref={inputRef}
         type="text"
         className="searchable-select__input"
-        placeholder={selectedOption?.label || placeholder}
+        placeholder={isOpen ? placeholder : (selectedOption?.label || emptyLabel)}
         value={isOpen ? searchTerm : selectedOption?.label ?? ''}
         onChange={(e) => setSearchTerm(e.target.value)}
         onKeyDown={(e) => {
