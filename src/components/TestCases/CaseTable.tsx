@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { IconChevronDown, IconFilterList, IconSearch, IconVisibility } from '../Common/Icons';
+import { IconChevronDown, IconDelete, IconSearch, IconVisibility, IconX } from '../Common/Icons';
 import type { ADOTestCase } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { EmptyTestCases } from './EmptyTestCases';
 import { CreateTestCaseForm } from './CreateTestCaseForm';
-import { fetchTestCasesForSuite, getCachedTestCasesForSuite, createTestCase } from '../../services/adoApi';
+import { deleteTestCase, fetchTestCasesForSuite, getCachedTestCasesForSuite, createTestCase } from '../../services/adoApi';
 import { buildTestCaseData } from '../../utils/testCaseBuilder';
+import { useNotification } from '../../context/useNotification';
 
 function getInitials(name: string): string {
   const parts = name.split(/\s+/).filter(Boolean);
@@ -46,6 +47,21 @@ const SORT_OPTIONS: SortOption[] = [
   { key: 'priority-low', label: 'Priority: Low to High', field: 'priority', order: 'asc' },
 ];
 
+function getStatusBadgeClass(status: string): string {
+  switch (status.trim().toLowerCase()) {
+    case 'ready':
+      return 'badge badge--success';
+    case 'closed':
+      return 'badge badge--neutral';
+    case 'removed':
+      return 'badge badge--danger';
+    case 'design':
+      return 'badge badge--info';
+    default:
+      return 'badge badge--warning';
+  }
+}
+
 /*function normalizeFieldText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return String(value);
@@ -77,18 +93,16 @@ export function CaseTable({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterByAssignees, setFilterByAssignees] = useState<Set<string>>(new Set());
-  const [openFilterColumn, setOpenFilterColumn] = useState<'assignee' | null>(null);
-  const [searchFilterAssignee, setSearchFilterAssignee] = useState('');
-  const [filterPopupSize, setFilterPopupSize] = useState<{ width: number; height: number } | null>(null);
-  const filterPopupRef = useRef<HTMLDivElement>(null);
   const [sortField, setSortField] = useState<SortField>('id');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const filterMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
   const [localIsCreateMode, setLocalIsCreateMode] = useState(false);
   const createModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [deleteTargetCase, setDeleteTargetCase] = useState<ADOTestCase | null>(null);
+  const [blockedRemovalCase, setBlockedRemovalCase] = useState<ADOTestCase | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { addNotification } = useNotification();
 
   // Use prop if provided, otherwise use local state
   const isCreateMode = propIsCreateMode !== undefined ? propIsCreateMode : localIsCreateMode;
@@ -185,14 +199,27 @@ export function CaseTable({
   }, []);
 
   useEffect(() => {
-    if (!sortMenuOpen && openFilterColumn === null) return;
+    if (!deleteTargetCase && !blockedRemovalCase) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isDeleting) {
+        setDeleteTargetCase(null);
+        setBlockedRemovalCase(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [blockedRemovalCase, deleteTargetCase, isDeleting]);
+
+  useEffect(() => {
+    if (!sortMenuOpen) return;
 
     const handleDocumentMouseDown = (event: MouseEvent) => {
-      if (sortMenuOpen && sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
         setSortMenuOpen(false);
-      }
-      if (openFilterColumn !== null && filterMenuRef.current && !filterMenuRef.current.contains(event.target as Node)) {
-        setOpenFilterColumn(null);
       }
     };
 
@@ -200,45 +227,7 @@ export function CaseTable({
     return () => {
       document.removeEventListener('mousedown', handleDocumentMouseDown);
     };
-  }, [sortMenuOpen, openFilterColumn]);
-
-  useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
-      const resizeHandle = document.querySelector('.cases-table__filter-resize-handle') as HTMLElement | null;
-      if (!resizeHandle || resizeHandle.dataset.resizing !== 'true') return;
-
-      const popup = filterPopupRef.current;
-      if (!popup) return;
-
-      const startX = Number(resizeHandle.dataset.startX);
-      const startY = Number(resizeHandle.dataset.startY);
-      const startWidth = Number(resizeHandle.dataset.startWidth);
-      const startHeight = Number(resizeHandle.dataset.startHeight);
-
-      const deltaX = event.clientX - startX;
-      const deltaY = event.clientY - startY;
-
-      const newWidth = Math.max(220, startWidth + deltaX);
-      const newHeight = Math.max(150, startHeight + deltaY);
-
-      setFilterPopupSize({ width: newWidth, height: newHeight });
-    };
-
-    const handleMouseUp = () => {
-      const resizeHandle = document.querySelector('.cases-table__filter-resize-handle') as HTMLElement | null;
-      if (resizeHandle) {
-        resizeHandle.dataset.resizing = 'false';
-      }
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, []);
+  }, [sortMenuOpen]);
 
   const filteredCases = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -249,13 +238,9 @@ export function CaseTable({
         || String(testCase.id).includes(normalizedSearch)
         || testCase.assignedTo?.displayName.toLowerCase().includes(normalizedSearch)
         || false;
-
-      const assigneeName = testCase.assignedTo?.displayName || 'Unassigned';
-      const matchesAssigneeFilter = filterByAssignees.size === 0 || filterByAssignees.has(assigneeName);
-
-      return matchesSearch && matchesAssigneeFilter;
+      return matchesSearch;
     });
-  }, [cases, searchTerm, filterByAssignees]);
+  }, [cases, searchTerm]);
 
   const sortedCases = useMemo(() => {
     return [...filteredCases].sort((a, b) => {
@@ -287,21 +272,12 @@ export function CaseTable({
     });
   }, [filteredCases, sortField, sortOrder]);
 
+  const hasActiveFilter = searchTerm.trim().length > 0;
+  const noFilteredData = cases.length > 0 && sortedCases.length === 0;
+
   const selectedSortOption = useMemo(() => {
     return SORT_OPTIONS.find((option) => option.field === sortField && option.order === sortOrder) ?? SORT_OPTIONS[0];
   }, [sortField, sortOrder]);
-
-  const assigneeOptions = useMemo(() => {
-    const assignees = Array.from(
-      new Set(cases.map((testCase) => testCase.assignedTo?.displayName || 'Unassigned')),
-    );
-    return assignees.sort();
-  }, [cases]);
-
-  const filteredAssigneeOptions = useMemo(() => {
-    const search = searchFilterAssignee.trim().toLowerCase();
-    return search ? assigneeOptions.filter((assignee) => assignee.toLowerCase().includes(search)) : assigneeOptions;
-  }, [assigneeOptions, searchFilterAssignee]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -321,6 +297,54 @@ export function CaseTable({
       }
       return next;
     });
+  };
+
+  const handleDeleteSelectedCase = async () => {
+    if (!deleteTargetCase || isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteTestCase(
+        workspaceSettings,
+        deleteTargetCase.id,
+        deleteTargetCase._links?.workItem?.href ?? deleteTargetCase._links?.self?.href,
+        { planId, suiteId },
+      );
+
+      setCases((current) => current.filter((testCase) => testCase.id !== deleteTargetCase.id));
+      setDeleteTargetCase(null);
+      addNotification('success', `Test case "${deleteTargetCase.name}" removed from this suite.`);
+      setWarning(null);
+      setError(null);
+
+      try {
+        const updatedCases = await fetchTestCasesForSuite(
+          workspaceSettings,
+          planId,
+          suiteId,
+          suiteTestCasesHref,
+          suiteSelfHref,
+        );
+        setCases(updatedCases);
+      } catch (refreshError) {
+        console.warn('Failed to refresh test cases after suite removal:', refreshError);
+      }
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : 'Failed to remove test case from suite';
+      setError(message);
+      addNotification('error', message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const requestRemoveFromSuite = (testCase: ADOTestCase) => {
+    if (testCase.state.trim().toLowerCase() !== 'removed') {
+      setBlockedRemovalCase(testCase);
+      return;
+    }
+
+    setDeleteTargetCase(testCase);
   };
 
   if (loading) {
@@ -382,6 +406,7 @@ export function CaseTable({
 
             // Success: show message and refresh test list
             setSuccessMessage(`✅ Test case "${newCase.name}" created successfully!`);
+            addNotification('success', `Test case "${newCase.name}" created successfully.`);
             setError(null);
             setWarning(null);
             onTestCaseCreated?.(newCase);
@@ -529,165 +554,228 @@ export function CaseTable({
               <th>
                 <span>Test Case Title</span>
               </th>
-              <th style={{ width: 220 }} className="cases-table__header-with-filter">
-                <div className="cases-table__header-content">
-                  <span>Assigned To</span>
-                  <div className="cases-table__filter-dropdown" ref={filterMenuRef}>
-                    <button
-                      type="button"
-                      className={`cases-table__filter-icon${openFilterColumn === 'assignee' ? ' is-open' : ''}`}
-                      onClick={() => setOpenFilterColumn(openFilterColumn === 'assignee' ? null : 'assignee')}
-                      title="Filter Assignee"
-                    >
-                      <IconFilterList size={14} />
-                    </button>
-                    {openFilterColumn === 'assignee' && (
-                      <div
-                        className="cases-table__filter-popup"
-                        ref={filterPopupRef}
-                        style={filterPopupSize ? { width: `${filterPopupSize.width}px`, maxHeight: `${filterPopupSize.height}px` } : undefined}
-                      >
-                        <input
-                          type="text"
-                          className="cases-table__filter-search-input"
-                          placeholder="Search..."
-                          value={searchFilterAssignee}
-                          onChange={(event) => setSearchFilterAssignee(event.target.value)}
-                          autoFocus
-                        />
-                        <div className="cases-table__filter-options">
-                          {filteredAssigneeOptions.map((assignee) => (
-                            <label key={assignee} className="cases-table__filter-option">
-                              <input
-                                type="checkbox"
-                                checked={filterByAssignees.has(assignee)}
-                                onChange={(event) => {
-                                  const newSet = new Set(filterByAssignees);
-                                  if (event.target.checked) {
-                                    newSet.add(assignee);
-                                  } else {
-                                    newSet.delete(assignee);
-                                  }
-                                  setFilterByAssignees(newSet);
-                                }}
-                              />
-                              {assignee}
-                            </label>
-                          ))}
-                        </div>
-                        <div className="cases-table__filter-actions">
-                          <button
-                            type="button"
-                            className="cases-table__filter-reset"
-                            onClick={() => {
-                              setFilterByAssignees(new Set());
-                              setSearchFilterAssignee('');
-                            }}
-                          >
-                            Clear
-                          </button>
-                          <button
-                            type="button"
-                            className="cases-table__filter-reset"
-                            onClick={() => setFilterPopupSize(null)}
-                            title="Reset size"
-                          >
-                            Reset
-                          </button>
-                        </div>
-                        <div
-                          className="cases-table__filter-resize-handle"
-                          onMouseDown={(e) => {
-                            const handle = e.currentTarget;
-                            const popup = filterPopupRef.current;
-                            if (!popup) return;
-                            handle.dataset.resizing = 'true';
-                            handle.dataset.startX = String(e.clientX);
-                            handle.dataset.startY = String(e.clientY);
-                            handle.dataset.startWidth = String(filterPopupSize?.width || popup.offsetWidth);
-                            handle.dataset.startHeight = String(filterPopupSize?.height || popup.offsetHeight);
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <th style={{ width: 140 }}>
+                <span>Status</span>
+              </th>
+              <th style={{ width: 220 }}>
+                <span>Assigned To</span>
               </th>
               <th style={{ width: 100 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {sortedCases.map((testCase) => (
-              <tr key={testCase.id} className={showSelectionColumn && selected.has(testCase.id) ? 'selected' : ''}>
-                {showSelectionColumn && (
-                  <td onClick={(event) => event.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(testCase.id)}
-                      onChange={() => handleSelectCase(testCase.id)}
-                    />
-                  </td>
-                )}
-                <td>
-                  <span className="text-primary font-semibold">{testCase.id}</span>
-                </td>
-                <td>
-                  <div className="cases-table__user">
-                    <div className="cases-table__user-copy">
-                      <button
-                        type="button"
-                        className="cases-table__name-btn"
-                        onClick={() => onSelectCase(testCase)}
-                        title={testCase.name}
-                      >
-                        {testCase.name}
-                      </button>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <div className="cases-table__assigned-to">
-                    {testCase.assignedTo ? (
-                      <>
-                        {testCase._links?.avatar?.href ? (
-                          <img
-                            src={testCase._links.avatar.href}
-                            alt={testCase.assignedTo.displayName}
-                            className="cases-table__avatar"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              const fallback = e.currentTarget.parentElement?.querySelector('.avatar');
-                              if (fallback) fallback.classList.remove('hidden');
-                            }}
-                          />
-                        ) : null}
-                        <span className={`avatar avatar--sm${!testCase._links?.avatar?.href ? '' : ' hidden'}`}>
-                          {getInitials(testCase.assignedTo.displayName)}
-                        </span>
-                        <span className="cases-table__assignee-name">{testCase.assignedTo.displayName}</span>
-                      </>
-                    ) : (
-                      <span className="text-secondary">Unassigned</span>
-                    )}
-                  </div>
-                </td>
-                <td>
-                  <div className="cases-table__actions">
-                    <button
-                      type="button"
-                      className="cases-table__action-btn"
-                      onClick={() => onSelectCase(testCase)}
-                      title="Open details"
-                    >
-                      <IconVisibility size={16} />
-                    </button>
+            {noFilteredData ? (
+              <tr>
+                <td colSpan={showSelectionColumn ? 6 : 5}>
+                  <div className="cases-table__no-data">
+                    <strong>No data</strong>
+                    <span>
+                      {hasActiveFilter
+                        ? 'Try clearing or updating the search to see matching test cases.'
+                        : 'No test cases available in this suite.'}
+                    </span>
                   </div>
                 </td>
               </tr>
-            ))}
+            ) : (
+              sortedCases.map((testCase) => (
+                <tr key={testCase.id} className={showSelectionColumn && selected.has(testCase.id) ? 'selected' : ''}>
+                  {showSelectionColumn && (
+                    <td onClick={(event) => event.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(testCase.id)}
+                        onChange={() => handleSelectCase(testCase.id)}
+                      />
+                    </td>
+                  )}
+                  <td>
+                    <span className="text-primary font-semibold">{testCase.id}</span>
+                  </td>
+                  <td>
+                    <div className="cases-table__user">
+                      <div className="cases-table__user-copy">
+                        <button
+                          type="button"
+                          className="cases-table__name-btn"
+                          onClick={() => onSelectCase(testCase)}
+                          title={testCase.name}
+                        >
+                          {testCase.name}
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span className={getStatusBadgeClass(testCase.state || 'Unknown')}>
+                      {testCase.state || 'Unknown'}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="cases-table__assigned-to">
+                      {testCase.assignedTo ? (
+                        <>
+                          {testCase._links?.avatar?.href ? (
+                            <img
+                              src={testCase._links.avatar.href}
+                              alt={testCase.assignedTo.displayName}
+                              className="cases-table__avatar"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const fallback = e.currentTarget.parentElement?.querySelector('.avatar');
+                                if (fallback) fallback.classList.remove('hidden');
+                              }}
+                            />
+                          ) : null}
+                          <span className={`avatar avatar--sm${!testCase._links?.avatar?.href ? '' : ' hidden'}`}>
+                            {getInitials(testCase.assignedTo.displayName)}
+                          </span>
+                          <span className="cases-table__assignee-name">{testCase.assignedTo.displayName}</span>
+                        </>
+                      ) : (
+                        <span className="text-secondary">Unassigned</span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="cases-table__actions">
+                      <button
+                        type="button"
+                        className="cases-table__action-btn"
+                        onClick={() => onSelectCase(testCase)}
+                        title="Open details"
+                      >
+                        <IconVisibility size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="cases-table__action-btn cases-table__action-btn--danger"
+                        onClick={() => requestRemoveFromSuite(testCase)}
+                        title="Remove from suite"
+                      >
+                        <IconDelete size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
+
+      {deleteTargetCase && (
+        <div className="steps-editor__confirm-overlay" role="dialog" aria-modal="true" aria-label="Remove test case from suite confirmation">
+          <button
+            type="button"
+            className="steps-editor__confirm-backdrop"
+            onClick={() => !isDeleting && setDeleteTargetCase(null)}
+            aria-label="Close remove confirmation"
+            disabled={isDeleting}
+          />
+          <div className="steps-editor__confirm-card steps-editor__confirm-card--danger" role="document">
+            <div className="steps-editor__confirm-head">
+              <div>
+                <p className="steps-editor__confirm-kicker steps-editor__confirm-kicker--danger">Remove from suite</p>
+                <h3 className="steps-editor__confirm-title steps-editor__confirm-title--danger">
+                  Remove from suite
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="steps-editor__confirm-close"
+                onClick={() => setDeleteTargetCase(null)}
+                aria-label="Close remove confirmation"
+                title="Close"
+                disabled={isDeleting}
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <p className="steps-editor__confirm-copy">
+              This only removes the test case from the current Azure DevOps test suite. The work item remains available in Azure DevOps.
+            </p>
+
+            <div className="steps-editor__confirm-meta">
+              <span className="steps-editor__confirm-meta-label">Test case</span>
+              <strong className="steps-editor__confirm-meta-value">
+                {deleteTargetCase.id} - {deleteTargetCase.name}
+              </strong>
+            </div>
+
+            <div className="steps-editor__confirm-actions">
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => setDeleteTargetCase(null)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger btn--sm"
+                onClick={() => { void handleDeleteSelectedCase(); }}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Removing...' : 'Remove from suite'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {blockedRemovalCase && (
+        <div className="steps-editor__confirm-overlay" role="dialog" aria-modal="true" aria-label="Remove from suite restriction">
+          <button
+            type="button"
+            className="steps-editor__confirm-backdrop"
+            onClick={() => setBlockedRemovalCase(null)}
+            aria-label="Close remove restriction"
+          />
+          <div className="steps-editor__confirm-card steps-editor__confirm-card--warning" role="document">
+            <div className="steps-editor__confirm-head">
+              <div>
+                <p className="steps-editor__confirm-kicker steps-editor__confirm-kicker--warning">Validation</p>
+                <h3 className="steps-editor__confirm-title steps-editor__confirm-title--warning">
+                  Remove from suite
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="steps-editor__confirm-close"
+                onClick={() => setBlockedRemovalCase(null)}
+                aria-label="Close remove restriction"
+                title="Close"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <p className="steps-editor__confirm-copy">
+              Only test cases with status <strong>Removed</strong> can be removed from a suite in this app. For any other status, check in the Azure DevOps directly.
+            </p>
+
+            <div className="steps-editor__confirm-meta">
+              <span className="steps-editor__confirm-meta-label">Current status</span>
+              <strong className="steps-editor__confirm-meta-value">
+                {blockedRemovalCase.state || 'Unknown'}
+              </strong>
+            </div>
+
+            <div className="steps-editor__confirm-actions">
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => setBlockedRemovalCase(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

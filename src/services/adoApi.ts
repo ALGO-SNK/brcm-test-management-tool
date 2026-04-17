@@ -3,6 +3,7 @@ import type {
   ADOTestCase,
   ADOTestCaseListItem,
   ADOTestPlan,
+  ADOTestSuite,
   ADOWorkItem,
   WorkspaceConnectionSettings,
 } from '../types';
@@ -31,6 +32,83 @@ class ADORequestError extends Error {
     this.name = 'ADORequestError';
     this.status = status;
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function extractAdoErrorText(body: string): string {
+  const trimmed = body.trim();
+  if (!trimmed) return '';
+
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      message?: unknown;
+      error?: { message?: unknown };
+    };
+    if (typeof parsed.message === 'string') {
+      return parsed.message.trim();
+    }
+    if (typeof parsed.error?.message === 'string') {
+      return parsed.error.message.trim();
+    }
+  } catch {
+    // Fall back to plain text.
+  }
+
+  return trimmed;
+}
+
+function buildAdoErrorMessage(action: string, status: number, body: string, statusText: string): string {
+  const details = extractAdoErrorText(body).toLowerCase();
+
+  if (status === 400) {
+    if (details.includes('api-version')) {
+      return `We couldn't ${action}. Check the Azure DevOps API version in Workspace Settings and try again.`;
+    }
+    return `We couldn't ${action} because Azure DevOps rejected the request. Please check the selected item and try again.`;
+  }
+
+  if (status === 401 || status === 403) {
+    return `We couldn't ${action}. Check your Azure DevOps PAT token and permissions, then try again.`;
+  }
+
+  if (status === 404) {
+    return `We couldn't ${action} because the item could not be found in Azure DevOps.`;
+  }
+
+  if (status === 408 || status === 429) {
+    return `We couldn't ${action} right now because Azure DevOps is busy. Please try again in a moment.`;
+  }
+
+  if (status >= 500) {
+    return `We couldn't ${action} because Azure DevOps had a temporary problem. Please try again in a moment.`;
+  }
+
+  return `We couldn't ${action}. Please try again.`;
+}
+
+function humanizeUnexpectedError(action: string, error: unknown): Error {
+  if (isAbortError(error)) {
+    return error as Error;
+  }
+
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    if (message === 'No fields to update') {
+      return new Error('There are no changes to save.');
+    }
+    if (
+      message.startsWith("We couldn't")
+      || message.startsWith('There are no changes')
+      || message.includes('required')
+    ) {
+      return new Error(message);
+    }
+  }
+
+  return new Error(`We couldn't ${action}. Please try again.`);
 }
 
 function getStorage(): Storage | null {
@@ -212,20 +290,58 @@ function buildBaseApiUrl(settings: WorkspaceConnectionSettings): string {
   return `https://dev.azure.com/${organization}/${project}/_apis`;
 }
 
+function buildBaseWebUrl(settings: WorkspaceConnectionSettings): string {
+  const organization = normalizeOrganization(settings.organization);
+  const project = encodeURIComponent(normalizeProjectName(settings.projectName));
+  return `https://dev.azure.com/${organization}/${project}`;
+}
+
+export function buildPlanAdoUrl(settings: WorkspaceConnectionSettings, planId: number): string {
+  return `${buildBaseWebUrl(settings)}/_testPlans/define?planId=${encodeURIComponent(String(planId))}`;
+}
+
+export function buildSuiteAdoUrl(
+  settings: WorkspaceConnectionSettings,
+  planId: number,
+  suiteId: number,
+): string {
+  return `${buildPlanAdoUrl(settings, planId)}&suiteId=${encodeURIComponent(String(suiteId))}`;
+}
+
+export function buildWorkItemAdoUrl(settings: WorkspaceConnectionSettings, workItemId: number): string {
+  return `${buildBaseWebUrl(settings)}/_workitems/edit/${encodeURIComponent(String(workItemId))}`;
+}
+
 async function fetchJson<T>(url: string, patToken: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Basic ${toBasicAuthToken(patToken)}`,
-    },
-    signal,
-  });
+  return fetchJsonWithAction<T>(url, patToken, 'load data from Azure DevOps', signal);
+}
+
+async function fetchJsonWithAction<T>(
+  url: string,
+  patToken: string,
+  action: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Basic ${toBasicAuthToken(patToken)}`,
+      },
+      signal,
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    throw new Error(`We couldn't ${action}. Check your connection and Azure DevOps settings, then try again.`);
+  }
 
   if (!response.ok) {
     const body = await response.text();
-    const details = body.trim().slice(0, 240);
-    throw new ADORequestError(response.status, `ADO request failed (${response.status}): ${details || response.statusText}`);
+    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body, response.statusText));
   }
 
   return (await response.json()) as T;
@@ -235,24 +351,55 @@ async function patchJson<T>(
   url: string,
   patToken: string,
   operations: Array<{ op: string; path: string; value: unknown }>,
+  action = 'save your changes',
 ): Promise<T> {
-  const response = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json-patch+json',
-      Accept: 'application/json',
-      Authorization: `Basic ${toBasicAuthToken(patToken)}`,
-    },
-    body: JSON.stringify(operations),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json-patch+json',
+        Accept: 'application/json',
+        Authorization: `Basic ${toBasicAuthToken(patToken)}`,
+      },
+      body: JSON.stringify(operations),
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    throw new Error(`We couldn't ${action}. Check your connection and Azure DevOps settings, then try again.`);
+  }
 
   if (!response.ok) {
     const body = await response.text();
-    const details = body.trim().slice(0, 240);
-    throw new ADORequestError(response.status, `ADO PATCH request failed (${response.status}): ${details || response.statusText}`);
+    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body, response.statusText));
   }
 
   return (await response.json()) as T;
+}
+
+async function deleteRequest(url: string, patToken: string, action = 'remove the item'): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Basic ${toBasicAuthToken(patToken)}`,
+      },
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    throw new Error(`We couldn't ${action}. Check your connection and Azure DevOps settings, then try again.`);
+  }
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body, response.statusText));
+  }
 }
 
 function getPlanSelfHref(plan: ADOTestPlan): string | null {
@@ -528,7 +675,7 @@ export async function fetchPlans(
 
   const apiVersion = normalizeApiVersion(settings.apiVersion);
   const url = `${buildBaseApiUrl(settings)}/testplan/plans?api-version=${encodeURIComponent(apiVersion)}`;
-  const data = await fetchJson<ADOListResponse<ADOTestPlan>>(url, settings.patToken.trim(), signal);
+  const data = await fetchJsonWithAction<ADOListResponse<ADOTestPlan>>(url, settings.patToken.trim(), 'load test plans', signal);
 
   const plans = Array.isArray(data.value) ? data.value : [];
   writeCacheEntry(getPlansCacheKey(settings), plans);
@@ -549,7 +696,7 @@ export async function fetchSuitesForPlan(
     ? buildSuitesUrlFromSelf(selfHref, apiVersion)
     : `${buildBaseApiUrl(settings)}/testplan/Plans/${encodeURIComponent(String(plan.id))}/suites?asTreeView=True&api-version=${encodeURIComponent(apiVersion)}`;
 
-  const response = await fetchJson<unknown>(url, settings.patToken.trim(), signal);
+  const response = await fetchJsonWithAction<unknown>(url, settings.patToken.trim(), 'load test suites', signal);
   writeCacheEntry(getSuitesCacheKey(settings, plan.id), response);
   return response;
 }
@@ -594,9 +741,10 @@ export async function fetchTestCasesForSuite(
 
   for (const url of uniqueCandidateUrls) {
     try {
-      const response = await fetchJson<ADOListResponse<ADOTestCaseListItem | Record<string, unknown>>>(
+      const response = await fetchJsonWithAction<ADOListResponse<ADOTestCaseListItem | Record<string, unknown>>>(
         url,
         settings.patToken.trim(),
+        'load test cases',
         signal,
       );
       const selfHref = url.split('?')[0];
@@ -619,10 +767,10 @@ export async function fetchTestCasesForSuite(
   }
 
   if (lastError instanceof Error) {
-    throw new Error(`Failed to load test cases from ADO suite endpoint variants: ${lastError.message}`);
+    throw humanizeUnexpectedError('load test cases', lastError);
   }
 
-  throw new Error('Failed to load test cases from ADO suite endpoint variants.');
+  throw new Error("We couldn't load test cases. Please try again.");
 }
 
 export async function fetchTestCaseDetail(
@@ -664,7 +812,7 @@ export async function fetchTestCaseDetail(
 
   for (const url of uniqueCandidateUrls) {
     try {
-      const workItem = await fetchJson<ADOWorkItem>(url, settings.patToken.trim(), signal);
+      const workItem = await fetchJsonWithAction<ADOWorkItem>(url, settings.patToken.trim(), 'load test case details', signal);
 
       // Debug: Log what fields are actually in the response
       if (workItem.fields) {
@@ -717,16 +865,17 @@ export async function fetchTestCaseDetail(
   }
 
   if (lastError instanceof Error) {
-    throw new Error(`Failed to load work item details from ADO: ${lastError.message}`);
+    throw humanizeUnexpectedError('load test case details', lastError);
   }
 
-  throw new Error('Failed to load work item details from ADO.');
+  throw new Error("We couldn't load test case details. Please try again.");
 }
 
 export async function updateTestCase(
   settings: WorkspaceConnectionSettings,
   caseId: number,
   updateData: {
+    title?: string;
     status?: string;
     method?: string;
     region?: string;
@@ -760,6 +909,9 @@ export async function updateTestCase(
   const operations: Array<{ op: string; path: string; value: unknown }> = [];
 
   // Only add operations for fields that have values
+  if (updateData.title && updateData.title.trim()) {
+    operations.push({ op: 'add', path: '/fields/System.Title', value: updateData.title });
+  }
   if (updateData.status) {
     operations.push({ op: 'add', path: '/fields/System.State', value: updateData.status });
   }
@@ -784,14 +936,14 @@ export async function updateTestCase(
   }
 
   if (operations.length === 0) {
-    throw new Error('No fields to update');
+    throw new Error('There are no changes to save.');
   }
 
   let lastError: unknown = null;
 
   for (const url of candidateUrls) {
     try {
-      const updatedWorkItem = await patchJson<ADOWorkItem>(url, settings.patToken.trim(), operations);
+      const updatedWorkItem = await patchJson<ADOWorkItem>(url, settings.patToken.trim(), operations, 'save test case changes');
       const mappedCase = mapWorkItemToTestCase(updatedWorkItem);
 
       // Invalidate and update cache
@@ -809,10 +961,114 @@ export async function updateTestCase(
   }
 
   if (lastError instanceof Error) {
-    throw new Error(`Failed to update work item in ADO: ${lastError.message}`);
+    throw humanizeUnexpectedError('save test case changes', lastError);
   }
 
-  throw new Error('Failed to update work item in ADO.');
+  throw new Error("We couldn't save test case changes. Please try again.");
+}
+
+export async function deleteTestCase(
+  settings: WorkspaceConnectionSettings,
+  caseId: number,
+  _preferredHref?: string,
+  suiteCache?: { planId: number; suiteId: number },
+): Promise<void> {
+  assertSettings(settings);
+
+  if (!suiteCache) {
+    throw new Error('Plan and suite context are required to remove a test case from a suite.');
+  }
+
+  const apiVersions = getApiVersionCandidates(settings.apiVersion);
+  const encodedPlanId = encodeURIComponent(String(suiteCache.planId));
+  const encodedSuiteId = encodeURIComponent(String(suiteCache.suiteId));
+  const encodedCaseId = encodeURIComponent(String(caseId));
+  const baseApi = buildBaseApiUrl(settings);
+  let lastError: unknown = null;
+
+  for (const apiVersion of apiVersions) {
+    const encodedApiVersion = encodeURIComponent(apiVersion);
+    const url = `${baseApi}/test/Plans/${encodedPlanId}/suites/${encodedSuiteId}/testcases/${encodedCaseId}?api-version=${encodedApiVersion}`;
+
+    try {
+      await deleteRequest(url, settings.patToken.trim(), 'remove the test case from the suite');
+      clearCacheEntry(getTestCasesCacheKey(settings, suiteCache.planId, suiteCache.suiteId));
+      return;
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('remove the test case from the suite', lastError);
+  }
+
+  throw new Error("We couldn't remove the test case from the suite. Please try again.");
+}
+
+export async function createStaticSuite(
+  settings: WorkspaceConnectionSettings,
+  planId: number,
+  suiteName: string,
+  parentSuiteId?: number,
+): Promise<ADOTestSuite> {
+  assertSettings(settings);
+
+  if (!suiteName.trim()) {
+    throw new Error('Suite name is required.');
+  }
+
+  const apiVersions = getApiVersionCandidates(settings.apiVersion);
+  const encodedPlanId = encodeURIComponent(String(planId));
+  const baseApi = buildBaseApiUrl(settings);
+  let lastError: unknown = null;
+
+  for (const apiVersion of apiVersions) {
+    const encodedApiVersion = encodeURIComponent(apiVersion);
+    const url = `${baseApi}/testplan/Plans/${encodedPlanId}/suites?api-version=${encodedApiVersion}`;
+    const body: {
+      suiteType: 'staticTestSuite';
+      name: string;
+      inheritDefaultConfigurations: true;
+      parentSuite?: { id: number };
+    } = {
+      suiteType: 'staticTestSuite',
+      name: suiteName.trim(),
+      inheritDefaultConfigurations: true,
+    };
+
+    if (typeof parentSuiteId === 'number') {
+      body.parentSuite = { id: parentSuiteId };
+    }
+
+    try {
+      const createdSuite = await postJson<ADOTestSuite>(
+        url,
+        settings.patToken.trim(),
+        body,
+        'application/json',
+        'create the suite',
+      );
+      clearCacheEntry(getSuitesCacheKey(settings, planId));
+      return createdSuite;
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('create the suite', lastError);
+  }
+
+  throw new Error("We couldn't create the suite. Please try again.");
 }
 
 /**
@@ -823,21 +1079,29 @@ async function postJson<T>(
   patToken: string,
   body: unknown,
   contentType: string = 'application/json',
+  action = 'save data',
 ): Promise<T> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': contentType,
-      Accept: 'application/json',
-      Authorization: `Basic ${toBasicAuthToken(patToken)}`,
-    },
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': contentType,
+        Accept: 'application/json',
+        Authorization: `Basic ${toBasicAuthToken(patToken)}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    throw new Error(`We couldn't ${action}. Check your connection and Azure DevOps settings, then try again.`);
+  }
 
   if (!response.ok) {
     const body = await response.text();
-    const details = body.trim().slice(0, 240);
-    throw new ADORequestError(response.status, `ADO POST request failed (${response.status}): ${details || response.statusText}`);
+    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body, response.statusText));
   }
 
   return (await response.json()) as T;
@@ -1050,6 +1314,7 @@ export async function createTestCase(
           createUrl,
           settings.patToken.trim(),
           operations,
+          'create the test case',
       );
 
       // STEP 2: Add created work item to selected suite
@@ -1067,6 +1332,8 @@ export async function createTestCase(
               pointAssignments: [],
             },
           ],
+          'application/json',
+          'add the test case to the suite',
       );
 
       const mappedCase = mapWorkItemToTestCase(createdWorkItem);
@@ -1083,8 +1350,8 @@ export async function createTestCase(
   }
 
   if (lastError instanceof Error) {
-    throw new Error(`Failed to create test case in ADO: ${lastError.message}`);
+    throw humanizeUnexpectedError('create the test case', lastError);
   }
 
-  throw new Error('Failed to create test case in ADO.');
+  throw new Error("We couldn't create the test case. Please try again.");
 }

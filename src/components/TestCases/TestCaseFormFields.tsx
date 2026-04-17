@@ -24,6 +24,8 @@ interface TestCaseFormFieldsProps {
   titlePlaceholder?: string;
 }
 
+const DEFAULT_STATUS_OPTIONS = ['Design', 'Ready', 'Closed', 'Removed'];
+
 export function TestCaseFormFields({
   formData,
   onChange,
@@ -35,6 +37,10 @@ export function TestCaseFormFields({
   const handleChange = (field: string, value: string) => {
     onChange({ [field]: value } as any);
   };
+
+  const statusOptions = DEFAULT_STATUS_OPTIONS.includes(formData.status)
+    ? DEFAULT_STATUS_OPTIONS
+    : [formData.status, ...DEFAULT_STATUS_OPTIONS].filter((value, index, arr) => value && arr.indexOf(value) === index);
 
   return (
     <>
@@ -82,14 +88,18 @@ export function TestCaseFormFields({
         <div style={{ display: 'flex', gap: '16px', gridColumn: 'span 6' }}>
           <div className="case-detail-edit-form__field" style={{ flex: 1 }}>
             <label className="case-detail-edit-form__label">Status</label>
-            <input
-              type="text"
-              className="case-detail-edit-form__input"
+            <select
+              className="steps-editor__select"
               value={formData.status}
               onChange={(e) => handleChange('status', e.target.value)}
-              placeholder="e.g., Design, Active"
               disabled={isLoading}
-            />
+            >
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="case-detail-edit-form__field" style={{ flex: 1 }}>
             <label className="case-detail-edit-form__label">Testing Method</label>

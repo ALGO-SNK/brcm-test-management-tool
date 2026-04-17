@@ -7,12 +7,14 @@ import type { WorkspaceSettingsValues } from './WorkspaceSettings';
 
 interface LandingProps {
   onSelectPlan: (plan: ADOTestPlan) => void;
+  onCreateSuiteForPlan: (plan: ADOTestPlan) => void;
   onSettingsClick: () => void;
   workspaceSettings: WorkspaceSettingsValues;
 }
 
 export function Landing({
                           onSelectPlan,
+                          onCreateSuiteForPlan,
                           onSettingsClick,
                           workspaceSettings,
                         }: LandingProps) {
@@ -104,6 +106,7 @@ export function Landing({
 
             <PlansList
                 onSelectPlan={onSelectPlan}
+                onCreateSuiteForPlan={onCreateSuiteForPlan}
                 workspaceSettings={workspaceSettings}
                 onPlansLoaded={handlePlansLoaded}
                 onConnectionStatusChange={handleConnectionStatusChange}

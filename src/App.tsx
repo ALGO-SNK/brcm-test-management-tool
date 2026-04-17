@@ -42,7 +42,7 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
    surfaces switch correctly alongside the CSS-variable-based theme.
    -------------------------------------------------------------------------- */
 function MuiThemeAdapter({ children }: { children: ReactNode }) {
-  const { mode } = useThemeContext();
+  const { mode, font } = useThemeContext();
 
   const muiTheme = useMemo(() => {
     const isLight        = mode === 'light';
@@ -76,7 +76,13 @@ function MuiThemeAdapter({ children }: { children: ReactNode }) {
         divider: isLight ? '#d8d8d8' : isPaper ? '#d8d5cc' : isHighContrast ? '#8a8a8a' : '#3a3a3a',
       },
       typography: {
-        fontFamily: '"IBM Plex Mono", "JetBrains Mono", "Roboto Mono", ui-monospace, monospace',
+        fontFamily: 'var(--font-sans), sans-serif',
+        h1: { fontFamily: 'var(--font-display), sans-serif' },
+        h2: { fontFamily: 'var(--font-display), sans-serif' },
+        h3: { fontFamily: 'var(--font-display), sans-serif' },
+        h4: { fontFamily: 'var(--font-display), sans-serif' },
+        h5: { fontFamily: 'var(--font-display), sans-serif' },
+        h6: { fontFamily: 'var(--font-display), sans-serif' },
         fontSize: 14,
       },
       shape: { borderRadius: 10 },
@@ -84,7 +90,7 @@ function MuiThemeAdapter({ children }: { children: ReactNode }) {
         MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
       },
     });
-  }, [mode]);
+  }, [mode, font]);
 
   return (
     <ThemeProvider theme={muiTheme}>
@@ -103,6 +109,7 @@ export function App() {
   const [selectedPlan, setSelectedPlan]   = useState<ADOTestPlan | null>(null);
   const [selectedSuite, setSelectedSuite] = useState<ADOTestSuite | null>(null);
   const [selectedCase, setSelectedCase]   = useState<ADOTestCase | null>(null);
+  const [planSuiteCreateRequest, setPlanSuiteCreateRequest] = useState(0);
   const [workspaceSettings, setWorkspaceSettings] =
     useState<WorkspaceSettingsValues>(getInitialWorkspaceSettings);
 
@@ -111,6 +118,14 @@ export function App() {
     setCurrentPage('cases');
     setSelectedSuite(null);
     setSelectedCase(null);
+    setPlanSuiteCreateRequest(0);
+  };
+  const handleCreateSuiteForPlan = (plan: ADOTestPlan) => {
+    setSelectedPlan(plan);
+    setCurrentPage('cases');
+    setSelectedSuite(null);
+    setSelectedCase(null);
+    setPlanSuiteCreateRequest((value) => value + 1);
   };
   const handleSelectSuite = (suite: ADOTestSuite) => {
     setSelectedSuite(suite);
@@ -152,6 +167,7 @@ export function App() {
           {activeContentPage === 'landing' && (
             <Landing
               onSelectPlan={handleSelectPlan}
+              onCreateSuiteForPlan={handleCreateSuiteForPlan}
               onSettingsClick={handleSettingsClick}
               workspaceSettings={workspaceSettings}
             />
@@ -168,6 +184,7 @@ export function App() {
               onBackToPlan={handleBackToPlan}
               onSettingsClick={handleSettingsClick}
               workspaceSettings={workspaceSettings}
+              createPlanSuiteRequest={planSuiteCreateRequest}
             />
           )}
 

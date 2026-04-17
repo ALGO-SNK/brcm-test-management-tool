@@ -1,15 +1,17 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {MainLayout} from '../layouts/MainLayout';
 import {PageDetailLayout} from '../layouts/PageDetailLayout';
-import {IconEdit, IconX} from '../Common/Icons';
+import {IconEdit, IconOpenInNew, IconX} from '../Common/Icons';
 import type {ADOTestCase, ADOTestPlan, ADOTestSuite} from '../../types';
 import type {WorkspaceSettingsValues} from './WorkspaceSettings';
-import {fetchTestCaseDetail, updateTestCase} from '../../services/adoApi';
+import {buildWorkItemAdoUrl, fetchTestCaseDetail, updateTestCase} from '../../services/adoApi';
 import {parseXMLSteps} from '../../utils/xmlParser';
 import {buildTestCaseData} from '../../utils/testCaseBuilder';
 import type {ParsedStep} from '../TestCases/StepsEditor';
 import {StepsEditor} from '../TestCases/StepsEditor';
+import {TestCaseFormFields} from '../TestCases/TestCaseFormFields';
 import {ACTION_REGISTRY} from '../../utils/actionRegistry';
+import {useNotification} from '../../context/useNotification';
 
 interface TestCaseDetailProps {
   plan: ADOTestPlan;
@@ -295,6 +297,7 @@ export function TestCaseDetail({
   const [isEditMode, setIsEditMode] = useState(false);
   const [isAdditionalModalOpen, setIsAdditionalModalOpen] = useState(false);
   const [editFormData, setEditFormData] = useState({
+    title: '',
     status: '',
     method: '',
     region: '',
@@ -305,12 +308,25 @@ export function TestCaseDetail({
   const [editValidationErrors, setEditValidationErrors] = useState<string[]>([]);
   const [editSteps, setEditSteps] = useState<ParsedStep[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
+  const [pendingExitAction, setPendingExitAction] = useState<'back' | 'exit' | 'window-close' | null>(null);
+  const [confirmExitRequested, setConfirmExitRequested] = useState(false);
   const reloadCaseControllerRef = useRef<AbortController | null>(null);
+  const editBaselineRef = useRef<{
+    formData: typeof editFormData;
+    steps: ParsedStep[];
+  } | null>(null);
+  const allowWindowCloseRef = useRef(false);
+  const { addNotification } = useNotification();
 
   const workspaceReady = Boolean(
     workspaceSettings.organization.trim()
       && workspaceSettings.projectName.trim()
       && workspaceSettings.patToken.trim(),
+  );
+  const canOpenInAdo = Boolean(
+    workspaceSettings.organization.trim()
+      && workspaceSettings.projectName.trim(),
   );
 
   useEffect(() => {
@@ -395,6 +411,7 @@ export function TestCaseDetail({
     if (isEditMode && testCase) {
       const fields = testCase.fields ?? {};
       const newFormData = {
+        title: testCase.name || '',
         status: testCase.state || '',
         method: toDisplayValue(fields['Custom.TestingMethod']) || '',
         region: toDisplayValue(fields['Custom.ApplicableRegions']) || '',
@@ -410,13 +427,233 @@ export function TestCaseDetail({
       if (rawSteps) {
         const { steps } = parseXMLSteps(normalizeFieldText(rawSteps).trim());
         setEditSteps(steps.map((step, idx) => ({ ...step, index: idx + 1 })));
+        editBaselineRef.current = {
+          formData: newFormData,
+          steps: steps.map((step, idx) => ({ ...step, index: idx + 1 })),
+        };
       } else {
         setEditSteps([]);
+        editBaselineRef.current = {
+          formData: newFormData,
+          steps: [],
+        };
       }
 
       setEditValidationErrors([]);
+      setShowUnsavedConfirm(false);
+      setPendingExitAction(null);
     }
   }, [isEditMode, testCase]);
+
+  const isEditDirty = useMemo(() => {
+    const baseline = editBaselineRef.current;
+    if (!isEditMode || !baseline) return false;
+
+    const normalizeStep = (step: ParsedStep) => {
+      const { index, ...rest } = step as ParsedStep & { index?: number };
+      return rest;
+    };
+
+    return JSON.stringify(editFormData) !== JSON.stringify(baseline.formData)
+      || JSON.stringify(editSteps.map(normalizeStep)) !== JSON.stringify(baseline.steps.map(normalizeStep));
+  }, [editFormData, editSteps, isEditMode]);
+
+  useEffect(() => {
+    if (!isEditDirty) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowWindowCloseRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isEditDirty]);
+
+  useEffect(() => {
+    window.desktop?.setUnsavedChanges?.(`test-case-edit:${caseId}`, isEditDirty);
+
+    return () => {
+      window.desktop?.setUnsavedChanges?.(`test-case-edit:${caseId}`, false);
+    };
+  }, [caseId, isEditDirty]);
+
+  useEffect(() => {
+    if (!isEditDirty) return;
+
+    return window.desktop?.onWindowCloseRequested?.(() => {
+      setPendingExitAction('window-close');
+      setShowUnsavedConfirm(true);
+    });
+  }, [isEditDirty]);
+
+  const requestExitEdit = useCallback((action: 'back' | 'exit' | 'window-close') => {
+    if (isEditDirty) {
+      setPendingExitAction(action);
+      setShowUnsavedConfirm(true);
+      return;
+    }
+
+    if (action === 'back') {
+      onBackToCases();
+      return;
+    }
+
+    setIsEditMode(false);
+  }, [isEditDirty, onBackToCases]);
+
+  const discardEditChanges = useCallback(() => {
+    setShowUnsavedConfirm(false);
+    setConfirmExitRequested(true);
+  }, []);
+
+  const keepEditing = useCallback(() => {
+    allowWindowCloseRef.current = false;
+    if (pendingExitAction === 'window-close') {
+      window.desktop?.respondToWindowClose?.(false);
+    }
+    setPendingExitAction(null);
+    setShowUnsavedConfirm(false);
+  }, [pendingExitAction]);
+
+  useEffect(() => {
+    if (showUnsavedConfirm || !confirmExitRequested || pendingExitAction === null) return;
+
+    const action = pendingExitAction;
+    setConfirmExitRequested(false);
+    setPendingExitAction(null);
+    editBaselineRef.current = null;
+
+    if (action === 'back') {
+      setIsEditMode(false);
+      onBackToCases();
+      return;
+    }
+
+    if (action === 'window-close') {
+      allowWindowCloseRef.current = true;
+      window.desktop?.respondToWindowClose?.(true);
+      return;
+    }
+
+    setIsEditMode(false);
+  }, [confirmExitRequested, onBackToCases, pendingExitAction, showUnsavedConfirm]);
+
+  const handleSaveChanges = useCallback(async () => {
+    if (!testCase || isSaving) return;
+
+    const errors: string[] = [];
+    if (!editFormData.title.trim()) errors.push('Test Title is required');
+    if (!editFormData.status.trim()) errors.push('Status is required');
+    if (!editFormData.method.trim()) errors.push('Testing Method is required');
+    if (!editFormData.region.trim()) errors.push('Region is required');
+    if (!editFormData.execProcess.trim()) errors.push('Executive Process is required');
+    if (!editFormData.pltpProcess.trim()) errors.push('PLTP Process is required');
+    if (editSteps.length === 0) errors.push('At least one step is required');
+
+    editSteps.forEach((step, idx) => {
+      if (!step.action.trim()) {
+        errors.push(`Step ${idx + 1}: Action is required`);
+        return;
+      }
+
+      const actionDef = ACTION_REGISTRY[step.action];
+
+      if (actionDef?.contract.element === 'required' && !step.element?.trim()) {
+        errors.push(`Step ${idx + 1}: Locator is required`);
+      }
+
+      if (!step.description?.trim()) {
+        errors.push(`Step ${idx + 1}: Step Summary is required`);
+      }
+    });
+
+    if (errors.length > 0) {
+      setEditValidationErrors(errors);
+      return;
+    }
+
+    setIsSaving(true);
+    let reloadController: AbortController | null = null;
+    try {
+      const testCaseData = buildTestCaseData(editFormData, editSteps);
+
+      console.log('[TestCaseDetail Save] Steps being saved:', {
+        stepCount: editSteps.length,
+        xmlLength: testCaseData.stepsXml?.length || 0,
+        xmlPreview: testCaseData.stepsXml?.substring(0, 200),
+      });
+
+      await updateTestCase(
+        workspaceSettings,
+        testCase.id,
+        testCaseData,
+        testCase._links?.workItem?.href ?? testCase._links?.self?.href,
+      );
+
+      console.log('[TestCaseDetail] Fetching updated test case after save...');
+      reloadCaseControllerRef.current?.abort();
+      reloadController = new AbortController();
+      reloadCaseControllerRef.current = reloadController;
+      const updatedCase = await fetchTestCaseDetail(
+        workspaceSettings,
+        testCase.id,
+        testCase._links?.workItem?.href ?? testCase._links?.self?.href,
+        undefined,
+        reloadController.signal,
+      );
+      console.log('[TestCaseDetail] Updated test case received:', {
+        id: updatedCase.id,
+        stepsCount: (updatedCase.fields?.['Microsoft.VSTS.TCM.Steps'] as string)?.length || 0,
+        hasSteps: !!updatedCase.fields?.['Microsoft.VSTS.TCM.Steps'],
+      });
+      setTestCase(updatedCase);
+      setIsEditMode(false);
+      setEditValidationErrors([]);
+      editBaselineRef.current = null;
+      setShowUnsavedConfirm(false);
+      setPendingExitAction(null);
+      addNotification('success', `Test case "${updatedCase.name}" updated successfully.`);
+      if (reloadCaseControllerRef.current === reloadController) {
+        reloadCaseControllerRef.current = null;
+      }
+    } catch (error) {
+      if (reloadController?.signal.aborted) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'Failed to save changes';
+      setEditValidationErrors([`Save failed: ${message}`]);
+    } finally {
+      if (!reloadController?.signal.aborted) {
+        setIsSaving(false);
+      }
+    }
+  }, [addNotification, editFormData, editSteps, isSaving, testCase, workspaceSettings]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat) return;
+      const isSaveShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's';
+      if (!isSaveShortcut) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      void handleSaveChanges();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [handleSaveChanges, isEditMode]);
 
   const stepsForDisplay = useMemo(() => {
     if (!testCase) return [];
@@ -476,15 +713,24 @@ export function TestCaseDetail({
           {loadWarning && <p className="text-sm text-secondary mb-md">{loadWarning}</p>}
 
           <div className="case-detail-section__head case-detail-section__head--merged case-detail-section__head--fixed">
-            <div>
-              <h3>Details & Steps</h3>
-            </div>
-            <div className="case-detail-section__actions">
-              {!isEditMode && (
-                <>
-                  <button
-                    type="button"
-                    className={`btn btn--secondary btn--sm case-detail-pane__edit-btn${isEditMode ? ' is-active' : ''}`}
+                <div>
+                  <h3>Details & Steps</h3>
+                </div>
+                <div className="case-detail-section__actions">
+                  {!isEditMode && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => window.open(buildWorkItemAdoUrl(workspaceSettings, testCase.id), '_blank', 'noopener,noreferrer')}
+                        disabled={!canOpenInAdo}
+                      >
+                        <IconOpenInNew size={15} />
+                        Open in ADO
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn--secondary btn--sm case-detail-pane__edit-btn${isEditMode ? ' is-active' : ''}`}
                     onClick={() => setIsEditMode((prev) => !prev)}
                     aria-pressed={isEditMode}
                   >
@@ -510,97 +756,14 @@ export function TestCaseDetail({
                     type="button"
                     className="btn btn--primary btn--sm"
                     disabled={isSaving}
-                    onClick={async () => {
-                      const errors: string[] = [];
-                      if (!editFormData.status.trim()) errors.push('Status is required');
-                      if (!editFormData.method.trim()) errors.push('Testing Method is required');
-                      if (!editFormData.region.trim()) errors.push('Region is required');
-                      if (!editFormData.execProcess.trim()) errors.push('Executive Process is required');
-                      if (!editFormData.pltpProcess.trim()) errors.push('PLTP Process is required');
-                      if (editSteps.length === 0) errors.push('At least one step is required');
-
-                      // Validate individual steps
-                      editSteps.forEach((step, idx) => {
-                        if (!step.action.trim()) {
-                          errors.push(`Step ${idx + 1}: Action is required`);
-                          return;
-                        }
-
-                        // Get the action definition to check which fields are required
-                        const actionDef = ACTION_REGISTRY[step.action];
-
-                        // Only require Locator if the action actually uses elements
-                        if (actionDef?.contract.element === 'required' && !step.element?.trim()) {
-                          errors.push(`Step ${idx + 1}: Locator is required`);
-                        }
-
-                        if (!step.description?.trim()) {
-                          errors.push(`Step ${idx + 1}: Step Summary is required`);
-                        }
-                      });
-
-                      if (errors.length > 0) {
-                        setEditValidationErrors(errors);
-                        return;
-                      }
-
-                      setIsSaving(true);
-                      let reloadController: AbortController | null = null;
-                      try {
-                        // Build test case data (reusable for create/update)
-                        const testCaseData = buildTestCaseData(editFormData, editSteps);
-
-                        console.log('[TestCaseDetail Save] Steps being saved:', {
-                          stepCount: editSteps.length,
-                          xmlLength: testCaseData.stepsXml?.length || 0,
-                          xmlPreview: testCaseData.stepsXml?.substring(0, 200),
-                        });
-
-                        // Call update API with shared data format
-                        await updateTestCase(workspaceSettings, testCase.id, testCaseData, testCase._links?.workItem?.href ?? testCase._links?.self?.href);
-
-                        // Reload test case data with fresh API call
-                        console.log('[TestCaseDetail] Fetching updated test case after save...');
-                        reloadCaseControllerRef.current?.abort();
-                        reloadController = new AbortController();
-                        reloadCaseControllerRef.current = reloadController;
-                        const updatedCase = await fetchTestCaseDetail(
-                          workspaceSettings,
-                          testCase.id,
-                          testCase._links?.workItem?.href ?? testCase._links?.self?.href,
-                          undefined,
-                          reloadController.signal,
-                        );
-                        console.log('[TestCaseDetail] Updated test case received:', {
-                          id: updatedCase.id,
-                          stepsCount: (updatedCase.fields?.['Microsoft.VSTS.TCM.Steps'] as string)?.length || 0,
-                          hasSteps: !!updatedCase.fields?.['Microsoft.VSTS.TCM.Steps'],
-                        });
-                        setTestCase(updatedCase);
-                        setIsEditMode(false);
-                        setEditValidationErrors([]);
-                        if (reloadCaseControllerRef.current === reloadController) {
-                          reloadCaseControllerRef.current = null;
-                        }
-                      } catch (error) {
-                        if (reloadController?.signal.aborted) {
-                          return;
-                        }
-                        const message = error instanceof Error ? error.message : 'Failed to save changes';
-                        setEditValidationErrors([`Save failed: ${message}`]);
-                      } finally {
-                        if (!reloadController?.signal.aborted) {
-                          setIsSaving(false);
-                        }
-                      }
-                    }}
+                    onClick={() => { void handleSaveChanges(); }}
                   >
                     {isSaving ? 'Saving...' : 'Save'}
                   </button>
                   <button
                     type="button"
                     className="btn btn--secondary btn--sm"
-                    onClick={() => setIsEditMode(false)}
+                    onClick={() => requestExitEdit('exit')}
                   >
                     Exit Edit
                   </button>
@@ -659,86 +822,19 @@ export function TestCaseDetail({
             </>
           ) : (
             <section className="case-detail-edit-section">
-              {editValidationErrors.length > 0 && (
-                <div className="case-detail-edit-errors">
-                  {editValidationErrors.map((error, idx) => (
-                    <p key={idx} className="case-detail-edit-error">{error}</p>
-                  ))}
-                </div>
-              )}
-
-              <div className="case-detail-edit-form">
-                <div className="case-detail-edit-form__field">
-                  <label className="case-detail-edit-form__label">Status</label>
-                  <input
-                    type="text"
-                    className="case-detail-edit-form__input"
-                    value={editFormData.status}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, status: e.target.value }))}
-                    placeholder="e.g., Design, Active"
-                  />
-                </div>
-
-                <div className="case-detail-edit-form__field">
-                  <label className="case-detail-edit-form__label">Testing Method</label>
-                  <input
-                    type="text"
-                    className="case-detail-edit-form__input"
-                    value={editFormData.method}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, method: e.target.value }))}
-                    placeholder="e.g., Manual, Automated"
-                  />
-                </div>
-
-                <div className="case-detail-edit-form__field">
-                  <label className="case-detail-edit-form__label">Region</label>
-                  <input
-                    type="text"
-                    className="case-detail-edit-form__input"
-                    value={editFormData.region}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, region: e.target.value }))}
-                    placeholder="e.g., US, EU, APAC"
-                  />
-                </div>
-
-                <div className="case-detail-edit-form__field">
-                  <label className="case-detail-edit-form__label">Executive Process</label>
-                  <input
-                    type="text"
-                    className="case-detail-edit-form__input"
-                    value={editFormData.execProcess}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, execProcess: e.target.value }))}
-                    placeholder="Enter executive process"
-                  />
-                </div>
-
-                <div className="case-detail-edit-form__field">
-                  <label className="case-detail-edit-form__label">PLTP Process</label>
-                  <input
-                    type="text"
-                    className="case-detail-edit-form__input"
-                    value={editFormData.pltpProcess}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, pltpProcess: e.target.value }))}
-                    placeholder="Enter PLTP process area"
-                  />
-                </div>
-
-                <div className="case-detail-edit-form__field">
-                  <label className="case-detail-edit-form__label">Initial Steps</label>
-                  <input
-                    type="text"
-                    className="case-detail-edit-form__input"
-                    value={editFormData.initialSteps}
-                    onChange={(e) => setEditFormData(prev => ({ ...prev, initialSteps: e.target.value }))}
-                    placeholder="Enter initial setup steps or preconditions..."
-                  />
-                </div>
-              </div>
+              <TestCaseFormFields
+                formData={editFormData}
+                onChange={(updatedData) => setEditFormData((prev) => ({ ...prev, ...updatedData }))}
+                isLoading={isSaving}
+                showTitle
+                validationErrors={editValidationErrors}
+                titlePlaceholder="Enter test title"
+              />
 
               <StepsEditor
                 rawSteps={testCase.fields['Microsoft.VSTS.TCM.Steps']}
                 onChange={setEditSteps}
-                errors={editValidationErrors.filter((e) => e.includes('step'))}
+                errors={editValidationErrors.filter((e) => e.toLowerCase().includes('step'))}
               />
 
             </section>
@@ -796,6 +892,51 @@ export function TestCaseDetail({
         </div>
       )}
 
+      {showUnsavedConfirm && (
+        <div className="steps-editor__confirm-overlay" role="dialog" aria-modal="true" aria-label="Unsaved edit changes">
+          <button
+            type="button"
+            className="steps-editor__confirm-backdrop"
+            onClick={keepEditing}
+            aria-label="Close unsaved changes confirmation"
+          />
+          <div className="steps-editor__confirm-card steps-editor__confirm-card--warning" role="document">
+            <div className="steps-editor__confirm-head">
+              <div>
+                <p className="steps-editor__confirm-kicker steps-editor__confirm-kicker--warning">Unsaved changes</p>
+                <h3 className="steps-editor__confirm-title steps-editor__confirm-title--warning">
+                  Discard edits on this test case?
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="steps-editor__confirm-close"
+                onClick={keepEditing}
+                aria-label="Close unsaved changes confirmation"
+                title="Close"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <p className="steps-editor__confirm-copy">
+              {pendingExitAction === 'window-close'
+                ? 'You have unsaved changes in edit mode. Closing the app now will discard your updates to the title, fields, and steps.'
+                : 'You have unsaved changes in edit mode. Discarding now will remove your updates to the title, fields, and steps.'}
+            </p>
+
+            <div className="steps-editor__confirm-actions">
+              <button type="button" className="btn btn--secondary btn--sm" onClick={keepEditing}>
+                Keep editing
+              </button>
+              <button type="button" className="btn btn--danger btn--sm" onClick={discardEditChanges}>
+                {pendingExitAction === 'window-close' ? 'Close without saving' : 'Discard changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 
@@ -804,10 +945,9 @@ export function TestCaseDetail({
   return (
     <MainLayout title="Test Case Detail" onSettingsClick={onSettingsClick}>
       <PageDetailLayout
-
         breadcrumbs={[
-          { label: 'Plans', onClick: onBackToCases, isLink: true },
-          { label: plan.rootSuite.name, isLink: true, onClick: onBackToCases },
+          { label: 'Plans', onClick: () => requestExitEdit('back'), isLink: true },
+          { label: plan.rootSuite.name, isLink: true, onClick: () => requestExitEdit('back') },
           { label: suite.name, isActive: true },
         ]
       }

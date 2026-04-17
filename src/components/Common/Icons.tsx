@@ -31,6 +31,15 @@ export function IconSettings(props: IconProps) {
 export function IconArrowRight(props: IconProps) {
   return <MaterialIcon name="arrow_forward" {...props} />;
 }
+
+export function IconArrowUpward(props: IconProps) {
+  return <MaterialIcon name="arrow_upward" {...props} />;
+}
+
+export function IconArrowDownward(props: IconProps) {
+  return <MaterialIcon name="arrow_downward" {...props} />;
+}
+
 export function IconSave(props: IconProps) {
   return <MaterialIcon name="save" {...props} />;
 }
@@ -41,6 +50,10 @@ export function IconCopy(props: IconProps) {
 
 export function IconPlus(props: IconProps) {
   return <MaterialIcon name="add" {...props} />;
+}
+
+export function IconTune(props: IconProps) {
+  return <MaterialIcon name="tune" {...props} />;
 }
 
 export function IconX(props: IconProps) {
@@ -63,6 +76,26 @@ export function IconEdit(props: IconProps) {
   return <MaterialIcon name="edit" {...props} />;
 }
 
+export function IconDelete(props: IconProps) {
+  return <MaterialIcon name="delete" {...props} />;
+}
+
+export function IconCheckCircle(props: IconProps) {
+  return <MaterialIcon name="check_circle" {...props} />;
+}
+
+export function IconInfo(props: IconProps) {
+  return <MaterialIcon name="info" {...props} />;
+}
+
+export function IconWarning(props: IconProps) {
+  return <MaterialIcon name="warning" {...props} />;
+}
+
+export function IconError(props: IconProps) {
+  return <MaterialIcon name="error" {...props} />;
+}
+
 export function IconChevronDown(props: IconProps) {
   return <MaterialIcon name="expand_more" {...props} />;
 }
@@ -76,4 +109,20 @@ export function IconFolderOpen(props: IconProps) {
 }
 export function IconFilterList(props: IconProps) {
   return <MaterialIcon name="filter_list" {...props} />;
+}
+
+export function IconUnfoldMore(props: IconProps) {
+  return <MaterialIcon name="unfold_more" {...props} />;
+}
+
+export function IconUnfoldLess(props: IconProps) {
+  return <MaterialIcon name="unfold_less" {...props} />;
+}
+
+export function IconMoreHoriz(props: IconProps) {
+  return <MaterialIcon name="more_horiz" {...props} />;
+}
+
+export function IconOpenInNew(props: IconProps) {
+  return <MaterialIcon name="open_in_new" {...props} />;
 }

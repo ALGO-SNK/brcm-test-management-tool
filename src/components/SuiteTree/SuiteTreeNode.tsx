@@ -1,5 +1,12 @@
-import React, { useState } from 'react';
-import { IconChevronRight, IconFolder, IconFolderOpen } from '../Common/Icons';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  IconChevronRight,
+  IconFolder,
+  IconFolderOpen,
+  IconMoreHoriz,
+  IconOpenInNew,
+  IconPlus,
+} from '../Common/Icons';
 import type { ADOTestSuite } from '../../types';
 
 interface SuiteTreeNodeProps {
@@ -7,8 +14,14 @@ interface SuiteTreeNodeProps {
   depth: number;
   selectedSuiteId: number | null;
   onSelect: (suite: ADOTestSuite) => void;
+  onAddSuite: (suite: ADOTestSuite) => void;
+  onAddTestCase: (suite: ADOTestSuite) => void;
+  onOpenInAdo: (suite: ADOTestSuite) => void;
   filterText: string;
   expandSignal: number;
+  canCreateSuite: boolean;
+  canAddTestCase: boolean;
+  canOpenInAdo: boolean;
 }
 
 function matchesFilter(suite: ADOTestSuite, text: string): boolean {
@@ -18,21 +31,72 @@ function matchesFilter(suite: ADOTestSuite, text: string): boolean {
   return suite.children?.some(child => matchesFilter(child, text)) ?? false;
 }
 
+function containsSuiteId(suite: ADOTestSuite, suiteId: number): boolean {
+  if (suite.id === suiteId) return true;
+  return suite.children?.some(child => containsSuiteId(child, suiteId)) ?? false;
+}
+
 export function SuiteTreeNode({
   suite,
   depth,
   selectedSuiteId,
   onSelect,
+  onAddSuite,
+  onAddTestCase,
+  onOpenInAdo,
   filterText,
   expandSignal,
+  canCreateSuite,
+  canAddTestCase,
+  canOpenInAdo,
 }: SuiteTreeNodeProps) {
   const hasChildren = Boolean(suite.children && suite.children.length > 0);
   const [expanded, setExpanded] = useState(expandSignal > 0);
-
-  if (filterText && !matchesFilter(suite, filterText)) return null;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const isVisible = !filterText || matchesFilter(suite, filterText);
+  const shouldAutoExpand = hasChildren && (
+    (selectedSuiteId != null && containsSuiteId(suite, selectedSuiteId))
+    || (filterText ? suite.children?.some(child => matchesFilter(child, filterText)) ?? false : false)
+  );
 
   const isSelected = suite.id === selectedSuiteId;
   const showCount = suite.testCaseCount != null && suite.testCaseCount > 0;
+
+  useEffect(() => {
+    setExpanded(expandSignal > 0);
+  }, [expandSignal]);
+
+  useEffect(() => {
+    if (shouldAutoExpand) {
+      setExpanded(true);
+    }
+  }, [shouldAutoExpand]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [menuOpen]);
+
+  if (!isVisible) return null;
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -72,6 +136,65 @@ export function SuiteTreeNode({
         {showCount && (
           <span className="suite-tree__count">{suite.testCaseCount}</span>
         )}
+        <div
+          className={`suite-tree__actions${menuOpen ? ' is-open' : ''}`}
+          ref={menuRef}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="suite-tree__action-btn"
+            aria-label={`Actions for ${suite.name}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <IconMoreHoriz size={16} />
+          </button>
+          {menuOpen && (
+            <div className="action-menu action-menu--suite-tree" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                className="action-menu__item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onAddSuite(suite);
+                }}
+                disabled={!canCreateSuite}
+              >
+                <IconPlus size={16} />
+                <span>Add static suite</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="action-menu__item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onAddTestCase(suite);
+                }}
+                disabled={!canAddTestCase}
+              >
+                <IconPlus size={16} />
+                <span>Add test case</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="action-menu__item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenInAdo(suite);
+                }}
+                disabled={!canOpenInAdo}
+              >
+                <IconOpenInNew size={16} />
+                <span>Open in ADO</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {hasChildren && expanded && (
@@ -83,8 +206,14 @@ export function SuiteTreeNode({
               depth={depth + 1}
               selectedSuiteId={selectedSuiteId}
               onSelect={onSelect}
+              onAddSuite={onAddSuite}
+              onAddTestCase={onAddTestCase}
+              onOpenInAdo={onOpenInAdo}
               filterText={filterText}
               expandSignal={expandSignal}
+              canCreateSuite={canCreateSuite}
+              canAddTestCase={canAddTestCase}
+              canOpenInAdo={canOpenInAdo}
             />
           ))}
         </ul>

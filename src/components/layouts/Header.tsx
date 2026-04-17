@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 /*import { useThemeContext } from '../../context/useThemeContext';*/
 import {
  /* IconHelp,
@@ -10,10 +11,19 @@ import brandLogo from '../../assets/brand-logo.png';
 
 interface HeaderProps {
   title?: string;
+  contextTitle?: string;
+  contextMeta?: string;
+  actions?: ReactNode;
   onSettingsClick?: () => void;
 }
 
-export function Header({ title = 'ADO Test Case Editor', onSettingsClick }: HeaderProps) {
+export function Header({
+  title = 'ADO Test Case Editor',
+  contextTitle,
+  contextMeta,
+  actions,
+  onSettingsClick,
+}: HeaderProps) {
  /* const { mode, toggleTheme } = useThemeContext();*/
   const canOpenSettings = typeof onSettingsClick === 'function';
   /*const isLightMode = mode === 'light';*/
@@ -28,7 +38,17 @@ export function Header({ title = 'ADO Test Case Editor', onSettingsClick }: Head
         </div>
       </div>
 
+      {contextTitle && (
+        <div className="app-header__context">
+          <span className="app-header__title" title={contextTitle}>{contextTitle}</span>
+          {contextMeta && (
+            <span className="app-header__meta">{contextMeta}</span>
+          )}
+        </div>
+      )}
+
       <div className="app-header__actions">
+        {actions}
         {/*Hiiden for now*/}
         {/*<button className="app-header__icon-btn" title="Search">
           <IconSearch size={18} />

@@ -8,6 +8,7 @@ export type ConnectionStatus = 'checking' | 'connected' | 'cached' | 'disconnect
 
 interface PlansListProps {
   onSelectPlan: (plan: ADOTestPlan) => void;
+  onCreateSuiteForPlan: (plan: ADOTestPlan) => void;
   workspaceSettings: WorkspaceSettingsValues;
   onPlansLoaded?: (plans: ADOTestPlan[]) => void;
   onConnectionStatusChange?: (status: ConnectionStatus) => void;
@@ -16,6 +17,7 @@ interface PlansListProps {
 
 export function PlansList({
   onSelectPlan,
+  onCreateSuiteForPlan,
   workspaceSettings,
   onPlansLoaded,
   onConnectionStatusChange,
@@ -176,6 +178,8 @@ export function PlansList({
                   key={plan.id}
                   plan={plan}
                   onOpenSuites={onSelectPlan}
+                  onCreateSuite={onCreateSuiteForPlan}
+                  workspaceSettings={workspaceSettings}
               />
           ))}
         </div>

@@ -251,38 +251,37 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
         </div>
       )}
 
-      {/* ── Dynamic locator (read-only indicator; replacement key follows) ─ */}
+      {/* ── Dynamic Locator (25%, like Locator Type) ─────────────────────────── */}
       {showDynamic && (
-        <div className="steps-editor__field steps-editor__field--dynamic-row">
-          <div className="steps-editor__dynamic-control">
-            <label className={labelClass(isFieldRequired('isElementPathDynamic', contract))}>
-              {renderFieldLabel('isElementPathDynamic', contract)}
-            </label>
-            <div className="steps-editor__readonly-pill" aria-readonly="true">
-              <span className="steps-editor__readonly-pill-value">True</span>
-            </div>
+        <div className="steps-editor__field steps-editor__field--dynamic-locator">
+          <label className={labelClass(isFieldRequired('isElementPathDynamic', contract))}>
+            {renderFieldLabel('isElementPathDynamic', contract)}
+          </label>
+          <div className="steps-editor__readonly-pill" aria-readonly="true">
+            <span className="steps-editor__readonly-pill-value">True</span>
           </div>
+        </div>
+      )}
 
-          {showReplaceKey && (
-            <div className="steps-editor__field steps-editor__field--replace-key-inline">
-              <label className={labelClass(isFieldRequired('elementReplaceTextDataKey', contract))}>
-                {renderFieldLabel('elementReplaceTextDataKey', contract)}
-              </label>
-              <input
-                type="text"
-                className="steps-editor__input"
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  borderColor: !step.elementReplaceTextDataKey ? 'var(--color-danger-border)' : undefined,
-                }}
-                value={step.elementReplaceTextDataKey || ''}
-                onChange={(e) => onFieldChange('elementReplaceTextDataKey', e.target.value)}
-                placeholder={getFieldPlaceholder('elementReplaceTextDataKey')}
-              />
-              {showReplaceKeyError && (
-                <small className="steps-editor__field-error">{getRequiredMessage('elementReplaceTextDataKey')}</small>
-              )}
-            </div>
+      {/* ── Replacement Key (75%, like Locator) ────────────────────────────── */}
+      {showReplaceKey && (
+        <div className="steps-editor__field steps-editor__field--replace-key-inline">
+          <label className={labelClass(isFieldRequired('elementReplaceTextDataKey', contract))}>
+            {renderFieldLabel('elementReplaceTextDataKey', contract)}
+          </label>
+          <input
+            type="text"
+            className="steps-editor__input"
+            style={{
+              fontFamily: 'var(--font-mono)',
+              borderColor: !step.elementReplaceTextDataKey ? '' : undefined,
+            }}
+            value={step.elementReplaceTextDataKey || ''}
+            onChange={(e) => onFieldChange('elementReplaceTextDataKey', e.target.value)}
+            placeholder={getFieldPlaceholder('elementReplaceTextDataKey')}
+          />
+          {showReplaceKeyError && (
+            <small className="steps-editor__field-error">{getRequiredMessage('elementReplaceTextDataKey')}</small>
           )}
         </div>
       )}
@@ -342,7 +341,6 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
           <input
             type="text"
             className="steps-editor__input"
-            style={{ fontFamily: 'var(--font-mono)' }}
             value={step.key || ''}
             onChange={(e) => onFieldChange('key', e.target.value)}
             placeholder={getFieldPlaceholder('key')}

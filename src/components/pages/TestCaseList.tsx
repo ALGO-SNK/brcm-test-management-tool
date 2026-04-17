@@ -17,6 +17,7 @@ interface TestCaseListProps {
   onBackToPlan: () => void;
   onSettingsClick: () => void;
   workspaceSettings: WorkspaceSettingsValues;
+  createPlanSuiteRequest?: number;
 }
 
 const MIN_SIDEBAR = 220;
@@ -33,12 +34,14 @@ export function TestCaseList({
   onBackToPlan,
   onSettingsClick,
   workspaceSettings,
+  createPlanSuiteRequest = 0,
 }: TestCaseListProps) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
   const [isDragging, setIsDragging] = useState(false);
   const [suiteCaseCountBySuiteId, setSuiteCaseCountBySuiteId] = useState<Record<number, number>>({});
   const [isCreateMode, setIsCreateMode] = useState(false);
   const dragging = useRef(false);
+  const preserveCreateModeOnSuiteChangeRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleMouseDown = useCallback(() => {
@@ -76,6 +79,21 @@ export function TestCaseList({
     };
   }, []);
 
+  useEffect(() => {
+    if (!suite) return;
+    if (preserveCreateModeOnSuiteChangeRef.current) {
+      preserveCreateModeOnSuiteChangeRef.current = false;
+      return;
+    }
+    setIsCreateMode(false);
+  }, [suite?.id]);
+
+  const handleAddTestCaseFromSuite = useCallback((targetSuite: ADOTestSuite) => {
+    preserveCreateModeOnSuiteChangeRef.current = true;
+    onSelectSuite(targetSuite);
+    setIsCreateMode(true);
+  }, [onSelectSuite]);
+
   const currentSuiteCount = suite
     ? suiteCaseCountBySuiteId[suite.id] ?? (typeof suite.testCaseCount === 'number' ? suite.testCaseCount : null)
     : null;
@@ -91,8 +109,10 @@ export function TestCaseList({
             plan={plan}
             selectedSuiteId={suite?.id ?? null}
             onSelectSuite={onSelectSuite}
+            onAddTestCase={handleAddTestCaseFromSuite}
             onBackToPlan={onBackToPlan}
             workspaceSettings={workspaceSettings}
+            createPlanSuiteRequest={createPlanSuiteRequest}
           />
         </div>
 

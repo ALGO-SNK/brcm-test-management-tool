@@ -12,6 +12,9 @@ const version = app.getVersion();
 let mainWindow = null;
 let splashWindow = null;
 let splashStartTime = 0;
+const dirtySourcesByContentsId = new Map();
+const pendingCloseRequestContentsIds = new Set();
+const confirmedCloseContentsIds = new Set();
 
 function resolveAssetFile(fileNames) {
   const names = Array.isArray(fileNames) ? fileNames : [fileNames];
@@ -104,6 +107,7 @@ function createWindow() {
       sandbox: false,
     },
   });
+  const mainWindowContentsId = mainWindow.webContents.id;
 
   mainWindow.once('ready-to-show', () => {
     closeSplashAndShowMain();
@@ -123,6 +127,38 @@ function createWindow() {
 
   mainWindow.webContents.on('did-fail-load', () => {
     closeSplashAndShowMain();
+  });
+
+  mainWindow.on('close', (event) => {
+    const { webContents } = mainWindow;
+
+    if (!webContents || webContents.isDestroyed()) {
+      return;
+    }
+
+    if (confirmedCloseContentsIds.has(mainWindowContentsId)) {
+      confirmedCloseContentsIds.delete(mainWindowContentsId);
+      return;
+    }
+
+    const dirtySources = dirtySourcesByContentsId.get(mainWindowContentsId);
+    if (!dirtySources || dirtySources.size === 0) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!pendingCloseRequestContentsIds.has(mainWindowContentsId)) {
+      pendingCloseRequestContentsIds.add(mainWindowContentsId);
+      webContents.send('app:window-close-requested');
+    }
+  });
+
+  mainWindow.on('closed', () => {
+    dirtySourcesByContentsId.delete(mainWindowContentsId);
+    pendingCloseRequestContentsIds.delete(mainWindowContentsId);
+    confirmedCloseContentsIds.delete(mainWindowContentsId);
+    mainWindow = null;
   });
 }
 
@@ -199,3 +235,45 @@ app.on('window-all-closed', () => {
 });
 
 ipcMain.handle('app:get-version', () => app.getVersion());
+ipcMain.on('app:set-unsaved-changes', (event, payload) => {
+  const source = typeof payload?.source === 'string' ? payload.source : '';
+  if (!source) {
+    return;
+  }
+
+  const contentsId = event.sender.id;
+  const isDirty = Boolean(payload?.isDirty);
+  const dirtySources = dirtySourcesByContentsId.get(contentsId) ?? new Set();
+
+  if (isDirty) {
+    dirtySources.add(source);
+    dirtySourcesByContentsId.set(contentsId, dirtySources);
+    return;
+  }
+
+  dirtySources.delete(source);
+  if (dirtySources.size === 0) {
+    dirtySourcesByContentsId.delete(contentsId);
+    return;
+  }
+
+  dirtySourcesByContentsId.set(contentsId, dirtySources);
+});
+
+ipcMain.on('app:window-close-response', (event, payload) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+
+  const contentsId = event.sender.id;
+  pendingCloseRequestContentsIds.delete(contentsId);
+
+  if (!payload?.shouldClose) {
+    return;
+  }
+
+  dirtySourcesByContentsId.delete(contentsId);
+  confirmedCloseContentsIds.add(contentsId);
+  win.close();
+});

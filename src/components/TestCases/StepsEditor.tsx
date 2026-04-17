@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { IconArrowRight, IconChevronDown, IconCopy, IconPlus, IconX } from '../Common/Icons';
+import {
+  IconArrowDownward,
+  IconArrowRight,
+  IconArrowUpward,
+  IconChevronDown,
+  IconCopy,
+  IconPlus,
+  IconTune,
+  IconX,
+} from '../Common/Icons';
 import { SearchableSelect } from '../Common/SearchableSelect';
 import { StepFieldRenderer } from './StepFieldRenderer';
 import { parseXMLSteps } from '../../utils/xmlParser';
@@ -34,68 +43,6 @@ interface StepsEditorProps {
   rawSteps: unknown;
   onChange: (steps: ParsedStep[]) => void;
   errors?: string[];
-}
-
-// ── Per-step toggle icon (three sliders icon) ──────────────────────────────
-function IconSliders({ size = 14 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <line x1="2" y1="4" x2="14" y2="4" />
-      <circle cx="5" cy="4" r="1.5" fill="currentColor" stroke="none" />
-      <line x1="2" y1="8" x2="14" y2="8" />
-      <circle cx="11" cy="8" r="1.5" fill="currentColor" stroke="none" />
-      <line x1="2" y1="12" x2="14" y2="12" />
-      <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function IconMoveUp({ size = 14 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 9l4-4 4 4" />
-      <path d="M8 5v6" />
-    </svg>
-  );
-}
-
-function IconMoveDown({ size = 14 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 7l4 4 4-4" />
-      <path d="M8 5v6" />
-    </svg>
-  );
 }
 
 function createEditorUiId(): string {
@@ -353,7 +300,7 @@ function StepItem({
             title="Add optional fields"
           >
             <span className="steps-editor__advanced-toggle__icon" aria-hidden="true">
-              <IconSliders size={12} />
+              <IconTune size={12} />
             </span>
             <span className="steps-editor__advanced-toggle__label">
               Additional Fields
@@ -417,7 +364,7 @@ function StepItem({
             title="Move step up"
             aria-label="Move step up"
           >
-            <IconMoveUp size={12} />
+            <IconArrowUpward size={12} />
           </button>
           <button
             type="button"
@@ -427,7 +374,7 @@ function StepItem({
             title="Move step down"
             aria-label="Move step down"
           >
-            <IconMoveDown size={12} />
+            <IconArrowDownward size={12} />
           </button>
         </div>
 
@@ -708,11 +655,11 @@ export function StepsEditor({ rawSteps, onChange, errors = [] }: StepsEditorProp
             onClick={cancelDeleteStep}
             aria-label="Close delete confirmation"
           />
-          <div className="steps-editor__confirm-card" role="document">
+          <div className="steps-editor__confirm-card steps-editor__confirm-card--danger" role="document">
             <div className="steps-editor__confirm-head">
               <div>
-                <p className="steps-editor__confirm-kicker">Delete step</p>
-                <h3 className="steps-editor__confirm-title">
+                <p className="steps-editor__confirm-kicker steps-editor__confirm-kicker--danger">Delete step</p>
+                <h3 className="steps-editor__confirm-title steps-editor__confirm-title--danger">
                   Remove Step {steps[deleteTargetIndex].index}?
                 </h3>
               </div>
@@ -744,7 +691,7 @@ export function StepsEditor({ rawSteps, onChange, errors = [] }: StepsEditorProp
               <button type="button" className="btn btn--secondary btn--sm" onClick={cancelDeleteStep}>
                 Keep step
               </button>
-              <button type="button" className="btn btn--primary btn--sm" onClick={confirmDeleteStep}>
+              <button type="button" className="btn btn--danger btn--sm" onClick={confirmDeleteStep}>
                 Delete step
               </button>
             </div>

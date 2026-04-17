@@ -19,6 +19,7 @@ interface PageDetailLayoutProps {
   heading: HeadingData;
   children: React.ReactNode;
   className?: string;
+  headingActions?: React.ReactNode;
 }
 
 /**
@@ -35,6 +36,7 @@ export function PageDetailLayout({
   heading,
   children,
   className = '',
+  headingActions,
 }: PageDetailLayoutProps) {
   return (
     <div className={`page-detail-layout ${className}`}>
@@ -60,19 +62,26 @@ export function PageDetailLayout({
 
       {/* Section 2: Main Heading */}
       <div className="page-detail-layout__heading-wrapper mb-lg">
-        <div className="suite-main-heading">
-          <h2 className="text-2xl font-semibold case-detail-pane__title" title={heading.title}>
-            {heading.title}
-          </h2>
-          {heading.id !== undefined && (
-            <span className="suite-main-heading__id">
-              {heading.countLabel === 'New Test Case' ? 'New Test Case' : `ID: ${heading.id}`}
-            </span>
-          )}
-          {heading.count !== undefined && (
-            <span className="suite-main-heading__count">
-              {heading.countLabel}: {heading.count}
-            </span>
+        <div className="page-detail-layout__heading-row">
+          <div className="suite-main-heading">
+            <h2 className="text-2xl font-semibold case-detail-pane__title" title={heading.title}>
+              {heading.title}
+            </h2>
+            {heading.id !== undefined && (
+              <span className="suite-main-heading__id">
+                {heading.countLabel === 'New Test Case' ? 'New Test Case' : `ID: ${heading.id}`}
+              </span>
+            )}
+            {heading.count !== undefined && (
+              <span className="suite-main-heading__count">
+                {heading.countLabel}: {heading.count}
+              </span>
+            )}
+          </div>
+          {headingActions && (
+            <div className="page-detail-layout__heading-actions">
+              {headingActions}
+            </div>
           )}
         </div>
       </div>

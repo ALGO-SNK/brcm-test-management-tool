@@ -9,6 +9,8 @@ import {
 
 const THEME_MODE_KEY = 'theme-mode';
 const THEME_FONT_KEY = 'theme-font';
+const THEME_DEFAULT_VERSION_KEY = 'theme-default-version';
+const THEME_DEFAULT_VERSION = 'light-v1';
 
 const THEME_MODES: ThemeMode[] = [
   'dark',
@@ -47,10 +49,19 @@ function parseFont(value: string | null): AppFontMode {
   return 'system';
 }
 
+function getInitialThemeMode(): ThemeMode {
+  const appliedDefaultVersion = localStorage.getItem(THEME_DEFAULT_VERSION_KEY);
+  if (appliedDefaultVersion !== THEME_DEFAULT_VERSION) {
+    localStorage.setItem(THEME_MODE_KEY, 'light');
+    localStorage.setItem(THEME_DEFAULT_VERSION_KEY, THEME_DEFAULT_VERSION);
+    return 'light';
+  }
+
+  return parseThemeMode(localStorage.getItem(THEME_MODE_KEY));
+}
+
 export function ThemeContextProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<ThemeMode>(() =>
-      parseThemeMode(localStorage.getItem(THEME_MODE_KEY)),
-  );
+  const [mode, setMode] = useState<ThemeMode>(getInitialThemeMode);
 
   const [font, setFontMode] = useState<AppFontMode>(() =>
       parseFont(localStorage.getItem(THEME_FONT_KEY)),

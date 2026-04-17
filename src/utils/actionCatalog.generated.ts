@@ -28,7 +28,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Group helper: creates band rows until the count is at least 5. Page-state-driven.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -62,7 +62,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Communication helper: Key selects email vs phone flow. Value is the new email/phone. Copy a working pattern.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -79,7 +79,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Group helper: Headers is a mini DSL containing raw click XPaths and commands like TYPE:days:xpath, STYPE:text:xpath, DATEPICK:days:iconXpath:calendarXpath.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -96,7 +96,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Group helper: creates intervention rows until the count is at least 3. Page-state-driven.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -147,7 +147,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Payment helper: when table says No data available in table, it creates an order for the student from Value or Key.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -164,7 +164,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Group helper: Headers is the existence-check XPath. If none found, the helper adds a schedule. Copy existing usage.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -181,8 +181,8 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Headers is SECOND, MINUTE, or HOUR.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
-      "value": "optional",
+      "elementCategory": "required",
+      "value": "required",
       "expectedValue": "optional",
       "key": "not-used",
       "headers": "optional",
@@ -198,7 +198,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Group helper: creates withdrawal rows until the count is at least 3. Page-state-driven.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -232,7 +232,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Asserts all column filter icons are visible.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -317,7 +317,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares the calculated salary projection amount to the current element text.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -351,7 +351,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Types DateTime.Now.AddYears(-1) in dd/MM/yyyy; saves the same date when Key exists.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -402,7 +402,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Executes arguments[0].innerHTML = Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -419,7 +419,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Table.IsBulkAssignmentColumnCheck(element).",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -436,7 +436,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads current state with CommonControls.IsCheckBoxSelected; clicks the custom control at Value only if state must change.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -453,7 +453,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Student helper: validates sorting against the deleted-student table variant.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -470,7 +470,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Staff helper: sorts saved column values and compares them to the current deleted-staff table.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -487,7 +487,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Student helper: validates deleted-student list sort order against saved data.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -504,7 +504,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Clicks the element only if it is currently unchecked.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -521,7 +521,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses visible list text via GetListItemsViaContent.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -538,7 +538,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Table.IsManageAttendanceCellSelected.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -555,7 +555,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Table.GetManageAttendanceSelectedRowPeriodCount(element, rowCount).",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -572,7 +572,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Staff helper: compares one or more saved deleted-staff values against the current deleted-staff table.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -606,7 +606,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses element.Selected.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -623,7 +623,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses the saved class from Key or the literal Value, then checks every table cell class for that fragment.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -657,7 +657,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Sends Ctrl+A then Delete.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -674,7 +674,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "CLICK_DELAY first applies an explicit wait on Element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -691,7 +691,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "CLICK_DELAY first applies an explicit wait on Element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -725,7 +725,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses JavaScript click.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -776,7 +776,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value may be select, childspan, or default element text mode.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -793,7 +793,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Re-reads mark cells using the same row XPath and compares the list to the saved list.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -810,7 +810,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value supports EQUAL, LESS_THEN, GREATER_THEN, otherwise not-equal. Compares current text/value against saved count.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "required",
       "expectedValue": "not-used",
       "key": "required",
@@ -827,7 +827,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Currently documented mode seen in code: Less_Than_Equal.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -912,7 +912,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Parses explicit day, month, year.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -929,7 +929,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Delegates to DatePicker.SelectDate(element, offset, browser).",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -947,7 +947,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "contract": {
       "element": "not-used",
       "elementCategory": "not-used",
-      "value": "optional",
+      "value": "required",
       "expectedValue": "not-used",
       "key": "not-used",
       "headers": "not-used",
@@ -963,7 +963,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Delegates to Table.ValidateStudentDeletedRowSelection.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -980,7 +980,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Delegates to Table.ValidateStudentDeletedRowUnSelection.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -997,7 +997,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Direct negative text assertion.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1014,7 +1014,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Double-clicks the element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1048,7 +1048,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Current implementation finds the XPath in Value and calls DragAndDrop(target, element). Copy an existing working test because source/target ordering is easy to misread.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1065,7 +1065,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Selenium DragAndDropToOffset with the two integers from Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1082,7 +1082,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Dinner helper: Headers selects one of the hard-coded scenarios such as Only All Groups, Not Assigned Group, In Assigned Group, In Two Assigned Group, MS Two Seperate Assigned Group.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -1116,7 +1116,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Toggles the mark between ? and /, saves the previous mark in Key, and updates innerHTML directly.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -1133,7 +1133,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Changes the mark only if the current value does not equal Value. If Headers exists, it clicks that save button after updating.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1150,7 +1150,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads a saved date from DataStore and types it into the element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -1167,7 +1167,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads value, then Text, then textContent; trims whitespace/newlines.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1184,7 +1184,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads value, then Text, then textContent; trims whitespace/newlines.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1218,7 +1218,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses the #ListGrid header table and asserts all values in Headers column contain Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "required",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1235,7 +1235,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Same as FILTER_BY, but filter text comes from DataStore[Key].",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -1252,7 +1252,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads marks for one row via Table.GetManageAttendanceRowMarks and asserts at least one equals ExpectedValue.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1269,7 +1269,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Clicks the filter icon for the column named in Headers.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1303,7 +1303,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Table.HasAmmendDailyAttendanceIcon.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1320,7 +1320,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Table.HasAttendanceCommentAddedInGroupActions.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1337,7 +1337,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Clicks only if the saved column-visibility key is true.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -1354,7 +1354,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Moves the mouse to the element. HOVER_DELAY only differs by the pre-wait path.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1371,7 +1371,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Moves the mouse to the element. HOVER_DELAY only differs by the pre-wait path.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1388,7 +1388,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Checks all dates in the named table column.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1405,7 +1405,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses current selected-row count. When ExpectedValue is wrapped in @...@, the framework reads that element and subtracts Value from it.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1422,7 +1422,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Asserts type=\"checkbox\".",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1439,7 +1439,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Same idea as IS_COLUMN_EMPTY, but uses a different grid header path.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1456,7 +1456,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "When Value=true, all values in the column must be empty; otherwise all must be non-empty.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1473,7 +1473,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value=td toggles the table-cell mode. Saves or asserts visibility.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -1490,7 +1490,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Asserts the class contains datePickerCustom.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1507,7 +1507,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Direct element.Enabled comparison.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1524,7 +1524,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Finds all children by the first XPath in Headers, then checks the nested XPath from the second token for each child.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1541,7 +1541,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Table.GetSelectedRowCount(element) and compares it to Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1558,7 +1558,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Asserts the target has a scrollbar.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1575,7 +1575,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Current implementation asserts Table.IsSorted(element) is false. Treat it as a very narrow negative check.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1592,7 +1592,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Checks the element value attribute.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1609,7 +1609,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Wrapped in try/catch like ISVISIBLE.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1626,7 +1626,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Checks whether the input type attribute is password.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1677,7 +1677,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "At least one non-empty date in the column must be in the future.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1694,7 +1694,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Validates past dates in the named column. ANY means at least one past/blank value; otherwise all must be past/blank.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1711,7 +1711,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Calls Table.MarkAllCellForNumberOfRows.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1728,7 +1728,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses saved \"Admission Number\" data and checks it against current \"Admission No\" values.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -1745,7 +1745,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses a saved mark list and Table.GetManageAttendancePeriodsByDay(element, Headers). Non-A/P values must exist in the saved list.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -1779,7 +1779,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Current list count must equal the text of the XPath extracted from ExpectedValue.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1796,7 +1796,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Current text/value/textContent must contain ExpectedValue.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1830,7 +1830,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Communication helper: matches saved student identifiers to current recipients and message type.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -1847,7 +1847,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads selected row count from table row classes.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -1864,7 +1864,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Student helper: compares three saved columns against the deleted-student table.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -1881,7 +1881,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares current element values to a saved table dictionary keyed by Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1915,7 +1915,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Expected count can come from Key, direct text, or another element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "optional",
@@ -1932,7 +1932,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Student helper: compares deleted-table column values against a saved dropdown list. Copy from an existing student flow.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -1949,7 +1949,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Student helper: looks for a matching row in a specific confirm-student table. Copy a working pattern.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -1966,7 +1966,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Same idea for unselected rows.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -2000,7 +2000,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Defaults to 1 if empty or invalid.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2017,7 +2017,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Defaults to 1 if empty or invalid.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2051,7 +2051,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Treats empty style as success and compares that to ExpectedValue.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -2068,7 +2068,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Asserts selected text is not the given value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2102,7 +2102,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Communication helper: checks message text, today's date, and Delivered status.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2136,7 +2136,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Checks whether current text starts with Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -2170,7 +2170,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Sends the given key once per row. It does not target an individual cell.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2221,7 +2221,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Payment helper: no authored parameters beyond current page state. Copy an existing usage only.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2255,7 +2255,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Context-clicks the element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2272,7 +2272,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads div text from all mark cells found under the row XPath in Headers and saves them as a list.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -2289,7 +2289,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Headers may be SplitByBreak, SplitByCarriageReturn, or SplitBySpace.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2306,7 +2306,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves current period label built from current month + current year element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2340,7 +2340,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Student helper: saves deleted-student table data.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -2357,7 +2357,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Staff helper: saves deleted-staff table data.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -2374,7 +2374,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves dropdown options.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2391,7 +2391,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves option count.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2408,7 +2408,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Collects the named attribute from all child elements matched by Headers.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "required",
@@ -2425,7 +2425,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves the title attribute.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2442,7 +2442,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves one attribute from the current element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2459,7 +2459,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Counts children matching Headers XPath under the current element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2493,7 +2493,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads ag-grid text by XPath.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2527,7 +2527,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves visible list length from li elements.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2544,7 +2544,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves the latest non-empty date minus 14 days from the table column in Headers.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -2561,7 +2561,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value must include tableheaderxpath; optional headercount stores {Key}_count. Saves the selected-row dictionary.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -2578,7 +2578,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Splits element text and writes sequential keys like Key_1, Key_2.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2595,7 +2595,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Headers is an XPath filter applied inside the list.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2612,7 +2612,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Headers first token is parsed as the target column index.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2629,7 +2629,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Supports chained split operations via comma-separated Headers and Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -2646,7 +2646,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses ExpectedValue as an alternate XPath to read from; falls back to 0.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -2663,7 +2663,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Generates a 3-character uppercase/random staff code, types it, and stores it.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -2680,7 +2680,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "If Value contains tdInTableHeader, delete-row parsing is used.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2697,7 +2697,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves the element text directly; this is not the same as SAVE_TABLE_ROW_COUNT.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -2714,7 +2714,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves row data as dictionary keyed by table header text.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2731,7 +2731,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Missing/null tables are treated as zero when Headers contains TableCanBeNull.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2748,7 +2748,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves every input value under the column whose header text equals Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -2765,7 +2765,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads element value, parses dd/MM/yyyy, and stores the weekday name.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -2799,7 +2799,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves Text, then value, then textContent.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2816,7 +2816,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Communication helper: checks subject/body pair in the forgotten-people table.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2833,7 +2833,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Delegates to DomScriptsExecutor.ScrollByPixel(..., Headers, ExpectedValue, \"Horizontal\").",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -2850,7 +2850,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Scrolls inside the target element horizontally.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2867,7 +2867,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Scrolls inside the target element horizontally.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2901,7 +2901,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Delegates to DomScriptsExecutor.ScrollByPixel(..., Headers, ExpectedValue, \"Vertical\").",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -2918,7 +2918,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Repeatedly scrolls until the element is visible.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2935,7 +2935,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "All values in the named table column must equal Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "required",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -2986,7 +2986,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "SELECT is executed in CommonPage as SelectElement, not generic IWebElement.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3003,7 +3003,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Delegates to Table.SelectStudentDeletedRow(element, Value).",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3020,7 +3020,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Adds Value to current selected index.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3037,7 +3037,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares selected option text.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3054,7 +3054,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Clicks a subset of li items.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3071,7 +3071,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses text from Key if present.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3088,7 +3088,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Advances one index from current selection.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3105,7 +3105,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves the selected option text into DataStore.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -3122,7 +3122,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Picks a unique mark via Helpers.GetUniqueMark(currentSelection) and optionally stores the previous mark.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3139,7 +3139,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Same data-source idea as SELECT_IS_SELECTED, but direct equality assertion.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3173,7 +3173,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Sorts the saved table column in memory and compares it to the current UI column.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "required",
       "expectedValue": "not-used",
       "key": "required",
@@ -3241,7 +3241,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Targets select controls by table column.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3258,7 +3258,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Supports row number and headerhasth flags in Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3275,7 +3275,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Clicks all matching icon components.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3292,7 +3292,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value is 1-based.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3309,7 +3309,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Clicks a specific i icon.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3326,7 +3326,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Clicks rows by count or by take/skip dictionary.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3360,7 +3360,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Row/column can come from stored JSON coordinates or direct Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3377,7 +3377,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Finds the first icon under nested divs whose attribute contains findvalue, then clicks it through JavaScript.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3394,7 +3394,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Supports possibletext, sendkeys, and direct text.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3411,7 +3411,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "unused",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -3428,7 +3428,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Asserts current integer text is saved count - 1.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -3445,7 +3445,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares header count.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3479,7 +3479,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Supports skip, take, and iconnumber.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3496,7 +3496,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Hovers header/data icon element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3513,7 +3513,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "At least one value in the named column must equal Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3530,7 +3530,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves selected rows as structured table data.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3547,7 +3547,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves a table cell class.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3564,7 +3564,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Headers as column index.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -3581,7 +3581,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves a cell div style.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3598,7 +3598,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves one div text from a row/column coordinate.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -3615,7 +3615,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves one span text from a row/column coordinate. spannumber defaults to 1.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -3632,7 +3632,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves matching row,column coordinates as JSON plus {Key}_count.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -3649,7 +3649,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Delegates to Table.GetWholeRowText(element, Headers). Copy a nearby example because Headers meaning comes from the helper.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -3666,7 +3666,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Saves visible rows count.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -3683,7 +3683,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Common inline format is columnNumber:5,take:5,skip:0.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -3700,7 +3700,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Checks whether cells in one row contain an attribute value. Row numbers are zero-based in the helper loop.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3717,7 +3717,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Stores {Key}_firstrowmatched, {Key}_totalcount, {Key}_lastrowmatched. Supports datakeycolumnnumber, headertablexpath, headerhasth, rownumber, columnnumber.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "required",
@@ -3734,7 +3734,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads one icon attribute.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3751,7 +3751,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses GetValuesDictionary(Value).",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3768,7 +3768,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value contains at least columnnumber.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3785,7 +3785,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Passes if any icon matches.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3802,7 +3802,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Checks for icons under the cell div.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3819,7 +3819,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Checks for i elements in the cell.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3836,7 +3836,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Checks whether a target cell div style contains a fragment.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3853,7 +3853,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses tag and optional divnumber.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3870,7 +3870,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares current style against stored style.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -3887,7 +3887,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Header icon presence check.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3904,7 +3904,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Also validates icon class.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3921,7 +3921,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Verifies one icon attribute directly.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3955,7 +3955,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value may include headertablexpath, headerhasth, rownumber, columnnumber. Without columnnumber, all columns are checked.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3972,7 +3972,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads one header-row div text and compares it to headertext.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -3989,7 +3989,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads one header-row text cell and compares it to headertext.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4006,7 +4006,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Counts header rows.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4023,7 +4023,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Current logic only handles comparefor=currentdatemonthheader.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4040,7 +4040,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares one div text against a saved value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -4057,7 +4057,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "unused",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -4074,7 +4074,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares one span text against a saved value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "required",
@@ -4091,7 +4091,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Works off selected rows.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4108,7 +4108,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value must include headertablexpath, columnscount, repeated column{i}header, column{i}searchkey, and expectedrowcount.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -4125,7 +4125,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses ag-grid row count.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4142,7 +4142,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares current visible row count against Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4159,7 +4159,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares current visible row count to the saved count.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "required",
@@ -4176,7 +4176,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Iterates all checkbox labels under the current element XPath.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4193,7 +4193,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Toggles projector mode and optionally enters a password in a popup/frame. Copy a working example.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4210,7 +4210,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares GetCssValue(\"color\") to ExpectedValue.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4227,7 +4227,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Stable path is a concatenated compare using two headers and IsConcatenated=true. The tooltip lines are matched as SecondHeader, FirstHeader.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -4244,7 +4244,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Asserts the title attribute contains ExpectedValue.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4261,7 +4261,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares the title attribute exactly to ExpectedValue.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4312,7 +4312,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "If Key exists, stored data is typed instead of Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -4329,7 +4329,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Enters DateTime.Now + Value in dd/MM/yyyy.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -4346,7 +4346,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "If Key exists, stored data is typed instead of Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -4363,7 +4363,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses JavaScript to assign value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -4380,7 +4380,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "ExpectedValue controls alphabet/number/default random text.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -4397,7 +4397,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Clicks the element only if it is currently checked.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -4414,7 +4414,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses element.Selected.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -4448,7 +4448,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "If Key exists, the stored path is used instead of Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -4465,7 +4465,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "All dates in the named column must be later than the saved active date in Key.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -4482,7 +4482,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares element text with Helpers.CalculateAge(Value).",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -4499,7 +4499,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares element text with Helpers.CalculateAgeNumber(Value).",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -4516,7 +4516,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares element text with Helpers.CalculateAgeShort(Value).",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -4533,7 +4533,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses DateTime.GetDateTimeFormats()[Value].",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -4550,7 +4550,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "All dates in the named column must be earlier than the saved date in Key.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -4567,7 +4567,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Current visible count must differ from stored count.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -4584,7 +4584,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares current dropdown count against stored count.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "optional",
@@ -4601,7 +4601,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value contains four paths: count, previous button, date control, text control. Headers contains expected text and date token like TODAY, YESTERDAY, TOMORROW.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4618,7 +4618,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Student helper: checks saved student rows now exist in the deleted-student table.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -4635,7 +4635,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "All items must contain ExpectedValue.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4652,7 +4652,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "If Value exists it overrides the assertion mode.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4669,7 +4669,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Specialized numeric sign comparison against stored value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -4686,7 +4686,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Table.GetManageAttendanceRowMarkPeriodCount.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4703,7 +4703,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Table.GetManageAttendanceRowCountForParticularColum(element, Headers).",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4720,7 +4720,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares current value to the previously saved mark in Key.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -4737,7 +4737,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value may contain \"OR\" to allow alternative class matches.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4754,7 +4754,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Converts a stored signed value into CR/DR text and compares to the element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "optional",
@@ -4771,7 +4771,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Headers must contain dd/MM/yyyy or dd/MM/yy.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "optional",
@@ -4839,7 +4839,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Replaces Datakey1, Datakey2 etc through CommonControls.AddDatakeyValueToString.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -4856,7 +4856,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Compares type attribute.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "not-used",
@@ -4907,7 +4907,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Calculates percentage from saved count and the total element at Headers, then checks current text contains that percentage.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "optional",
       "key": "required",
@@ -4924,7 +4924,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses Table.GetSelectedItems and compares the selected values in column Headers to the saved values from Key.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "not-used",
       "expectedValue": "not-used",
       "key": "required",
@@ -4941,7 +4941,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Every non-empty entry in Value must exist as a visible option.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -4958,7 +4958,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Reads a selected-row dictionary from Key and checks whether the current element text contains each saved value from column Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "required",
@@ -4975,7 +4975,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Defaults to 5 if empty.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",
@@ -4992,7 +4992,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Uses RadioControl and group name from Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -5009,7 +5009,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Checks whether style contains Value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -5026,7 +5026,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Value is not the final assertion here; ExpectedValue is.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -5043,7 +5043,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Looks in the second-last column div for an attribute that contains findvalue.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "not-used",
@@ -5094,7 +5094,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Usually compares current element text against stored value.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -5106,6 +5106,23 @@ export const DOC_ACTION_DEFINITIONS = {
   },
   "ZOOM_IN_OUT": {
     "name": "ZOOM_IN_OUT",
+    "category": "element",
+    "description": "Defined in ACTION_PARAMETER_MATRIX.md (High-Confidence Action Matrix)",
+    "notes": "Executes document.body.style.scale = Value.",
+    "contract": {
+      "element": "not-used",
+      "elementCategory": "not-used",
+      "value": "optional",
+      "expectedValue": "not-used",
+      "key": "not-used",
+      "headers": "not-used",
+      "elementReplaceTextDataKey": "optional",
+      "isElementPathDynamic": "optional",
+      "isConcatenated": "not-used"
+    }
+  },
+  "ZOOM_IN": {
+    "name": "ZOOM_IN",
     "category": "element",
     "description": "Defined in ACTION_PARAMETER_MATRIX.md (High-Confidence Action Matrix)",
     "notes": "Executes document.body.style.scale = Value.",
