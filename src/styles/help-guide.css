@@ -1,0 +1,402 @@
+.settings-dock--help {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.settings-dock--help .settings-workbench {
+  width: min(90vw, 1800px);
+  max-width: 90vw;
+  margin-left: auto;
+}
+
+.help-guide .settings-workbench__body {
+  align-items: stretch;
+}
+
+/* Header Search - Always visible, minimal layout, positioned right */
+.help-guide__header-search {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-soft);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.help-guide__search-container {
+  min-width: 250px;
+  display: flex;
+  align-items: center;
+  order: 1;
+  align-self: flex-end;
+}
+
+.help-guide__search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  padding: 6px 8px;
+  position: relative;
+}
+
+.help-guide__search input {
+  border: 0;
+  outline: none;
+  width: 100%;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+.help-guide__search input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+.help-guide__search input:focus {
+  outline: none;
+}
+
+.help-guide__search:has(input:focus) {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.help-guide__search-clear {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 2px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  transition: color var(--transition-base);
+}
+
+.help-guide__search-clear:hover {
+  color: var(--color-text);
+}
+
+/* Search controls - prev/next buttons and counter */
+.help-guide__search-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  order: 2;
+}
+
+.btn--icon-sm {
+  min-width: 32px !important;
+  min-height: 32px !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.help-guide__match-info {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 0 4px;
+  min-width: 45px;
+  text-align: right;
+}
+
+.help-guide__match-info--searching {
+  color: var(--color-primary);
+  opacity: 0.8;
+}
+
+.help-guide__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.help-guide__overview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.help-guide__summary-card,
+.help-guide__result-card {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: 12px;
+}
+
+.help-guide__summary-head,
+.help-guide__result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.help-guide__summary-head h2,
+.help-guide__result-head h3 {
+  margin: 0;
+  color: var(--color-text-heading);
+  font-size: var(--text-base);
+}
+
+.help-guide__summary-head {
+  justify-content: flex-start;
+}
+
+.help-guide__summary-card p {
+  margin: 10px 0 0;
+  color: var(--color-text-muted);
+  line-height: var(--line-relaxed);
+}
+
+.help-guide__results {
+  display: grid;
+  gap: 10px;
+}
+
+.help-guide__snippet {
+  margin: 8px 0 12px;
+  color: var(--color-text);
+  line-height: var(--line-relaxed);
+}
+
+.help-guide__tips {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  padding: 12px;
+}
+
+.help-guide__chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.help-guide__chip-row .meta-pill {
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.help-guide__inline-code {
+  margin: 0 4px;
+}
+
+.help-guide__document {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+/* Search feedback - Simple message */
+.help-guide__search-feedback {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-raised);
+}
+
+/* Navigation bar - Simple and functional */
+.help-guide__search-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface);
+}
+
+.help-guide__search-nav-counter {
+  font-size: 13px;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.help-guide__search-nav-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn--search-nav {
+  min-width: 44px;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.help-guide__article {
+  padding: 14px;
+  max-height: min(68vh, 800px);
+  overflow: auto;
+  scroll-behavior: smooth;
+  color: var(--color-text);
+  line-height: var(--line-relaxed);
+}
+
+.help-guide__article .help-guide__h1,
+.help-guide__article .help-guide__h2,
+.help-guide__article .help-guide__h3,
+.help-guide__article .help-guide__h4 {
+  color: var(--color-text-heading);
+  margin: 18px 0 8px;
+}
+
+.help-guide__article .help-guide__h1 {
+  font-size: var(--text-xl);
+}
+
+.help-guide__article .help-guide__h2 {
+  font-size: var(--text-lg);
+}
+
+.help-guide__article .help-guide__h3 {
+  font-size: var(--text-base);
+}
+
+.help-guide__article .help-guide__h4 {
+  font-size: var(--text-sm);
+}
+
+.help-guide__article .help-guide__paragraph {
+  margin: 8px 0;
+}
+
+.help-guide__article .help-guide__list {
+  margin: 8px 0 10px;
+  padding-left: 22px;
+}
+
+.help-guide__article .help-guide__code {
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: var(--color-code-bg);
+  color: var(--color-text-heading);
+}
+
+/* Highlight - Functional, minimal styling */
+.help-guide__highlight {
+  background: #ffd966;
+  color: #1f2328;
+  padding: 0 2px;
+  scroll-margin: 120px;
+  transition: background-color 0.1s, color 0.1s;
+}
+
+[data-theme='dark'] .help-guide__highlight,
+[data-theme='black-soft'] .help-guide__highlight,
+[data-theme='dark-cyan'] .help-guide__highlight,
+[data-theme='high-contrast'] .help-guide__highlight {
+  background: #8b6e00;
+  color: #fffacd;
+}
+
+/* Active highlight - current match */
+.help-guide__highlight.is-active {
+  background: #ff9800;
+  color: #ffffff;
+}
+
+[data-theme='dark'] .help-guide__highlight.is-active,
+[data-theme='black-soft'] .help-guide__highlight.is-active,
+[data-theme='dark-cyan'] .help-guide__highlight.is-active,
+[data-theme='high-contrast'] .help-guide__highlight.is-active {
+  background: #ff9800;
+  color: #0d0d0d;
+}
+
+.help-guide__link-text {
+  color: var(--color-text-muted);
+}
+
+.help-guide__table-wrap {
+  margin: 10px 0 14px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-sm);
+  max-height: min(58vh, 640px);
+  overflow: auto;
+  overscroll-behavior: auto;
+  scroll-behavior: smooth;
+}
+
+.help-guide__table {
+  border-collapse: collapse;
+  width: 100%;
+  background: var(--color-surface);
+  table-layout: auto;
+}
+
+.help-guide__table th,
+.help-guide__table td {
+  border: 1px solid var(--color-border-soft);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  font-size: var(--text-xs);
+  line-height: var(--line-relaxed);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.help-guide__table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-surface-raised);
+  color: var(--color-text-heading);
+  box-shadow: 0 1px 0 var(--color-border-soft);
+}
+
+@media (width <= 900px) {
+  .settings-dock--help {
+    width: 100%;
+  }
+
+  .settings-dock--help .settings-workbench {
+    width: min(96vw, 1200px);
+    max-width: 96vw;
+  }
+
+  .help-guide .settings-workbench__body {
+    grid-template-columns: 1fr;
+  }
+
+  .help-guide .settings-nav {
+    max-height: 220px;
+    overflow: auto;
+  }
+
+  .help-guide__article {
+    max-height: min(60vh, 700px);
+  }
+
+  .help-guide__table-wrap {
+    max-height: min(52vh, 520px);
+  }
+}

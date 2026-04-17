@@ -16,6 +16,7 @@ interface TestCaseListProps {
   onSelectCase: (testCase: ADOTestCase) => void;
   onBackToCases: () => void;
   onBackToPlan: () => void;
+  onHelpClick: () => void;
   onSettingsClick: () => void;
   workspaceSettings: WorkspaceSettingsValues;
   createPlanSuiteRequest?: number;
@@ -34,6 +35,7 @@ export function TestCaseList({
   onSelectCase,
   onBackToCases,
   onBackToPlan,
+  onHelpClick,
   onSettingsClick,
   workspaceSettings,
   createPlanSuiteRequest = 0,
@@ -120,7 +122,7 @@ export function TestCaseList({
 
   return (
     <div className="app-shell">
-      <Header title={plan.name} onSettingsClick={onSettingsClick} />
+      <Header title={plan.name} onHelpClick={onHelpClick} onSettingsClick={onSettingsClick} />
 
       <div className="split-pane" ref={containerRef}>
         {/* Sidebar */}

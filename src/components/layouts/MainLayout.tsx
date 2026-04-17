@@ -4,13 +4,14 @@ import { Header } from './Header';
 interface MainLayoutProps {
   children: ReactNode;
   title?: string;
+  onHelpClick?: () => void;
   onSettingsClick?: () => void;
 }
 
-export function MainLayout({ children, title, onSettingsClick }: MainLayoutProps) {
+export function MainLayout({ children, title, onHelpClick, onSettingsClick }: MainLayoutProps) {
   return (
     <div className="app-shell">
-      <Header title={title} onSettingsClick={onSettingsClick} />
+      <Header title={title} onHelpClick={onHelpClick} onSettingsClick={onSettingsClick} />
       <main className="app-main app-main--scroll">
         {children}
       </main>

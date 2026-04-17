@@ -8,6 +8,7 @@ import type { WorkspaceSettingsValues } from './WorkspaceSettings';
 interface LandingProps {
   onSelectPlan: (plan: ADOTestPlan) => void;
   onCreateSuiteForPlan: (plan: ADOTestPlan) => void;
+  onHelpClick: () => void;
   onSettingsClick: () => void;
   workspaceSettings: WorkspaceSettingsValues;
 }
@@ -15,6 +16,7 @@ interface LandingProps {
 export function Landing({
                           onSelectPlan,
                           onCreateSuiteForPlan,
+                          onHelpClick,
                           onSettingsClick,
                           workspaceSettings,
                         }: LandingProps) {
@@ -57,7 +59,7 @@ export function Landing({
   }[connectionStatus];
 
   return (
-      <MainLayout title={projectName} onSettingsClick={onSettingsClick}>
+      <MainLayout title={projectName} onHelpClick={onHelpClick} onSettingsClick={onSettingsClick}>
         <div className="page-shell">
           <div className="hero">
             <div className="hero__top">

@@ -28,6 +28,10 @@ export function IconSettings(props: IconProps) {
   return <MaterialIcon name="settings" {...props} />;
 }
 
+export function IconHelp(props: IconProps) {
+  return <MaterialIcon name="help" {...props} />;
+}
+
 export function IconArrowRight(props: IconProps) {
   return <MaterialIcon name="arrow_forward" {...props} />;
 }

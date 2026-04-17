@@ -7,10 +7,11 @@ import { NotificationContextProvider } from './context/NotificationContext';
 import { Toast } from './components/Common/Toast';
 import { Landing } from './components/pages/Landing';
 import { TestCaseList } from './components/pages/TestCaseList';
+import { HelpGuide } from './components/pages/HelpGuide';
 import { WorkspaceSettings, type WorkspaceSettingsValues } from './components/pages/WorkspaceSettings';
 import type { ADOTestPlan, ADOTestSuite, ADOTestCase } from './types';
 
-type PageType = 'landing' | 'cases' | 'detail' | 'settings';
+type PageType = 'landing' | 'cases' | 'detail' | 'settings' | 'help';
 type ContentPage = 'landing' | 'cases' | 'detail';
 
 const WORKSPACE_SETTINGS_KEY = 'workspace-settings';
@@ -151,17 +152,29 @@ export function App() {
     setSelectedCase(null);
   };
   const handleSettingsClick = () => {
-    if (currentPage !== 'settings') setPreviousPage(currentPage as ContentPage);
+    if (currentPage !== 'settings' && currentPage !== 'help') {
+      setPreviousPage(currentPage as ContentPage);
+    }
     setCurrentPage('settings');
   };
+  const handleHelpClick = () => {
+    if (currentPage !== 'settings' && currentPage !== 'help') {
+      setPreviousPage(currentPage as ContentPage);
+    }
+    setCurrentPage('help');
+  };
   const handleBackFromSettings = () => setCurrentPage(previousPage);
+  const handleBackFromHelp = () => setCurrentPage(previousPage);
   const handleSaveWorkspaceSettings = (values: WorkspaceSettingsValues) => {
     setWorkspaceSettings(values);
     localStorage.setItem(WORKSPACE_SETTINGS_KEY, JSON.stringify(values));
   };
 
   const isSettingsOpen = currentPage === 'settings';
-  const activeContentPage: ContentPage = isSettingsOpen ? previousPage : (currentPage as ContentPage);
+  const isHelpOpen = currentPage === 'help';
+  const activeContentPage: ContentPage = (isSettingsOpen || isHelpOpen)
+    ? previousPage
+    : (currentPage as ContentPage);
 
   return (
     <ThemeContextProvider>
@@ -173,6 +186,7 @@ export function App() {
             <Landing
               onSelectPlan={handleSelectPlan}
               onCreateSuiteForPlan={handleCreateSuiteForPlan}
+              onHelpClick={handleHelpClick}
               onSettingsClick={handleSettingsClick}
               workspaceSettings={workspaceSettings}
             />
@@ -188,6 +202,7 @@ export function App() {
               onSelectCase={handleSelectCase}
               onBackToCases={handleBackToCases}
               onBackToPlan={handleBackToPlan}
+              onHelpClick={handleHelpClick}
               onSettingsClick={handleSettingsClick}
               workspaceSettings={workspaceSettings}
               createPlanSuiteRequest={planSuiteCreateRequest}
@@ -200,6 +215,10 @@ export function App() {
               onSave={handleSaveWorkspaceSettings}
               onBack={handleBackFromSettings}
             />
+          )}
+
+          {isHelpOpen && (
+            <HelpGuide onBack={handleBackFromHelp} />
           )}
         </NotificationContextProvider>
       </MuiThemeAdapter>

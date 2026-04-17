@@ -20,6 +20,7 @@ interface TestCaseDetailProps {
   caseData?: ADOTestCase;
   workspaceSettings: WorkspaceSettingsValues;
   onBackToCases: () => void;
+  onHelpClick?: () => void;
   onSettingsClick: () => void;
   embedded?: boolean;
 }
@@ -288,6 +289,7 @@ export function TestCaseDetail({
   caseData,
   workspaceSettings,
   onBackToCases,
+  onHelpClick,
   onSettingsClick,
   embedded = false,
 }: TestCaseDetailProps) {
@@ -686,7 +688,7 @@ export function TestCaseDetail({
   if (loading && !testCase) {
     if (embedded) return loadingView;
     return (
-      <MainLayout title="Test Case Detail" onSettingsClick={onSettingsClick}>
+      <MainLayout title="Test Case Detail" onHelpClick={onHelpClick} onSettingsClick={onSettingsClick}>
         {loadingView}
       </MainLayout>
     );
@@ -696,7 +698,7 @@ export function TestCaseDetail({
     const emptyView = <p className="text-sm text-secondary">Test case not found.</p>;
     if (embedded) return emptyView;
     return (
-      <MainLayout title="Test Case Detail" onSettingsClick={onSettingsClick}>
+      <MainLayout title="Test Case Detail" onHelpClick={onHelpClick} onSettingsClick={onSettingsClick}>
         {emptyView}
       </MainLayout>
     );
@@ -953,7 +955,7 @@ export function TestCaseDetail({
   if (embedded) return content;
 
   return (
-    <MainLayout title="Test Case Detail" onSettingsClick={onSettingsClick}>
+    <MainLayout title="Test Case Detail" onHelpClick={onHelpClick} onSettingsClick={onSettingsClick}>
       <PageDetailLayout
         breadcrumbs={detailBreadcrumbs}
         heading={{

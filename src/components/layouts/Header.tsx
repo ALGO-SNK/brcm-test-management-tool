@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 /*import { useThemeContext } from '../../context/useThemeContext';*/
 import {
- /* IconHelp,
-  IconMoon,
+  IconHelp,
+ /* IconMoon,
   IconSearch,*/
   IconSettings,
  /* IconSun,*/
@@ -14,6 +14,7 @@ interface HeaderProps {
   contextTitle?: string;
   contextMeta?: string;
   actions?: ReactNode;
+  onHelpClick?: () => void;
   onSettingsClick?: () => void;
 }
 
@@ -22,9 +23,11 @@ export function Header({
   contextTitle,
   contextMeta,
   actions,
+  onHelpClick,
   onSettingsClick,
 }: HeaderProps) {
  /* const { mode, toggleTheme } = useThemeContext();*/
+  const canOpenHelp = typeof onHelpClick === 'function';
   const canOpenSettings = typeof onSettingsClick === 'function';
   /*const isLightMode = mode === 'light';*/
 
@@ -63,6 +66,14 @@ export function Header({
         >
           {isLightMode ? <IconMoon size={18} /> : <IconSun size={18} />}
         </button>*/}
+        <button
+          className="app-header__icon-btn"
+          onClick={onHelpClick}
+          disabled={!canOpenHelp}
+          title="Open help guide"
+        >
+          <IconHelp size={18} />
+        </button>
         <button
           className="app-header__icon-btn"
           onClick={onSettingsClick}

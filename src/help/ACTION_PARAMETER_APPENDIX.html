@@ -1,0 +1,1825 @@
+<h1 id="action-parameter-appendix">Action Parameter Appendix</h1>
+<h2 id="scope">Scope</h2>
+<p>This appendix completes the action coverage started in:</p>
+<ul>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\QA%20WORKFLOW%20OUTPUT\ACTION_PARAMETER_MATRIX.md">ACTION_PARAMETER_MATRIX.md</a></li>
+</ul>
+<p>It focuses on the remaining actions found in:</p>
+<ul>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\Bromcom.Contract\Utilities\Enums.cs">Enums.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\CommonUtility.cs">CommonUtility.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Pages\Common\CommonPage.cs">CommonPage.cs</a></li>
+<li>helper files under
+<code>BromCom.Tests\Utilities\PageObjectModelHelper</code></li>
+</ul>
+<h2 id="reading-rules">Reading Rules</h2>
+<ul>
+<li><code>Element</code> and <code>ElementCategory</code> still follow
+the rules in the main matrix.</li>
+<li>This appendix only describes the remaining action contracts.</li>
+<li>If a row says <code>copy-existing-only</code>, the action is too
+page-state-specific to author safely from theory alone.</li>
+<li>If a row says <code>enum-only</code>, the action exists in
+<code>Enums.cs</code> but no runtime branch was found in the scanned
+execution path.</li>
+</ul>
+<h2 id="generic-and-browser-actions">Generic and Browser Actions</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ACCEPT_ALERT</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>optional <code>true</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Accepts the current alert. In <code>GetElement</code>, missing alert
+is tolerated when <code>ExpectedValue=true</code>.</td>
+</tr>
+<tr class="even">
+<td><code>CANCEL_ALERT</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Dismisses the current alert.</td>
+</tr>
+<tr class="odd">
+<td><code>POPUP_TEXT</code></td>
+<td>not used</td>
+<td>text fragment</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Reads alert text and asserts it contains <code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_DELAY</code></td>
+<td>usually required XPath</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>In practice this only adds a 60-second XPath wait before normal
+element resolution. Use the same parameter shape as the non-delay
+version of the step.</td>
+</tr>
+<tr class="odd">
+<td><code>CHANGE_INNER_HTML</code></td>
+<td>required</td>
+<td>JavaScript-safe text literal</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Executes <code>arguments[0].innerHTML = Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>RIGHT_CLICK</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Context-clicks the element.</td>
+</tr>
+<tr class="odd">
+<td><code>HOVER</code> / <code>HOVER_DELAY</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Moves the mouse to the element. <code>HOVER_DELAY</code> only
+differs by the pre-wait path.</td>
+</tr>
+<tr class="even">
+<td><code>DOUBLE_CLICK</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Double-clicks the element.</td>
+</tr>
+<tr class="odd">
+<td><code>DRAG_DROP_BY_OFFSET</code></td>
+<td>required draggable element</td>
+<td><code>offsetX,offsetY</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses Selenium <code>DragAndDropToOffset</code> with the two integers
+from <code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>DRAG_DROP</code></td>
+<td>required drag/drop context element</td>
+<td>target XPath</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Current implementation finds the XPath in <code>Value</code> and
+calls <code>DragAndDrop(target, element)</code>. Copy an existing
+working test because source/target ordering is easy to misread.</td>
+</tr>
+<tr class="odd">
+<td><code>SCROLL_TO_TOP</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Scrolls the page to top through
+<code>DomScriptsExecutor</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SCROLL_TO_RIGHT</code> / <code>SCROLL_TO_LEFT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Scrolls inside the target element horizontally.</td>
+</tr>
+<tr class="odd">
+<td><code>SCROLL_TO_HORIZONTAL</code></td>
+<td>required</td>
+<td>unused</td>
+<td>pixel/direction value</td>
+<td>unused</td>
+<td>pixel/direction value</td>
+<td>Delegates to
+<code>DomScriptsExecutor.ScrollByPixel(..., Headers, ExpectedValue, "Horizontal")</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SCROLL_TO_VERTICAL</code></td>
+<td>required</td>
+<td>unused</td>
+<td>pixel/direction value</td>
+<td>unused</td>
+<td>pixel/direction value</td>
+<td>Delegates to
+<code>DomScriptsExecutor.ScrollByPixel(..., Headers, ExpectedValue, "Vertical")</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SCROLL_UNTIL_VISIBLE</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Repeatedly scrolls until the element is visible.</td>
+</tr>
+<tr class="even">
+<td><code>IS_SCROLL_BAR</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Asserts the target has a scrollbar.</td>
+</tr>
+<tr class="odd">
+<td><code>CHECK_IF_UNCHECKED</code></td>
+<td>required checkbox</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Clicks the element only if it is currently unchecked.</td>
+</tr>
+<tr class="even">
+<td><code>UNCHECK_IF_CHECKED</code></td>
+<td>required checkbox</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Clicks the element only if it is currently checked.</td>
+</tr>
+<tr class="odd">
+<td><code>IS_CHECKBOX</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Asserts <code>type="checkbox"</code>.</td>
+</tr>
+<tr class="even">
+<td><code>IS_DATEPICKER</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Asserts the class contains <code>datePickerCustom</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>CLEAR_KEYS</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>required comma-separated keys</td>
+<td>unused</td>
+<td>Removes one or more saved keys from <code>DataStore</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SEND_KEYS_WITHOUT_ELEMENT</code></td>
+<td>not used</td>
+<td>key text or <code>keyenter</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Sends keyboard input globally through Selenium
+<code>Actions</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>REFRESH_CACHE</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Runs the permission helper flow to refresh system cache. No element
+contract.</td>
+</tr>
+<tr class="even">
+<td><code>SELECT_SAVE_SELECTED_OPTION_TEXT</code></td>
+<td>required select-like control</td>
+<td>unused</td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td>Saves the selected option text into <code>DataStore</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_STAFF_CODE</code></td>
+<td>required input</td>
+<td>unused</td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td>Generates a 3-character uppercase/random staff code, types it, and
+stores it.</td>
+</tr>
+<tr class="even">
+<td><code>VALIDATE_AGE</code></td>
+<td>required</td>
+<td>birth date input</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Compares element text with
+<code>Helpers.CalculateAge(Value)</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>VALIDATE_AGE_SHORT</code></td>
+<td>required</td>
+<td>birth date input</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Compares element text with
+<code>Helpers.CalculateAgeShort(Value)</code>.</td>
+</tr>
+<tr class="even">
+<td><code>VALIDATE_AGE_NUMBER</code></td>
+<td>required</td>
+<td>birth date input</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Compares element text with
+<code>Helpers.CalculateAgeNumber(Value)</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>CALCULATE_SAVE_DATE</code></td>
+<td>required input</td>
+<td>unused</td>
+<td>unused</td>
+<td>optional output key</td>
+<td>unused</td>
+<td>Types <code>DateTime.Now.AddYears(-1)</code> in
+<code>dd/MM/yyyy</code>; saves the same date when <code>Key</code>
+exists.</td>
+</tr>
+<tr class="even">
+<td><code>ENTER_SAVED_DATE</code></td>
+<td>required input</td>
+<td>unused</td>
+<td>unused</td>
+<td>required input key</td>
+<td>unused</td>
+<td>Reads a saved date from <code>DataStore</code> and types it into the
+element.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_MID_DATE_FROM_DATE_MIN_MAX</code></td>
+<td>required table/list body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required output key</td>
+<td>required date column header</td>
+<td>Saves the latest non-empty date minus 14 days from the table column
+in <code>Headers</code>.</td>
+</tr>
+<tr class="even">
+<td><code>VALIDATE_LEAVERS</code></td>
+<td>required table/list body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required input key</td>
+<td>required date column header</td>
+<td>All dates in the named column must be earlier than the saved date in
+<code>Key</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>VALIDATE_ACTIVE_DATE_FILTER</code></td>
+<td>required table/list body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required input key</td>
+<td>required date column header</td>
+<td>All dates in the named column must be later than the saved active
+date in <code>Key</code>.</td>
+</tr>
+<tr class="even">
+<td><code>MATCH_FILTER_STATUS_COUNT</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>required three comma-separated keys</td>
+<td>unused</td>
+<td><code>Key</code> order is expected total, leaver count, current
+count. Asserts <code>leaver + current == expected</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY_SELECT_OPTIONS_DISPLAYTEXT</code></td>
+<td>required select</td>
+<td>comma-separated option texts</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Every non-empty entry in <code>Value</code> must exist as a visible
+option.</td>
+</tr>
+<tr class="even">
+<td><code>CHECK_BULK_GROUP_COLUMN_CHECKED</code></td>
+<td>required table</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>Table.IsBulkAssignmentColumnCheck(element)</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>NO_NEW_BOX_ADDED</code></td>
+<td>required</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Treats empty <code>style</code> as success and compares that to
+<code>ExpectedValue</code>.</td>
+</tr>
+<tr class="even">
+<td><code>CHECK_CUSTOM_CHECKBOX</code></td>
+<td>required custom checkbox wrapper</td>
+<td>XPath to the clickable custom control</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>optional <code>RadioButton</code></td>
+<td>Reads current state with
+<code>CommonControls.IsCheckBoxSelected</code>; clicks the custom
+control at <code>Value</code> only if state must change.</td>
+</tr>
+<tr class="odd">
+<td><code>IS_MULTIPLE_ELEMENT_VISIBLE</code></td>
+<td>required parent/root element</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td><code>childListXPath,visibilityCheckXPath</code></td>
+<td>Finds all children by the first XPath in <code>Headers</code>, then
+checks the nested XPath from the second token for each child.</td>
+</tr>
+<tr class="even">
+<td><code>VALIDATE_STICKY_NODE_ADD</code></td>
+<td>required root context</td>
+<td>comma-separated XPath path list</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td><code>text,date-token-or-literal-date</code></td>
+<td><code>Value</code> contains four paths: count, previous button, date
+control, text control. <code>Headers</code> contains expected text and
+date token like <code>TODAY</code>, <code>YESTERDAY</code>,
+<code>TOMORROW</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TOGGLE_PROJECTOR_MODE</code></td>
+<td>required toggle control</td>
+<td><code>frameXPath-or-No Frame,textboxXPath,okButtonXPath</code></td>
+<td>password or <code>PROJECTOR_MODE_OFF</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Toggles projector mode and optionally enters a password in a
+popup/frame. Copy a working example.</td>
+</tr>
+<tr class="even">
+<td><code>TOOL_TIP_EQUAL</code></td>
+<td>required element with <code>title</code></td>
+<td>unused</td>
+<td>exact tooltip text</td>
+<td>unused</td>
+<td>unused</td>
+<td>Compares the <code>title</code> attribute exactly to
+<code>ExpectedValue</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TOOL_TIP_CONTAINS</code></td>
+<td>required element with <code>title</code></td>
+<td>unused</td>
+<td>tooltip fragment</td>
+<td>unused</td>
+<td>unused</td>
+<td>Asserts the <code>title</code> attribute contains
+<code>ExpectedValue</code>.</td>
+</tr>
+<tr class="even">
+<td><code>TOOL_TIP_COLOR</code></td>
+<td>required tooltip element</td>
+<td>unused</td>
+<td>exact CSS color value</td>
+<td>unused</td>
+<td>unused</td>
+<td>Compares <code>GetCssValue("color")</code> to
+<code>ExpectedValue</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TOOL_TIP_COMPARE_TABLE</code></td>
+<td>required element with multi-line <code>title</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>required concatenated headers</td>
+<td>Stable path is a concatenated compare using two headers and
+<code>IsConcatenated=true</code>. The tooltip lines are matched as
+<code>SecondHeader, FirstHeader</code>.</td>
+</tr>
+<tr class="even">
+<td><code>ELEMENTS_TO_BE_CLICKABLE</code></td>
+<td>enum-only</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>Present in the enum, but no runtime branch was found in the scanned
+execution path.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="list-filter-and-sort-actions">List, Filter, and Sort
+Actions</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>VERIFY_LIST_IS_SORTED</code></td>
+<td>not used</td>
+<td><code>ascending</code> or <code>descending</code></td>
+<td>unused</td>
+<td>required list key</td>
+<td>unused</td>
+<td>Reads a saved list from <code>DataStore</code> and compares it to
+the sorted version.</td>
+</tr>
+<tr class="even">
+<td><code>MATCH_LIST_COUNT</code></td>
+<td>required list container</td>
+<td>unused</td>
+<td><code>@xpath@</code> wrapper</td>
+<td>unused</td>
+<td>unused</td>
+<td>Current list count must equal the text of the XPath extracted from
+<code>ExpectedValue</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_FILTER_LIST</code></td>
+<td>enum-only</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>Present in the enum, but no runtime branch was found in the scanned
+execution path.</td>
+</tr>
+<tr class="even">
+<td><code>FILTER_BY</code></td>
+<td>required table body</td>
+<td>filter text</td>
+<td>unused</td>
+<td>unused</td>
+<td>required column header</td>
+<td>Uses the <code>#ListGrid</code> header table and asserts all values
+in <code>Headers</code> column contain <code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>FILTER_BY_DYNAMIC_VALUE</code></td>
+<td>required table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required input key</td>
+<td>required column header</td>
+<td>Same as <code>FILTER_BY</code>, but filter text comes from
+<code>DataStore[Key]</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SEARCH_BY_SEARCH_FILTER</code></td>
+<td>required table body</td>
+<td>exact expected cell value</td>
+<td>unused</td>
+<td>unused</td>
+<td>required column header</td>
+<td>All values in the named table column must equal
+<code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>COMPARE_SEARCH_COUNT</code></td>
+<td>required count element</td>
+<td>comparison mode</td>
+<td>unused</td>
+<td>required count key</td>
+<td>unused</td>
+<td><code>Value</code> supports <code>EQUAL</code>,
+<code>LESS_THEN</code>, <code>GREATER_THEN</code>, otherwise not-equal.
+Compares current text/value against saved count.</td>
+</tr>
+<tr class="even">
+<td><code>SORT_BY</code></td>
+<td>required table body</td>
+<td><code>ascending</code> or <code>descending</code></td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>required column header</td>
+<td>Sorts the saved table column in memory and compares it to the
+current UI column.</td>
+</tr>
+<tr class="odd">
+<td><code>IS_SORTED</code></td>
+<td>required sortable control</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Current implementation asserts <code>Table.IsSorted(element)</code>
+is false. Treat it as a very narrow negative check.</td>
+</tr>
+<tr class="even">
+<td><code>LIST_HAS_PREVIOUS_DATE_DATA</code></td>
+<td>required table body</td>
+<td><code>ANY</code> or blank</td>
+<td>unused</td>
+<td>unused</td>
+<td><code>columnHeader,headerTableXPath</code></td>
+<td>Validates past dates in the named column. <code>ANY</code> means at
+least one past/blank value; otherwise all must be past/blank.</td>
+</tr>
+<tr class="odd">
+<td><code>LIST_HAS_FUTURE_DATE_DATA</code></td>
+<td>required table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>required date column header</td>
+<td>At least one non-empty date in the column must be in the
+future.</td>
+</tr>
+<tr class="even">
+<td><code>LIST_HAS_All_FUTURE_DATE_DATA</code></td>
+<td>required table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>required date column header</td>
+<td>All non-empty dates in the column must be in the future.</td>
+</tr>
+<tr class="odd">
+<td><code>IS_COLUMN_EMPTY</code></td>
+<td>required table body</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>required column header</td>
+<td>When <code>Value=true</code>, all values in the column must be
+empty; otherwise all must be non-empty.</td>
+</tr>
+<tr class="even">
+<td><code>IS_COLUMN_DATA_EMPTY</code></td>
+<td>required grid body</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>required column header</td>
+<td>Same idea as <code>IS_COLUMN_EMPTY</code>, but uses a different grid
+header path.</td>
+</tr>
+<tr class="odd">
+<td><code>CHECK_LIST_ORDER</code></td>
+<td>required list container</td>
+<td>unused</td>
+<td><code>ascending</code> or <code>descending</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>ListControl.GetListItemsViaContent</code> and compares
+current order to the sorted order.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_SELECTED_LIST_ITEM_COUNT</code></td>
+<td>required list container</td>
+<td>expected count or blank</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Defaults to <code>5</code> when <code>Value</code> is empty.</td>
+</tr>
+<tr class="odd">
+<td><code>SELECT_LIST_ITEM</code></td>
+<td>required list container</td>
+<td>count or <code>take:x,skip:y</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Clicks a subset of list items. The later <code>CommonUtility</code>
+branch supports dictionary-style <code>take/skip</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SELECT_LIST_ITEM_BY_TEXT</code></td>
+<td>required list container</td>
+<td>fallback item text</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Clicks the item by saved text from <code>Key</code>, or by
+<code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>MATCH_TABLE_DROPOWN_DATA</code></td>
+<td>required table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required dropdown list key</td>
+<td>required column header</td>
+<td>Student helper: compares deleted-table column values against a saved
+dropdown list. Copy from an existing student flow.</td>
+</tr>
+<tr class="even">
+<td><code>MATCH_TABLE_VALUE</code></td>
+<td>required table body</td>
+<td><code>firstName,lastName</code></td>
+<td>unused</td>
+<td>unused</td>
+<td><code>firstHeader,lastHeader</code></td>
+<td>Student helper: looks for a matching row in a specific
+confirm-student table. Copy a working pattern.</td>
+</tr>
+<tr class="odd">
+<td><code>FILTER_ICON_CLICK</code></td>
+<td>required table</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>required column header</td>
+<td>Clicks the filter icon for the column named in
+<code>Headers</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="table-and-grid-actions">Table and Grid Actions</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ALL_TABLE_FILTER_ICON_VISIBLE</code></td>
+<td>required table</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Asserts all column filter icons are visible.</td>
+</tr>
+<tr class="even">
+<td><code>IS_COLUMN_VISIBLE</code></td>
+<td>required table</td>
+<td>optional <code>td</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>optional output key</td>
+<td>required column header</td>
+<td><code>Value=td</code> toggles the table-cell mode. Saves or asserts
+visibility.</td>
+</tr>
+<tr class="odd">
+<td><code>HIDE_COLUMN_IF_VISIBLE</code></td>
+<td>required clickable hide control</td>
+<td>unused</td>
+<td>unused</td>
+<td>required bool key</td>
+<td>unused</td>
+<td>Clicks only if the saved column-visibility key is true.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_TABLE_COUNT</code></td>
+<td>required element</td>
+<td>unused</td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td>Saves the element text directly; this is not the same as
+<code>SAVE_TABLE_ROW_COUNT</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_ELEMENT_ATTRIBUTES</code></td>
+<td>required root element</td>
+<td>unused</td>
+<td>attribute name</td>
+<td>required output key</td>
+<td>required child XPath</td>
+<td>Collects the named attribute from all child elements matched by
+<code>Headers</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_TEXTBOX_VALUE_FROM_TABLE</code></td>
+<td>required table body</td>
+<td>target column header text</td>
+<td>unused</td>
+<td>required output key</td>
+<td>required header-table XPath</td>
+<td>Saves every input value under the column whose header text equals
+<code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_WEEK_NAME</code></td>
+<td>required date input</td>
+<td>unused</td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td>Reads element <code>value</code>, parses <code>dd/MM/yyyy</code>,
+and stores the weekday name.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_COUNT_AFTER_DELETE</code></td>
+<td>required count element</td>
+<td>unused</td>
+<td>unused</td>
+<td>required count key</td>
+<td>unused</td>
+<td>Asserts current integer text is <code>saved count - 1</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_MATCHES_ANY_ROW_VALUE</code></td>
+<td>required table body</td>
+<td>expected cell text</td>
+<td>unused</td>
+<td>unused</td>
+<td>required column header</td>
+<td>At least one value in the named column must equal
+<code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>MATCH_TABLE_COULMN_DATA_BY_TEXT</code></td>
+<td>not used directly</td>
+<td>required text fragment</td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>required column header</td>
+<td>Reads a saved table dictionary and asserts each value in the named
+column contains <code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY_TABLE_COLUMN_DATA_CONTAINS</code></td>
+<td>not used directly</td>
+<td>required text fragment</td>
+<td><code>true</code> or <code>false</code></td>
+<td>required saved table key</td>
+<td>required column header</td>
+<td>Reads a saved table dictionary and checks whether any value in the
+named column contains <code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>MATCH_TABLE_COULMN_DATA</code></td>
+<td>required current list/table element</td>
+<td>saved table key name</td>
+<td>unused</td>
+<td>unused</td>
+<td>required column header</td>
+<td>Compares current element values to a saved table dictionary keyed by
+<code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>CLASS_VERIFY_ON_WHOLE_TABLE_BODY</code></td>
+<td>required table body</td>
+<td>fallback class fragment</td>
+<td><code>true</code> or <code>false</code></td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Uses the saved class from <code>Key</code> or the literal
+<code>Value</code>, then checks every table cell class for that
+fragment.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_CLICK_ROW</code></td>
+<td>required table body</td>
+<td>row count or <code>take:x,skip:y</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Clicks rows by count or by <code>take/skip</code> dictionary.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_CLICK_ROWS</code></td>
+<td>enum-only</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>Present in the enum, but no runtime branch was found in the scanned
+execution path.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_SELECTED_ROW_NO</code></td>
+<td>required table body</td>
+<td><code>rowno:x,attribute:y,findvalue:z</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Checks whether cells in one row contain an attribute value. Row
+numbers are zero-based in the helper loop.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_COLUMN_IS_CHECKED</code></td>
+<td>required table body</td>
+<td><code>isfound:true|false</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Checks the last-column checkbox state across rows and compares
+against the <code>isfound</code> flag.</td>
+</tr>
+<tr class="even">
+<td><code>PRESS_KEY_ON_TABLE_ROW</code></td>
+<td>required table body</td>
+<td><code>key:...</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Sends the given key once per row. It does not target an individual
+cell.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_COLUMN_DIV_DIV_ICON_CLICK</code></td>
+<td>required table body</td>
+<td><code>attribute:x,findvalue:y</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Finds the first icon under nested divs whose attribute contains
+<code>findvalue</code>, then clicks it through JavaScript.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_TABLE_COLUMN_ATTRIBUTE</code></td>
+<td>required table body</td>
+<td><code>attribute:x,findvalue:y</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Looks in the second-last column div for an attribute that contains
+<code>findvalue</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_SAVE_ROW_COLUMN_DIV_TEXT_IN_DICTIONARY</code></td>
+<td>required table</td>
+<td><code>rownumber:x,columnnumber:y</code></td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td>Saves one div text from a row/column coordinate.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_ROW_COLUMN_DIV_TEXT_IN_DICTIONARY</code></td>
+<td>required table</td>
+<td><code>rownumber:x,columnnumber:y</code></td>
+<td>unused</td>
+<td>required input key</td>
+<td>unused</td>
+<td>Compares one div text against a saved value.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_SAVE_ROW_COLUMN_SPAN_TEXT_IN_DICTIONARY</code></td>
+<td>required table</td>
+<td><code>rownumber:x,columnnumber:y[,spannumber:z]</code></td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td>Saves one span text from a row/column coordinate.
+<code>spannumber</code> defaults to <code>1</code>.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_ROW_COLUMN_SPAN_TEXT_IN_DICTIONARY</code></td>
+<td>required table</td>
+<td><code>rownumber:x,columnnumber:y[,spannumber:z]</code></td>
+<td>unused</td>
+<td>required input key</td>
+<td>unused</td>
+<td>Compares one span text against a saved value.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_SAVE_ROW_DATA</code></td>
+<td>required row/table context</td>
+<td>unused</td>
+<td>unused</td>
+<td>required output key</td>
+<td>row selector/header hint</td>
+<td>Delegates to <code>Table.GetWholeRowText(element, Headers)</code>.
+Copy a nearby example because <code>Headers</code> meaning comes from
+the helper.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_SAVE_ROW_COLUMN_WITH_MATCHED_STYLE</code></td>
+<td>required table body</td>
+<td><code>style:x[,headertablexpath:y]</code></td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td>Saves matching <code>row,column</code> coordinates as JSON plus
+<code>{Key}_count</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_VERIFY_TEXT_BY_COLUMNS_DATA</code></td>
+<td>required table body</td>
+<td>multi-key dictionary payload</td>
+<td><code>greater</code>, <code>less</code>, or <code>equal</code></td>
+<td>saved search keys referenced in <code>Value</code></td>
+<td>unused</td>
+<td><code>Value</code> must include <code>headertablexpath</code>,
+<code>columnscount</code>, repeated <code>column{i}header</code>,
+<code>column{i}searchkey</code>, and <code>expectedrowcount</code>.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_VISIBLE_ROWS_COUNT_CHANGE</code></td>
+<td>required table</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>required saved count key</td>
+<td>unused</td>
+<td>Compares current visible row count to the saved count.</td>
+</tr>
+<tr class="odd">
+<td><code>INVERT_SELECTION_COUNT</code></td>
+<td>required table body</td>
+<td>optional deduction count</td>
+<td>expected count or <code>@xpath@</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses current selected-row count. When <code>ExpectedValue</code> is
+wrapped in <code>@...@</code>, the framework reads that element and
+subtracts <code>Value</code> from it.</td>
+</tr>
+<tr class="even">
+<td><code>IS_ROW_SELECTED</code></td>
+<td>required table body</td>
+<td>expected selected-row count</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>Table.GetSelectedRowCount(element)</code> and compares it
+to <code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_VERIFY_HEADER_ROWS_COLUMN_DIV_TEXT</code></td>
+<td>required table header</td>
+<td><code>rownumber:x,columnnumber:y,headertext:z</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Reads one header-row div text and compares it to
+<code>headertext</code>.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_HEADERS_ROW_COLUMN_TEXT</code></td>
+<td>required table header</td>
+<td><code>rownumber:x,columnnumber:y,headertext:z</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Reads one header-row text cell and compares it to
+<code>headertext</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_VERIFY_HEADERS_STYLE</code></td>
+<td>required table header</td>
+<td><code>rownumber:x,comparefor:currentdatemonthheader,expectedstyle:y</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Current logic only handles
+<code>comparefor=currentdatemonthheader</code>.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_COLUMN_VALUE_WITH_REGEX</code></td>
+<td>required table body</td>
+<td>dictionary payload</td>
+<td>regex pattern</td>
+<td>unused</td>
+<td>unused</td>
+<td><code>Value</code> may include <code>headertablexpath</code>,
+<code>headerhasth</code>, <code>rownumber</code>,
+<code>columnnumber</code>. Without <code>columnnumber</code>, all
+columns are checked.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_VERIFY_ANY_ROW_WITH_COLUMN_HAS_MATCH_REGEX</code></td>
+<td>required table body</td>
+<td>dictionary payload</td>
+<td>regex pattern</td>
+<td>required key prefix</td>
+<td>unused</td>
+<td>Stores <code>{Key}_firstrowmatched</code>,
+<code>{Key}_totalcount</code>, <code>{Key}_lastrowmatched</code>.
+Supports <code>datakeycolumnnumber</code>,
+<code>headertablexpath</code>, <code>headerhasth</code>,
+<code>rownumber</code>, <code>columnnumber</code>.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_ROW_COLUMN_DIV_VALUE</code></td>
+<td>required table body</td>
+<td><code>rownumber:x,columnnumber:y,comparisontype:contains|text[,sourcevalue:z]</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>optional source key</td>
+<td>unused</td>
+<td>Compares cell div text to either a saved <code>Key</code> value or
+<code>sourcevalue</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY_SELECTED_COLUMN_VALUE_WITH_ELEMENT_TEXT</code></td>
+<td>required element</td>
+<td>saved column name</td>
+<td><code>true</code> or <code>false</code></td>
+<td>required selected-row dictionary key</td>
+<td>unused</td>
+<td>Reads a selected-row dictionary from <code>Key</code> and checks
+whether the current element text contains each saved value from column
+<code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_SELECT_LAST</code></td>
+<td>required table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>required column header</td>
+<td>Uses <code>Table.GetSelectedItems</code> and compares the selected
+values in column <code>Headers</code> to the saved values from
+<code>Key</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_HEADER_ICON_HAS_STYLE</code></td>
+<td>enum-only</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>Present in the enum, but no runtime branch was found in the scanned
+execution path.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_COLUMN_STYLE</code></td>
+<td>enum-only</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>unknown</td>
+<td>Present in the enum, but no runtime branch was found in the scanned
+execution path.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="attendance-and-marks-actions">Attendance and Marks Actions</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>SAVE_ATTENDANCE_MARKS_OF_STUDENT</code></td>
+<td>required attendance table</td>
+<td>unused</td>
+<td>unused</td>
+<td>required output key</td>
+<td>required row XPath</td>
+<td>Reads div text from all mark cells found under the row XPath in
+<code>Headers</code> and saves them as a list.</td>
+</tr>
+<tr class="even">
+<td><code>COMPARE_SAVED_ATTENDANCE_MARKS_OF_STUDENT</code></td>
+<td>required attendance table</td>
+<td>unused</td>
+<td>unused</td>
+<td>required input key</td>
+<td>required row XPath</td>
+<td>Re-reads mark cells using the same row XPath and compares the list
+to the saved list.</td>
+</tr>
+<tr class="odd">
+<td><code>MATCH_ATTENDANCE_PERIOD_STRUCTURE</code></td>
+<td>required table</td>
+<td>unused</td>
+<td>unused</td>
+<td>required input key</td>
+<td>day/column selector used by helper</td>
+<td>Uses a saved mark list and
+<code>Table.GetManageAttendancePeriodsByDay(element, Headers)</code>.
+Non-<code>A</code>/<code>P</code> values must exist in the saved
+list.</td>
+</tr>
+<tr class="even">
+<td><code>CHECK_MANAGE_ATTENDANCE_CELL_SELECTED</code></td>
+<td>required attendance cell</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>Table.IsManageAttendanceCellSelected</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>HAS_AMMEND_ATTENDANCE_ICON</code></td>
+<td>required attendance cell</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>Table.HasAmmendDailyAttendanceIcon</code>.</td>
+</tr>
+<tr class="even">
+<td><code>CHECK_MANAGE_ATTENDANCE_ROW__PERIODS_ARE_SELECTED</code></td>
+<td>required row/table</td>
+<td>row count</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses
+<code>Table.GetManageAttendanceSelectedRowPeriodCount(element, rowCount)</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>MARK_ALL_PERIODS_FOR_ROW</code></td>
+<td>required table</td>
+<td><code>rowCount,mark</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Calls <code>Table.MarkAllCellForNumberOfRows</code>.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_ALL_PERIODS_FOR_ROW</code></td>
+<td>required table</td>
+<td><code>rowCount,mark</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>Table.GetManageAttendanceRowMarkPeriodCount</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>ENTER_MARK</code></td>
+<td>required editable mark cell</td>
+<td>unused</td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td>Toggles the mark between <code>?</code> and <code>/</code>, saves
+the previous mark in <code>Key</code>, and updates innerHTML
+directly.</td>
+</tr>
+<tr class="even">
+<td><code>ENTER_MARK_IF_NOT_ENTERED</code></td>
+<td>required editable mark cell</td>
+<td>target mark</td>
+<td>unused</td>
+<td>unused</td>
+<td>optional save button XPath</td>
+<td>Changes the mark only if the current value does not equal
+<code>Value</code>. If <code>Headers</code> exists, it clicks that save
+button after updating.</td>
+</tr>
+<tr class="odd">
+<td><code>SELECT_UNIQUE_MARK</code></td>
+<td>required select control</td>
+<td>unused</td>
+<td>unused</td>
+<td>optional output key</td>
+<td>unused</td>
+<td>Picks a unique mark via
+<code>Helpers.GetUniqueMark(currentSelection)</code> and optionally
+stores the previous mark.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_CANCEL_MARK</code></td>
+<td>required mark cell/select</td>
+<td>unused</td>
+<td>unused</td>
+<td>required input key</td>
+<td>unused</td>
+<td>Compares current value to the previously saved mark in
+<code>Key</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY_ATTENDANCE_MARK_COUNT_FOR_SELECTED_STUDENT</code></td>
+<td>required table</td>
+<td>unused</td>
+<td>expected count</td>
+<td>unused</td>
+<td>required target column/header</td>
+<td>Uses
+<code>Table.GetManageAttendanceRowCountForParticularColum(element, Headers)</code>.</td>
+</tr>
+<tr class="even">
+<td><code>MATCH_MANAGE_ATTENDANCE_GROUP_NAME</code></td>
+<td>required element</td>
+<td>unused</td>
+<td>expected text fragment</td>
+<td>unused</td>
+<td>unused</td>
+<td>Current text/value/textContent must contain
+<code>ExpectedValue</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>FILTER_BY_MARK_MEANING</code></td>
+<td>required table</td>
+<td>row count</td>
+<td>expected mark text</td>
+<td>unused</td>
+<td>unused</td>
+<td>Reads marks for one row via
+<code>Table.GetManageAttendanceRowMarks</code> and asserts at least one
+equals <code>ExpectedValue</code>.</td>
+</tr>
+<tr class="even">
+<td><code>HAS_COMMENT_ADDED</code></td>
+<td>required attendance cell/row</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses
+<code>Table.HasAttendanceCommentAddedInGroupActions</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="dictionary-comparison-and-calculation-actions">Dictionary,
+Comparison, and Calculation Actions</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ARITHMETIC_OPERATION_ON_NUMBER_AND_VERIFY</code></td>
+<td>usually required output element</td>
+<td>number or <code>-number</code></td>
+<td>unused</td>
+<td>optional one or two input keys</td>
+<td>mode or source XPath</td>
+<td><code>Headers</code> controls mode: <code>Multiply</code>,
+<code>Subtract</code>, or default add/subtract. Default mode can also
+use <code>Headers</code> as an XPath source when <code>Key</code> is
+empty.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_SELECTED_ROW_IN_DICTIONARY</code></td>
+<td>required table body</td>
+<td>dictionary payload</td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td><code>Value</code> must include <code>tableheaderxpath</code>;
+optional <code>headercount</code> stores <code>{Key}_count</code>. Saves
+the selected-row dictionary.</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY_DICTIONARY_KEY_VALUE</code></td>
+<td>not used</td>
+<td>expected literal value</td>
+<td><code>true</code> or <code>false</code></td>
+<td>required input key</td>
+<td>unused</td>
+<td>Compares <code>DataStore[Key]</code> to <code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>COMPARE_DICTIONARY_VALUES</code></td>
+<td>not used</td>
+<td><code>key1:x,key2:y</code></td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Compares two saved scalar values.</td>
+</tr>
+<tr class="odd">
+<td><code>UPDATE_DICTIONARY_KEY_VALUE</code></td>
+<td>not used</td>
+<td>dictionary payload</td>
+<td>unused</td>
+<td>required input/output key</td>
+<td>unused</td>
+<td>Supports <code>datatype:string</code> with
+<code>dataoperation:append|add</code>, and <code>datatype:date</code>
+with <code>dataoperation:modifydays</code>.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_PERCENTAGE_VALUE</code></td>
+<td>required percentage element</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>required count key</td>
+<td>required total-count XPath</td>
+<td>Calculates percentage from saved count and the total element at
+<code>Headers</code>, then checks current text contains that
+percentage.</td>
+</tr>
+<tr class="odd">
+<td><code>ADD_MULTIPLE_NUMBERS</code></td>
+<td>usually required output element</td>
+<td>output key when saving</td>
+<td><code>LIST</code> or default</td>
+<td>required input key list</td>
+<td>optional <code>SAVEADDEDVALUES</code></td>
+<td>Sums multiple saved numbers or list items. If
+<code>Headers=SAVEADDEDVALUES</code>, saves the result under
+<code>Value</code>; otherwise compares it to the current element
+text.</td>
+</tr>
+<tr class="even">
+<td><code>CALCULATE_PERCENTAGE</code></td>
+<td>usually required output element</td>
+<td>output key when saving</td>
+<td><code>PERCENT</code> or alternative mode</td>
+<td>required two input keys</td>
+<td>optional <code>SAVEPERCENTAGEVALUE</code></td>
+<td>Either saves the percentage result or compares it to the current
+element text.</td>
+</tr>
+<tr class="odd">
+<td><code>CALCULATE_SUPERANNUATION</code></td>
+<td>usually required output element</td>
+<td>output key when saving</td>
+<td>unused</td>
+<td>required two input keys</td>
+<td>optional <code>SAVESUPERANNUATION</code></td>
+<td>Either saves or compares the calculated result.</td>
+</tr>
+<tr class="even">
+<td><code>CALCULATE_SALARY_TOTAL</code></td>
+<td>optional</td>
+<td>required output key</td>
+<td>unused</td>
+<td>required two input keys</td>
+<td>unused</td>
+<td>Stores the calculated difference as a formatted number under
+<code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>CALCULATE_BASIC</code></td>
+<td>optional</td>
+<td>required output key</td>
+<td>unused</td>
+<td>required two input keys</td>
+<td>unused</td>
+<td>Stores the calculated product under <code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>CALCULATE_ALLOWANCE</code></td>
+<td>optional</td>
+<td>unused</td>
+<td>unused</td>
+<td>required <code>sourceKey,targetKey</code> pair</td>
+<td>unused</td>
+<td>Reads the first key, divides by 12, rounds, and stores into the
+second token from <code>Key</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>CALCULATE_SALARY_PROJECTION_AMOUNT</code></td>
+<td>required output element</td>
+<td><code>months,percentage</code></td>
+<td>unused</td>
+<td>required four input keys</td>
+<td>unused</td>
+<td>Compares the calculated salary projection amount to the current
+element text.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="deleted-items-and-other-business-specific-actions">Deleted Items
+and Other Business-Specific Actions</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>CHECK_STAFF_DELETED_ITEMS</code></td>
+<td>required deleted-staff table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>comma-separated header list</td>
+<td>Staff helper: compares one or more saved deleted-staff values
+against the current deleted-staff table.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_DELETED_TABLE_DATA</code></td>
+<td>required deleted-staff table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td>Staff helper: saves deleted-staff table data.</td>
+</tr>
+<tr class="odd">
+<td><code>CHECK_DELETED_LIST_SORTED</code></td>
+<td>required deleted-staff table body</td>
+<td><code>ascending</code> or <code>descending</code></td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>required column header</td>
+<td>Staff helper: sorts saved column values and compares them to the
+current deleted-staff table.</td>
+</tr>
+<tr class="even">
+<td><code>MATCH_STUDENT_DELETED_LIST</code></td>
+<td>required deleted-student table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>three comma-separated header names</td>
+<td>Student helper: compares three saved columns against the
+deleted-student table.</td>
+</tr>
+<tr class="odd">
+<td><code>MATCH_ADMISSION_NO_FROM_SAVED_DATA</code></td>
+<td>required deleted-student table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>required header-table XPath</td>
+<td>Uses saved <code>"Admission Number"</code> data and checks it
+against current <code>"Admission No"</code> values.</td>
+</tr>
+<tr class="even">
+<td><code>SELECT_DELETED_STUDENT_ROW</code></td>
+<td>required deleted-student table</td>
+<td>row identifier text</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Delegates to
+<code>Table.SelectStudentDeletedRow(element, Value)</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>DELETED_STUDENT_ROW_IS_SELECTED</code></td>
+<td>required deleted-student table</td>
+<td>unused</td>
+<td>expected selection marker</td>
+<td>unused</td>
+<td>unused</td>
+<td>Delegates to
+<code>Table.ValidateStudentDeletedRowSelection</code>.</td>
+</tr>
+<tr class="even">
+<td><code>DELETED_STUDENT_ROW_IS_UNSELECTED</code></td>
+<td>required deleted-student table</td>
+<td>unused</td>
+<td>expected selection marker</td>
+<td>unused</td>
+<td>unused</td>
+<td>Delegates to
+<code>Table.ValidateStudentDeletedRowUnSelection</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>VALIDATE_STUDENT_DELETED_SUCCESSFULLY</code></td>
+<td>required deleted-student table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>header list</td>
+<td>Student helper: checks saved student rows now exist in the
+deleted-student table.</td>
+</tr>
+<tr class="even">
+<td><code>CHECK_DELETED_STUDENT_LIST_SORTED</code></td>
+<td>required deleted-student table body</td>
+<td><code>ascending</code> or <code>descending</code></td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>required column header</td>
+<td>Student helper: validates deleted-student list sort order against
+saved data.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_DELETED_STUDENTS_TABLE_DATA</code></td>
+<td>required deleted-student table body</td>
+<td>unused</td>
+<td>unused</td>
+<td>required output key</td>
+<td>unused</td>
+<td>Student helper: saves deleted-student table data.</td>
+</tr>
+<tr class="even">
+<td><code>CHECK_DELETE_STUDENT_LIST_SORTED</code></td>
+<td>required deleted-student table body</td>
+<td><code>ascending</code> or <code>descending</code></td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>required column header</td>
+<td>Student helper: validates sorting against the deleted-student table
+variant.</td>
+</tr>
+<tr class="odd">
+<td><code>ADD_EDIT_PHONE_EMAIL</code></td>
+<td>required communication panel root</td>
+<td>email or phone value</td>
+<td>unused</td>
+<td><code>email</code> or <code>phone</code> mode</td>
+<td>unused</td>
+<td>Communication helper: <code>Key</code> selects email vs phone flow.
+<code>Value</code> is the new email/phone. Copy a working pattern.</td>
+</tr>
+<tr class="even">
+<td><code>OVERVIEW_EMAIL_SENT_VERIFY</code></td>
+<td>required overview table body</td>
+<td>expected message text</td>
+<td>unused</td>
+<td>unused</td>
+<td>required <code>message,date,status</code> headers</td>
+<td>Communication helper: checks message text, today’s date, and
+<code>Delivered</code> status.</td>
+</tr>
+<tr class="odd">
+<td><code>SCHEDULE_EMAIL_SUBJECT_BODY_CHECK</code></td>
+<td>required communication table body</td>
+<td><code>subject,body</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>required <code>subjectHeader,bodyHeader</code></td>
+<td>Communication helper: checks subject/body pair in the
+forgotten-people table.</td>
+</tr>
+<tr class="even">
+<td><code>MATCH_RECIPIENT_DATA_BY_STUDENT</code></td>
+<td>required communication table body</td>
+<td>expected message type</td>
+<td>unused</td>
+<td>required saved table key</td>
+<td>required header mapping</td>
+<td>Communication helper: matches saved student identifiers to current
+recipients and message type.</td>
+</tr>
+<tr class="odd">
+<td><code>ADD_SCHEDULE_DATA_IF_NOT_EXIST</code></td>
+<td>required schedule section root</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>XPath probe used to count existing rows</td>
+<td>Group helper: <code>Headers</code> is the existence-check XPath. If
+none found, the helper adds a schedule. Copy existing usage.</td>
+</tr>
+<tr class="even">
+<td><code>ADD_GROUP_DETAIL_DATA_IF_NOT_EXIST</code></td>
+<td>required group detail table</td>
+<td><code>true</code> or target count</td>
+<td>optional current-count short-circuit</td>
+<td>unused</td>
+<td>comma-separated mini script</td>
+<td>Group helper: <code>Headers</code> is a mini DSL containing raw
+click XPaths and commands like <code>TYPE:days:xpath</code>,
+<code>STYPE:text:xpath</code>,
+<code>DATEPICK:days:iconXpath:calendarXpath</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>ADD_INTERVENTION_DATA</code></td>
+<td>required count element</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Group helper: creates intervention rows until the count is at least
+3. Page-state-driven.</td>
+</tr>
+<tr class="even">
+<td><code>ADD_WITHDRAWAL_DATA</code></td>
+<td>required count element</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Group helper: creates withdrawal rows until the count is at least 3.
+Page-state-driven.</td>
+</tr>
+<tr class="odd">
+<td><code>ADD_BAND_DATA</code></td>
+<td>required count element</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Group helper: creates band rows until the count is at least 5.
+Page-state-driven.</td>
+</tr>
+<tr class="even">
+<td><code>MATCH_PERIOD_DATA_WITH_CLASS</code></td>
+<td>not used directly</td>
+<td>unused</td>
+<td>unused</td>
+<td>required <code>weekdayKey,timetableKey</code> pair</td>
+<td>unused</td>
+<td>Missing-register helper: compares saved weekday/timetable data to a
+viewed timetable window. Copy existing pattern.</td>
+</tr>
+<tr class="odd">
+<td><code>EDIT_MEAL_DEFINITION</code></td>
+<td>required meal-definition table</td>
+<td>unused</td>
+<td>unused</td>
+<td>optional saved group keys via helper</td>
+<td>scenario selector string</td>
+<td>Dinner helper: <code>Headers</code> selects one of the hard-coded
+scenarios such as <code>Only All Groups</code>,
+<code>Not Assigned Group</code>, <code>In Assigned Group</code>,
+<code>In Two Assigned Group</code>,
+<code>MS Two Seperate Assigned Group</code>.</td>
+</tr>
+<tr class="even">
+<td><code>ADD_ORDER_IF_NOT_PRESENT</code></td>
+<td>required order table/body</td>
+<td>fallback student search text</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Payment helper: when table says
+<code>No data available in table</code>, it creates an order for the
+student from <code>Value</code> or <code>Key</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>RELOGIN_INTO_SAGEPAY_IF_LOGGEDOUT</code></td>
+<td>required current page root</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Payment helper: no authored parameters beyond current page state.
+Copy an existing usage only.</td>
+</tr>
+<tr class="even">
+<td><code>TRANSFER_BALANCE_TO_SIBLING</code></td>
+<td>not used directly</td>
+<td>unused</td>
+<td>unused</td>
+<td>saved balance/sibling keys are implicit</td>
+<td>unused</td>
+<td>Payment helper: fully driven by saved keys like <code>Balance</code>
+and <code>SiblingFirstName1</code>. Copy existing usage only.</td>
+</tr>
+<tr class="odd">
+<td><code>ADD_OR_TRANSFER_BALANCE_TO_MAKE_POSITIVE</code></td>
+<td>not used directly</td>
+<td>target balance</td>
+<td>unused</td>
+<td>implicit saved balance/student keys</td>
+<td>unused</td>
+<td>Payment helper: <code>Value</code> is the desired balance threshold.
+Remaining data is taken from fixed keys.</td>
+</tr>
+<tr class="even">
+<td><code>REMOVE_TRANSACTION_TO_MAKE_BALANCE_NEGATIVE</code></td>
+<td>not used directly</td>
+<td>unused</td>
+<td>unused</td>
+<td>implicit saved balance/student keys</td>
+<td>unused</td>
+<td>Payment helper: page-state-driven corrective action. Copy existing
+usage only.</td>
+</tr>
+</tbody>
+</table>

@@ -32,11 +32,6 @@ function matchesFilter(suite: ADOTestSuite, text: string): boolean {
   return suite.children?.some(child => matchesFilter(child, text)) ?? false;
 }
 
-function containsSuiteId(suite: ADOTestSuite, suiteId: number): boolean {
-  if (suite.id === suiteId) return true;
-  return suite.children?.some(child => containsSuiteId(child, suiteId)) ?? false;
-}
-
 export function SuiteTreeNode({
   suite,
   depth,
@@ -57,10 +52,8 @@ export function SuiteTreeNode({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const isVisible = !filterText || matchesFilter(suite, filterText);
-  const shouldAutoExpand = hasChildren && (
-    (selectedSuiteId != null && containsSuiteId(suite, selectedSuiteId))
-    || (filterText ? suite.children?.some(child => matchesFilter(child, filterText)) ?? false : false)
-  );
+  const shouldAutoExpand = hasChildren
+    && (filterText ? suite.children?.some(child => matchesFilter(child, filterText)) ?? false : false);
 
   const isSelected = suite.id === selectedSuiteId;
   const showCount = suite.testCaseCount != null && suite.testCaseCount > 0;
