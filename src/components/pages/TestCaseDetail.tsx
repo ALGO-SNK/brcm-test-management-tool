@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {MainLayout} from '../layouts/MainLayout';
 import {PageDetailLayout} from '../layouts/PageDetailLayout';
 import {IconEdit, IconX} from '../Common/Icons';
@@ -305,6 +305,7 @@ export function TestCaseDetail({
   const [editValidationErrors, setEditValidationErrors] = useState<string[]>([]);
   const [editSteps, setEditSteps] = useState<ParsedStep[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const reloadCaseControllerRef = useRef<AbortController | null>(null);
 
   const workspaceReady = Boolean(
     workspaceSettings.organization.trim()
@@ -369,6 +370,11 @@ export function TestCaseDetail({
       controller.abort();
     };
   }, [caseData, caseId, workspaceReady, workspaceSettings]);
+
+  useEffect(() => () => {
+    reloadCaseControllerRef.current?.abort();
+    reloadCaseControllerRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (!isAdditionalModalOpen) return;
@@ -539,6 +545,7 @@ export function TestCaseDetail({
                       }
 
                       setIsSaving(true);
+                      let reloadController: AbortController | null = null;
                       try {
                         // Build test case data (reusable for create/update)
                         const testCaseData = buildTestCaseData(editFormData, editSteps);
@@ -554,10 +561,15 @@ export function TestCaseDetail({
 
                         // Reload test case data with fresh API call
                         console.log('[TestCaseDetail] Fetching updated test case after save...');
+                        reloadCaseControllerRef.current?.abort();
+                        reloadController = new AbortController();
+                        reloadCaseControllerRef.current = reloadController;
                         const updatedCase = await fetchTestCaseDetail(
                           workspaceSettings,
                           testCase.id,
                           testCase._links?.workItem?.href ?? testCase._links?.self?.href,
+                          undefined,
+                          reloadController.signal,
                         );
                         console.log('[TestCaseDetail] Updated test case received:', {
                           id: updatedCase.id,
@@ -567,11 +579,19 @@ export function TestCaseDetail({
                         setTestCase(updatedCase);
                         setIsEditMode(false);
                         setEditValidationErrors([]);
+                        if (reloadCaseControllerRef.current === reloadController) {
+                          reloadCaseControllerRef.current = null;
+                        }
                       } catch (error) {
+                        if (reloadController?.signal.aborted) {
+                          return;
+                        }
                         const message = error instanceof Error ? error.message : 'Failed to save changes';
                         setEditValidationErrors([`Save failed: ${message}`]);
                       } finally {
-                        setIsSaving(false);
+                        if (!reloadController?.signal.aborted) {
+                          setIsSaving(false);
+                        }
                       }
                     }}
                   >

@@ -6913,7 +6913,7 @@ input[type="radio"] {
 
 /* Dynamic toggle: auto/small width */
 .steps-editor__field--dynamic-row {
-    flex: 1 1 100%;
+    flex: 0 1 100%;
     min-width: 0;
     display: flex;
     align-items: center;
@@ -6934,8 +6934,8 @@ input[type="radio"] {
 
 .steps-editor__readonly-pill {
     display: flex;
-    width: 100px;
-    align-items: center;
+    width: 100%;
+    align-items: flex-start;
     justify-content: flex-start;
     min-height: 36px;
     padding: 6px 10px;
@@ -6970,7 +6970,7 @@ input[type="radio"] {
 
 /* Value: prominent, but not full-width */
 .steps-editor__field--value {
-    flex: 0 1 calc(50% - var(--space-3) * 0.5);
+    flex: 0 1 calc(33% - var(--space-3) * 0.5);
     min-width: 220px;
 }
 
@@ -6979,7 +6979,7 @@ input[type="radio"] {
 .steps-editor__field--key,
 .steps-editor__field--headers,
 .steps-editor__field--concatenated {
-    flex: 0 1 calc(50% - var(--space-3) * 0.5);
+    flex: 0 1 calc(33% - var(--space-3) * 0.5);
     min-width: 220px;
 }
 
