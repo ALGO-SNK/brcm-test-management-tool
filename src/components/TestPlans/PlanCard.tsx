@@ -68,7 +68,7 @@ export function PlanCard({ plan, onOpenSuites, onCreateSuite, workspaceSettings 
           title="Open suite list"
           aria-label={`Open suite list for ${plan.name}`}
         >
-          <span>Open suite list</span>
+          <span>Suite List</span>
           <IconArrowRight size={16} className="plan-card__arrow" />
         </button>
 

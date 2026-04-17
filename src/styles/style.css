@@ -6616,9 +6616,10 @@ input[type="radio"] {
 }
 
 .plan-card__suite-btn {
-    flex: 1;
+    flex: 0.8;
     justify-content: center;
-    padding-inline: 12px;
+    gap: 6px;
+    padding-inline: 10px;
     background: var(--color-primary);
     border-color: var(--color-primary);
     color: white;
@@ -6626,6 +6627,7 @@ input[type="radio"] {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 13px;
 }
 
 .plan-card__suite-btn:hover {
@@ -6634,26 +6636,18 @@ input[type="radio"] {
 }
 
 .plan-card__secondary-btn {
-    min-width: 36px;
-    width: 36px;
-    padding: 0;
-    justify-content: center;
-    flex-shrink: 0;
-    color: transparent;
-    font-size: var(--text-sm);
-    transition: width var(--transition-fast), color var(--transition-fast);
-}
-
-.plan-card__secondary-btn:hover {
-    width: auto;
+    flex: 1.2;
     padding-inline: 8px;
-    color: inherit;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    font-size: 13px;
 }
 
 .plan-card__secondary-btn svg {
     width: 16px;
     height: 16px;
-    color: inherit;
+    color: currentColor;
 }
 
 .plan-card__arrow {
