@@ -6595,8 +6595,9 @@ input[type="radio"] {
 .plan-card__footer {
     margin-top: auto;
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
     padding-top: 14px;
     border-top: 1px solid var(--color-border-soft);
 }
@@ -6604,7 +6605,7 @@ input[type="radio"] {
 .plan-card__footer-actions {
     display: flex;
     gap: 8px;
-    width: 100%;
+    flex: 1;
 }
 
 .plan-card__footer .btn {
@@ -6615,8 +6616,8 @@ input[type="radio"] {
 }
 
 .plan-card__suite-btn {
-    width: 100%;
-    justify-content: space-between;
+    flex: 1.2;
+    justify-content: center;
     padding-inline: 14px;
     background: var(--color-primary);
     border-color: var(--color-primary);
@@ -6630,7 +6631,8 @@ input[type="radio"] {
 }
 
 .plan-card__secondary-btn {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     justify-content: center;
     font-size: 13px;
 }
