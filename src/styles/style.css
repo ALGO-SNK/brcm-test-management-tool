@@ -1503,7 +1503,7 @@ blockquote {
     border-bottom: 1px solid var(--color-border);
     background: var(--color-surface);
     backdrop-filter: blur(15px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 
 .app-header__brand-group {
