@@ -5,23 +5,25 @@
  * Field layout (flex-wrap with smart sizing):
  *   Row 1: [Action 30%]              [Summary 70%]           — together, summary bigger
  *   Row 2: [Locator Type 25%]        [Locator 75%]           — together, locator bigger (XPATH)
- *   Row 3: [Dynamic Toggle]          [Replacement Key 100%]  — replacement key full-width when dynamic ON
+ *   Row 3: [Dynamic Toggle]          [Replacement Key]       — same row, replacement key appears only when dynamic is on
  *   Row 4: [Value 100%]                                      — full-width, bigger size
  *   Row 5: [Expected Value ~48%]     [Data Key ~48%]         — advanced/optional, smaller width
  *   Row 6: [Headers ~48%]            [Concatenated ~48%]     — advanced/optional, smaller width
  *
- * showAdvanced controls whether 'optional' fields (expectedValue, key, headers,
- * isConcatenated) are visible. Required fields and core locator fields always show.
+ * Optional fields are hidden until added from the per-step popup, then remain
+ * visible if they contain data. Required fields always show.
  */
 import { getElementAuthoringFields } from '../../utils/actionRegistry';
 import { ACTION_REGISTRY } from '../../utils/actionRegistry';
+import { supportsDynamicLocatorControls } from '../../utils/actionRegistry';
 import type { ParameterContract } from '../../utils/actionRegistry';
-import type { ParsedStep } from './StepsEditor';
+import type { ReactNode } from 'react';
+import type { OptionalStepField, ParsedStep } from './StepsEditor';
 
 interface StepFieldRendererProps {
   step: ParsedStep;
   onFieldChange: (field: keyof ParsedStep, value: string | boolean) => void;
-  showAdvanced: boolean;
+  visibleOptionalFields: OptionalStepField[];
 }
 
 const ELEMENT_CATEGORY_OPTIONS = [
@@ -43,16 +45,14 @@ const ELEMENT_CATEGORY_OPTIONS = [
  * - Summary (description): always show
  * - Required fields: always show
  * - Core locator/value fields (element, elementCategory, value): show when used
- * - Advanced/optional fields (expectedValue, key, headers, isConcatenated):
- *   show when required OR (optional AND showAdvanced)
- * - Dynamic fields (isElementPathDynamic, elementReplaceTextDataKey):
- *   only show when optional/required by contract
+ * - Optional fields: show when selected from the popup or already populated
+ * - Dynamic fields: follow the same contract-driven visibility rules
  */
 
 function shouldRenderField(
   fieldName: string,
   contract: ParameterContract | undefined,
-  showAdvanced: boolean,
+  visibleOptionalFields: OptionalStepField[],
 ): boolean {
   // Summary always visible
   if (fieldName === 'description') return true;
@@ -68,17 +68,32 @@ function shouldRenderField(
   // Required → always visible
   if (contractField === 'required') return true;
 
-  // Core fields that should always show when optional: element, elementCategory, value
-  // These are the fundamental UI targeting and value input fields
-  if (['element', 'elementCategory', 'value'].includes(fieldName)) return true;
+  if (contractField === 'optional') {
+    return visibleOptionalFields.includes(fieldName as OptionalStepField);
+  }
 
-  // Advanced/optional fields → only when showAdvanced
-  return showAdvanced;
+  return false;
 }
 
 function isFieldRequired(fieldName: string, contract: ParameterContract | undefined): boolean {
+  if (fieldName === 'description') return true;
   if (!contract) return false;
   return contract[fieldName as keyof ParameterContract] === 'required';
+}
+
+function getRequiredMessage(fieldName: string): string {
+  const labels: Record<string, string> = {
+    description: 'Summary',
+    elementCategory: 'Locator Type',
+    element: 'Locator',
+    value: 'Value',
+    expectedValue: 'Expected Value',
+    key: 'Data Key',
+    headers: 'Headers',
+    elementReplaceTextDataKey: 'Replacement Key',
+  };
+
+  return `${labels[fieldName] ?? fieldName} is required`;
 }
 
 function getFieldLabel(fieldName: string): string {
@@ -115,23 +130,50 @@ function labelClass(required: boolean): string {
   return `steps-editor__label${required ? '' : ' steps-editor__label--optional'}`;
 }
 
-export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFieldRendererProps) {
+function renderFieldLabel(
+  fieldName: string,
+  contract: ParameterContract | undefined,
+  suffix?: string,
+): ReactNode {
+  return (
+    <>
+      {getFieldLabel(fieldName)}
+      {suffix && <span>{suffix}</span>}
+      {isFieldRequired(fieldName, contract) && (
+        <span className="steps-editor__required-mark" aria-hidden="true">
+          *
+        </span>
+      )}
+    </>
+  );
+}
+
+export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }: StepFieldRendererProps) {
   const actionDef = ACTION_REGISTRY[step.action];
   const contract = actionDef?.contract;
   const elementFields = getElementAuthoringFields(actionDef, step.elementCategory ?? 'XPATH');
 
-  const showSummary    = shouldRenderField('description',         contract, showAdvanced);
-  const showLocType    = shouldRenderField('elementCategory',     contract, showAdvanced) && elementFields.showElementCategory;
-  const showLocator    = shouldRenderField('element',             contract, showAdvanced) && elementFields.showElement;
-  // Dynamic checkbox only shows when locator field is visible
-  const showDynamic    = showLocator && shouldRenderField('isElementPathDynamic',contract, showAdvanced) && elementFields.showIsElementPathDynamic;
-  // Replacement key only shows when dynamic checkbox is visible AND checked
-  const showReplaceKey = showDynamic && step.isElementPathDynamic && elementFields.showElementReplaceTextDataKey;
-  const showValue      = shouldRenderField('value',               contract, showAdvanced) && elementFields.showValue;
-  const showExpected   = shouldRenderField('expectedValue',       contract, showAdvanced);
-  const showKey        = shouldRenderField('key',                 contract, showAdvanced);
-  const showHeaders    = shouldRenderField('headers',             contract, showAdvanced);
-  const showConcat     = shouldRenderField('isConcatenated',      contract, showAdvanced);
+  const showSummary    = shouldRenderField('description',         contract, visibleOptionalFields);
+  const showLocType    = shouldRenderField('elementCategory',     contract, visibleOptionalFields) && elementFields.showElementCategory;
+  const showLocator    = shouldRenderField('element',             contract, visibleOptionalFields) && elementFields.showElement;
+  const showDynamic    = supportsDynamicLocatorControls(actionDef)
+    && shouldRenderField('isElementPathDynamic', contract, visibleOptionalFields);
+  const showReplaceKey = supportsDynamicLocatorControls(actionDef) && step.isElementPathDynamic === true;
+  const showValue      = shouldRenderField('value',               contract, visibleOptionalFields) && elementFields.showValue;
+  const showExpected   = shouldRenderField('expectedValue',       contract, visibleOptionalFields);
+  const showKey        = shouldRenderField('key',                 contract, visibleOptionalFields);
+  const showHeaders    = shouldRenderField('headers',             contract, visibleOptionalFields);
+  const showConcat     = shouldRenderField('isConcatenated',      contract, visibleOptionalFields);
+  const showSummaryError = false;
+  const showLocTypeError = showLocType && isFieldRequired('elementCategory', contract) && !step.elementCategory?.trim();
+  const showLocatorError = showLocator && isFieldRequired('element', contract) && !step.element?.trim();
+  const showValueError = showValue && isFieldRequired('value', contract) && !step.value?.trim();
+  const showExpectedError = showExpected && isFieldRequired('expectedValue', contract) && !step.expectedValue?.trim();
+  const showKeyError = showKey && isFieldRequired('key', contract) && !step.key?.trim();
+  const showHeadersError = showHeaders && isFieldRequired('headers', contract) && !step.headers?.trim();
+  const showReplaceKeyError = showReplaceKey
+    && isFieldRequired('elementReplaceTextDataKey', contract)
+    && !step.elementReplaceTextDataKey?.trim();
 
   return (
     <>
@@ -139,7 +181,7 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
       {showSummary && (
         <div className="steps-editor__field steps-editor__field--summary-inline">
           <label className={labelClass(isFieldRequired('description', contract))}>
-            {getFieldLabel('description')}
+            {renderFieldLabel('description', contract)}
           </label>
           <input
             type="text"
@@ -148,6 +190,9 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
             onChange={(e) => onFieldChange('description', e.target.value)}
             placeholder={getFieldPlaceholder('description')}
           />
+          {showSummaryError && (
+            <small className="steps-editor__field-error">{getRequiredMessage('description')}</small>
+          )}
         </div>
       )}
 
@@ -155,11 +200,11 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
       {showLocType && (
         <div className="steps-editor__field steps-editor__field--locator-type">
           <label className={labelClass(isFieldRequired('elementCategory', contract))}>
-            {getFieldLabel('elementCategory')}
+            {renderFieldLabel('elementCategory', contract)}
           </label>
           <select
             className="steps-editor__select"
-            value={step.elementCategory || 'XPATH'}
+            value={step.elementCategory || ''}
             onChange={(e) => {
               onFieldChange('elementCategory', e.target.value);
               if (!['URL', 'VERIFY', 'VERIFYERROR'].includes(e.target.value)) {
@@ -170,12 +215,18 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
             }}
             title={elementFields.elementCategoryHint}
           >
+            <option value="" disabled>
+              Select locator type
+            </option>
             {ELEMENT_CATEGORY_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
             ))}
           </select>
+          {showLocTypeError && (
+            <small className="steps-editor__field-error">{getRequiredMessage('elementCategory')}</small>
+          )}
         </div>
       )}
 
@@ -183,7 +234,7 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
       {showLocator && (
         <div className="steps-editor__field steps-editor__field--locator">
           <label className={labelClass(isFieldRequired('element', contract))}>
-            {getFieldLabel('element')}
+            {renderFieldLabel('element', contract)}
           </label>
           <input
             type="text"
@@ -194,73 +245,53 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
             placeholder={elementFields.elementCategoryHint || getFieldPlaceholder('element')}
             title={elementFields.elementCategoryHint}
           />
-        </div>
-      )}
-
-      {/* ── Dynamic toggle (auto, flex row with Replacement Key when enabled) */}
-      {showDynamic && (
-        <div className="steps-editor__field steps-editor__field--dynamic-toggle-row">
-          <label className="steps-editor__label steps-editor__label--optional">
-            {getFieldLabel('isElementPathDynamic')}
-          </label>
-          <div className="steps-editor__checkbox-wrapper">
-            <input
-              type="checkbox"
-              id={`dynamic-${step.index ?? 'new'}`}
-              className="steps-editor__checkbox"
-              checked={step.isElementPathDynamic || false}
-              onChange={(e) => onFieldChange('isElementPathDynamic', e.target.checked)}
-              title="Enable to inject saved data-store keys into the locator"
-            />
-            <label htmlFor={`dynamic-${step.index ?? 'new'}`} className="steps-editor__checkbox-label">
-              {step.isElementPathDynamic ? 'Dynamic' : 'Static'}
-            </label>
-          </div>
-        </div>
-      )}
-
-      {/* ── Replacement Key (100%, full-width, bigger size, when dynamic ON) ─ */}
-      {showReplaceKey && (
-        <div className="steps-editor__field steps-editor__field--replace-key-full">
-          <label
-            className="steps-editor__label"
-            style={{ color: !step.elementReplaceTextDataKey ? 'var(--color-danger)' : undefined }}
-          >
-            {getFieldLabel('elementReplaceTextDataKey')} *
-          </label>
-          <input
-            type="text"
-            className="steps-editor__input"
-            style={{
-              fontFamily: 'var(--font-mono)',
-              borderColor: !step.elementReplaceTextDataKey ? 'var(--color-danger-border)' : undefined,
-            }}
-            value={step.elementReplaceTextDataKey || ''}
-            onChange={(e) => onFieldChange('elementReplaceTextDataKey', e.target.value)}
-            placeholder={getFieldPlaceholder('elementReplaceTextDataKey')}
-            title="Key name(s) from DataStore to substitute into the locator. Separate multiple with a comma."
-          />
-          {!step.elementReplaceTextDataKey ? (
-            <small className="steps-editor__field-error">
-              Required when Dynamic Locator is enabled
-            </small>
-          ) : (
-            <small className="steps-editor__hint">
-              {step.element?.match(/Datakey\d+/g)
-                ? `${(step.element.match(/Datakey\d+/g) ?? []).length} token(s) — provide that many keys`
-                : step.element?.includes('$$')
-                ? 'Provide 1 key to replace $$'
-                : 'Enter key name(s)'}
-            </small>
+          {showLocatorError && (
+            <small className="steps-editor__field-error">{getRequiredMessage('element')}</small>
           )}
         </div>
       )}
 
-      {/* ── Value (100%, full-width, bigger size) ──────────────────────────── */}
+      {/* ── Dynamic locator (read-only indicator; replacement key follows) ─ */}
+      {showDynamic && (
+        <div className="steps-editor__field steps-editor__field--dynamic-row">
+          <div className="steps-editor__dynamic-control">
+            <label className={labelClass(isFieldRequired('isElementPathDynamic', contract))}>
+              {renderFieldLabel('isElementPathDynamic', contract)}
+            </label>
+            <div className="steps-editor__readonly-pill" aria-readonly="true">
+              <span className="steps-editor__readonly-pill-value">True</span>
+            </div>
+          </div>
+
+          {showReplaceKey && (
+            <div className="steps-editor__field steps-editor__field--replace-key-inline">
+              <label className={labelClass(isFieldRequired('elementReplaceTextDataKey', contract))}>
+                {renderFieldLabel('elementReplaceTextDataKey', contract)}
+              </label>
+              <input
+                type="text"
+                className="steps-editor__input"
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  borderColor: !step.elementReplaceTextDataKey ? 'var(--color-danger-border)' : undefined,
+                }}
+                value={step.elementReplaceTextDataKey || ''}
+                onChange={(e) => onFieldChange('elementReplaceTextDataKey', e.target.value)}
+                placeholder={getFieldPlaceholder('elementReplaceTextDataKey')}
+              />
+              {showReplaceKeyError && (
+                <small className="steps-editor__field-error">{getRequiredMessage('elementReplaceTextDataKey')}</small>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Value (reduced width, still prominent) ─────────────────────────── */}
       {showValue && (
         <div className="steps-editor__field steps-editor__field--value">
           <label className={labelClass(isFieldRequired('value', contract))}>
-            {getFieldLabel('value')}
+            {renderFieldLabel('value', contract)}
             {step.elementCategory === 'URL' && <span title="Navigation URL"> (URL)</span>}
             {step.elementCategory === 'VERIFYERROR' && <span title="Expected Error Text"> (Error Text)</span>}
           </label>
@@ -274,9 +305,12 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
                 ? 'https://example.com or #SavedURLKey'
                 : step.elementCategory === 'VERIFYERROR'
                 ? 'Expected error message'
-                : getFieldPlaceholder('value')
+              : getFieldPlaceholder('value')
             }
           />
+          {showValueError && (
+            <small className="steps-editor__field-error">{getRequiredMessage('value')}</small>
+          )}
         </div>
       )}
 
@@ -285,7 +319,7 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
       {showExpected && (
         <div className="steps-editor__field steps-editor__field--expected-value">
           <label className={labelClass(isFieldRequired('expectedValue', contract))}>
-            {getFieldLabel('expectedValue')}
+            {renderFieldLabel('expectedValue', contract)}
           </label>
           <input
             type="text"
@@ -294,13 +328,16 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
             onChange={(e) => onFieldChange('expectedValue', e.target.value)}
             placeholder={getFieldPlaceholder('expectedValue')}
           />
+          {showExpectedError && (
+            <small className="steps-editor__field-error">{getRequiredMessage('expectedValue')}</small>
+          )}
         </div>
       )}
 
       {showKey && (
         <div className="steps-editor__field steps-editor__field--key">
           <label className={labelClass(isFieldRequired('key', contract))}>
-            {getFieldLabel('key')}
+            {renderFieldLabel('key', contract)}
           </label>
           <input
             type="text"
@@ -310,13 +347,16 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
             onChange={(e) => onFieldChange('key', e.target.value)}
             placeholder={getFieldPlaceholder('key')}
           />
+          {showKeyError && (
+            <small className="steps-editor__field-error">{getRequiredMessage('key')}</small>
+          )}
         </div>
       )}
 
       {showHeaders && (
         <div className="steps-editor__field steps-editor__field--headers">
           <label className={labelClass(isFieldRequired('headers', contract))}>
-            {getFieldLabel('headers')}
+            {renderFieldLabel('headers', contract)}
           </label>
           <input
             type="text"
@@ -326,13 +366,16 @@ export function StepFieldRenderer({ step, onFieldChange, showAdvanced }: StepFie
             onChange={(e) => onFieldChange('headers', e.target.value)}
             placeholder={getFieldPlaceholder('headers')}
           />
+          {showHeadersError && (
+            <small className="steps-editor__field-error">{getRequiredMessage('headers')}</small>
+          )}
         </div>
       )}
 
       {showConcat && (
         <div className="steps-editor__field steps-editor__field--concatenated">
-          <label className="steps-editor__label steps-editor__label--optional">
-            {getFieldLabel('isConcatenated')}
+          <label className={labelClass(isFieldRequired('isConcatenated', contract))}>
+            {renderFieldLabel('isConcatenated', contract)}
           </label>
           <select
             className="steps-editor__select"

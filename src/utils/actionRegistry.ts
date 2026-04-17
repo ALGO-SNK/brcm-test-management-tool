@@ -26,6 +26,27 @@ export type ActionDefinition = {
   contract: ParameterContract;
 };
 
+/**
+ * Dynamic locator controls only make sense when the action has a mandatory
+ * locator and locator type. Keep this logic centralized so the menu and
+ * renderer stay in sync.
+ */
+export function supportsDynamicLocatorControls(
+  actionDef: ActionDefinition | undefined,
+): boolean {
+  if (!actionDef) {
+    return false;
+  }
+
+  const contract = actionDef.contract;
+
+  return (
+    contract.element === 'required'
+    && contract.elementCategory === 'required'
+    && contract.isElementPathDynamic !== 'not-used'
+  );
+}
+
 // Create the ACTION_REGISTRY from the definitions
 export const ACTION_REGISTRY: Record<string, ActionDefinition> = DOC_ACTION_DEFINITIONS as Record<string, ActionDefinition>;
 
@@ -83,7 +104,7 @@ export function getElementAuthoringFields(
     showElement: contract.element !== 'not-used',
     showElementCategory: contract.elementCategory !== 'not-used',
     showElementPath: contract.element !== 'not-used',
-    showIsElementPathDynamic: contract.isElementPathDynamic !== 'not-used',
+    showIsElementPathDynamic: supportsDynamicLocatorControls(actionDef),
     showElementReplaceTextDataKey: contract.elementReplaceTextDataKey !== 'not-used',
     showValue: contract.value !== 'not-used',
     elementCategoryHint: ELEMENT_CATEGORY_HINTS[elementCategory] ?? '',

@@ -39,6 +39,10 @@ export function IconCopy(props: IconProps) {
   return <MaterialIcon name="content_copy" {...props} />;
 }
 
+export function IconPlus(props: IconProps) {
+  return <MaterialIcon name="add" {...props} />;
+}
+
 export function IconX(props: IconProps) {
   return <MaterialIcon name="close" {...props} />;
 }

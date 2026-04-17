@@ -1031,7 +1031,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "If Headers exists it is used as the filename text instead of reading from the element.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "optional",
       "key": "optional",
@@ -2952,7 +2952,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "SELECT is executed in CommonPage as SelectElement, not generic IWebElement.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "optional",
@@ -2969,7 +2969,7 @@ export const DOC_ACTION_DEFINITIONS = {
     "notes": "Defaults to 5 if empty.",
     "contract": {
       "element": "required",
-      "elementCategory": "optional",
+      "elementCategory": "required",
       "value": "optional",
       "expectedValue": "not-used",
       "key": "not-used",

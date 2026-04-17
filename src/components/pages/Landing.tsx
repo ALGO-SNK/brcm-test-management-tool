@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { MainLayout } from '../layouts/MainLayout';
-import { PlansList } from '../TestPlans/PlansList';
+import { PlansList, type ConnectionStatus } from '../TestPlans/PlansList';
 import { IconRefresh } from '../Common/Icons';
 import type { ADOTestPlan } from '../../types';
 import type { WorkspaceSettingsValues } from './WorkspaceSettings';
@@ -17,9 +17,42 @@ export function Landing({
                           workspaceSettings,
                         }: LandingProps) {
   const [planCount, setPlanCount] = useState(0);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
 
   const projectName =
       workspaceSettings.projectName.trim() || 'Azure Test Plans';
+
+  const handlePlansLoaded = useCallback((plans: ADOTestPlan[]) => {
+    setPlanCount(plans.length);
+  }, []);
+
+  const handleConnectionStatusChange = useCallback((status: ConnectionStatus) => {
+    setConnectionStatus(status);
+  }, []);
+
+  const handleRefreshPlans = () => {
+    setRefreshToken((value) => value + 1);
+  };
+
+  const connectionMeta = {
+    checking: {
+      label: 'Checking',
+      dotClass: 'dot--blue',
+    },
+    connected: {
+      label: 'Connected',
+      dotClass: 'dot--green',
+    },
+    cached: {
+      label: 'Cached',
+      dotClass: 'dot--yellow',
+    },
+    disconnected: {
+      label: 'Disconnected',
+      dotClass: 'dot--red',
+    },
+  }[connectionStatus];
 
   return (
       <MainLayout title={projectName} onSettingsClick={onSettingsClick}>
@@ -45,8 +78,8 @@ export function Landing({
                   <div className="stat-card">
                     <div className="stat-card__label">Runtime</div>
                     <div className="stat-card__value flex items-center gap-2">
-                      <span className="dot dot--green" />
-                      <span>Connected</span>
+                      <span className={`dot ${connectionMeta.dotClass}`} />
+                      <span>{connectionMeta.label}</span>
                     </div>
                   </div>
                 </div>
@@ -54,7 +87,7 @@ export function Landing({
             </div>
 
             <div className="flex gap-2 mt-4">
-              <button type="button" className="btn btn--secondary btn--sm">
+              <button type="button" className="btn btn--secondary btn--sm" onClick={handleRefreshPlans}>
                 <IconRefresh size={14} />
                 <span>Refresh plans</span>
               </button>
@@ -72,7 +105,9 @@ export function Landing({
             <PlansList
                 onSelectPlan={onSelectPlan}
                 workspaceSettings={workspaceSettings}
-                onPlansLoaded={(plans) => setPlanCount(plans.length)}
+                onPlansLoaded={handlePlansLoaded}
+                onConnectionStatusChange={handleConnectionStatusChange}
+                refreshToken={refreshToken}
             />
           </section>
         </div>

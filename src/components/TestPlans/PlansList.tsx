@@ -4,13 +4,23 @@ import { PlanCard } from './PlanCard';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { fetchPlans, getCachedPlans } from '../../services/adoApi';
 
+export type ConnectionStatus = 'checking' | 'connected' | 'cached' | 'disconnected';
+
 interface PlansListProps {
   onSelectPlan: (plan: ADOTestPlan) => void;
   workspaceSettings: WorkspaceSettingsValues;
   onPlansLoaded?: (plans: ADOTestPlan[]) => void;
+  onConnectionStatusChange?: (status: ConnectionStatus) => void;
+  refreshToken?: number;
 }
 
-export function PlansList({ onSelectPlan, workspaceSettings, onPlansLoaded }: PlansListProps) {
+export function PlansList({
+  onSelectPlan,
+  workspaceSettings,
+  onPlansLoaded,
+  onConnectionStatusChange,
+  refreshToken = 0,
+}: PlansListProps) {
   const [plans, setPlans] = useState<ADOTestPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -25,6 +35,11 @@ export function PlansList({ onSelectPlan, workspaceSettings, onPlansLoaded }: Pl
 
   useEffect(() => {
     let active = true;
+    const forceLiveRefresh = refreshToken > 0;
+
+    const updateConnectionStatus = (status: ConnectionStatus) => {
+      onConnectionStatusChange?.(status);
+    };
 
     const loadPlans = async () => {
       if (!workspaceReady) {
@@ -34,6 +49,7 @@ export function PlansList({ onSelectPlan, workspaceSettings, onPlansLoaded }: Pl
         setError('Configure Organization, Project, and PAT in Settings to load test plans.');
         setWarning(null);
         onPlansLoaded?.([]);
+        updateConnectionStatus('disconnected');
         return;
       }
 
@@ -47,18 +63,21 @@ export function PlansList({ onSelectPlan, workspaceSettings, onPlansLoaded }: Pl
         setPlans(cached.data);
         setLoading(false);
         onPlansLoaded?.(cached.data);
+        updateConnectionStatus(cached.fresh && !forceLiveRefresh ? 'connected' : 'cached');
       } else {
         setPlans([]);
         setLoading(true);
+        updateConnectionStatus('checking');
       }
 
-      if (cached?.fresh) {
+      if (cached?.fresh && !forceLiveRefresh) {
         setRefreshing(false);
         return;
       }
 
       try {
         setRefreshing(hasCachedPlans);
+        updateConnectionStatus(hasCachedPlans ? 'cached' : 'checking');
         const data = await fetchPlans(workspaceSettings);
         if (!active) return;
 
@@ -66,18 +85,21 @@ export function PlansList({ onSelectPlan, workspaceSettings, onPlansLoaded }: Pl
         setError(null);
         setWarning(null);
         onPlansLoaded?.(data);
+        updateConnectionStatus('connected');
       } catch (err) {
         if (!active) return;
 
         if (hasCachedPlans) {
           setWarning('Showing cached plans. Live data sync failed, retrying on next refresh.');
           setError(null);
+          updateConnectionStatus('cached');
           return;
         }
 
         setPlans([]);
         onPlansLoaded?.([]);
         setError(err instanceof Error ? err.message : 'Failed to load test plans');
+        updateConnectionStatus('disconnected');
       } finally {
         if (active) {
           setLoading(false);
@@ -91,7 +113,7 @@ export function PlansList({ onSelectPlan, workspaceSettings, onPlansLoaded }: Pl
     return () => {
       active = false;
     };
-  }, [workspaceReady, workspaceSettings, onPlansLoaded]);
+  }, [workspaceReady, workspaceSettings, onPlansLoaded, onConnectionStatusChange, refreshToken]);
 
   if (loading) {
     return (

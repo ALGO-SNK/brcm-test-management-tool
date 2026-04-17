@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { IconChevronDown, IconX } from './Icons';
 
 interface SearchableSelectOption {
@@ -23,13 +24,19 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const filteredOptions = options.filter(
-    (opt) =>
-      opt.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      opt.value.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredOptions = useMemo(
+    () =>
+      options.filter(
+        (opt) =>
+          opt.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          opt.value.toLowerCase().includes(searchTerm.toLowerCase()),
+      ),
+    [options, searchTerm],
   );
 
   const selectedOption = options.find((opt) => opt.value === value);
@@ -37,7 +44,10 @@ export function SearchableSelect({
   // Close on outside click; focus input when opening
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const clickedInsideTrigger = containerRef.current?.contains(target) ?? false;
+      const clickedInsideDropdown = dropdownRef.current?.contains(target) ?? false;
+      if (!clickedInsideTrigger && !clickedInsideDropdown) {
         setIsOpen(false);
         setSearchTerm('');
       }
@@ -50,6 +60,47 @@ export function SearchableSelect({
 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+
+    const updateMenuPlacement = () => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      const margin = 8;
+      const estimatedMenuHeight = Math.min(240, Math.max(56, filteredOptions.length * 40 + 16));
+      const spaceBelow = viewportHeight - rect.bottom - margin;
+      const spaceAbove = rect.top - margin;
+      const shouldOpenUp = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
+      const availableHeight = Math.max(56, Math.min(estimatedMenuHeight, shouldOpenUp ? spaceAbove : spaceBelow));
+      const left = Math.min(Math.max(margin, rect.left), Math.max(margin, viewportWidth - rect.width - margin));
+      const top = shouldOpenUp
+        ? Math.max(margin, rect.top - 4 - availableHeight)
+        : rect.bottom + 4;
+
+      setDropdownStyle({
+        position: 'fixed',
+        top,
+        left,
+        width: rect.width,
+        maxHeight: availableHeight,
+        zIndex: 1000,
+      });
+    };
+
+    updateMenuPlacement();
+    window.addEventListener('resize', updateMenuPlacement);
+    window.addEventListener('scroll', updateMenuPlacement, true);
+
+    return () => {
+      window.removeEventListener('resize', updateMenuPlacement);
+      window.removeEventListener('scroll', updateMenuPlacement, true);
+    };
+  }, [filteredOptions.length, isOpen]);
 
   const handleSelect = (optionValue: string) => {
     onChange(optionValue);
@@ -67,11 +118,7 @@ export function SearchableSelect({
 
   return (
     // Flat structure — no inner trigger wrapper
-    <div
-      ref={containerRef}
-      className={`searchable-select ${className || ''}`}
-      onClick={toggleOpen}
-    >
+    <div ref={containerRef} className={`searchable-select ${className || ''}`}>
       <input
         ref={inputRef}
         type="text"
@@ -114,12 +161,26 @@ export function SearchableSelect({
         </button>
       )}
 
-      <div className={`searchable-select__icon${isOpen ? ' is-open' : ''}`} aria-hidden="true">
+      <button
+        type="button"
+        className={`searchable-select__icon-btn${isOpen ? ' is-open' : ''}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleOpen();
+        }}
+        aria-label={isOpen ? 'Close options' : 'Open options'}
+        aria-expanded={isOpen}
+      >
         <IconChevronDown size={14} />
-      </div>
+      </button>
 
-      {isOpen && (
-        <div className="searchable-select__dropdown" role="listbox">
+      {isOpen && dropdownStyle && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={dropdownRef}
+          className="searchable-select__dropdown"
+          role="listbox"
+          style={dropdownStyle}
+        >
           {filteredOptions.length > 0 ? (
             <ul className="searchable-select__options">
               {filteredOptions.map((option) => (
@@ -140,7 +201,8 @@ export function SearchableSelect({
           ) : (
             <div className="searchable-select__empty">No options found</div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
