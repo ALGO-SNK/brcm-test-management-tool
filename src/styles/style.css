@@ -6638,13 +6638,15 @@ input[type="radio"] {
     width: 36px;
     padding: 0;
     justify-content: center;
-    font-size: 0;
     flex-shrink: 0;
+    color: transparent;
+    font-size: var(--text-sm);
 }
 
 .plan-card__secondary-btn svg {
     width: 16px;
     height: 16px;
+    color: inherit;
 }
 
 .plan-card__arrow {
