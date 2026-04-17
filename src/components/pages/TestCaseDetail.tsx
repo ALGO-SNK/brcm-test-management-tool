@@ -314,6 +314,7 @@ export function TestCaseDetail({
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
 
     const selectedCase = caseData && caseData.id === caseId ? caseData : null;
     setTestCase(selectedCase);
@@ -337,7 +338,13 @@ export function TestCaseDetail({
         const preferredHref = selectedCase?._links?.workItem?.href
           ?? selectedCase?._links?.self?.href
           ?? selectedCase?._links?._self?.href;
-        const data = await fetchTestCaseDetail(workspaceSettings, caseId, preferredHref, selectedCase ?? undefined);
+        const data = await fetchTestCaseDetail(
+          workspaceSettings,
+          caseId,
+          preferredHref,
+          selectedCase ?? undefined,
+          controller.signal,
+        );
         if (!active) return;
         setTestCase((prev) => mergeTestCaseData(data, prev ?? selectedCase));
         setLoadWarning(null);
@@ -359,6 +366,7 @@ export function TestCaseDetail({
     loadCase().then(() => console.log('[TestCaseDetail] Initial load completed', { caseId, caseDataLoaded: !!caseData, workspaceReady }));
     return () => {
       active = false;
+      controller.abort();
     };
   }, [caseData, caseId, workspaceReady, workspaceSettings]);
 

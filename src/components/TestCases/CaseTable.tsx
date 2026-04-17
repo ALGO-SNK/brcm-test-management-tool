@@ -88,6 +88,7 @@ export function CaseTable({
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
   const [localIsCreateMode, setLocalIsCreateMode] = useState(false);
+  const createModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Use prop if provided, otherwise use local state
   const isCreateMode = propIsCreateMode !== undefined ? propIsCreateMode : localIsCreateMode;
@@ -104,6 +105,7 @@ export function CaseTable({
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
 
     const loadCases = async () => {
       if (!workspaceReady) {
@@ -143,6 +145,7 @@ export function CaseTable({
           suiteId,
           suiteTestCasesHref,
           suiteSelfHref,
+          controller.signal,
         );
         if (!active) return;
         setCases(data);
@@ -164,6 +167,7 @@ export function CaseTable({
     loadCases().then();
     return () => {
       active = false;
+      controller.abort();
     };
   }, [planId, suiteId, suiteSelfHref, suiteTestCasesHref, workspaceReady, workspaceSettings]);
 
@@ -172,6 +176,13 @@ export function CaseTable({
       onCaseCountChange?.(cases.length);
     }
   }, [cases.length, loading, onCaseCountChange]);
+
+  useEffect(() => () => {
+    if (createModeTimerRef.current) {
+      clearTimeout(createModeTimerRef.current);
+      createModeTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!sortMenuOpen && openFilterColumn === null) return;
@@ -392,7 +403,10 @@ export function CaseTable({
             }
 
             // Auto-exit create mode after showing success
-            setTimeout(() => {
+            if (createModeTimerRef.current) {
+              clearTimeout(createModeTimerRef.current);
+            }
+            createModeTimerRef.current = setTimeout(() => {
               setIsCreateMode(false);
               setSuccessMessage(null);
             }, 2000);

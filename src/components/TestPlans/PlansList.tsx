@@ -35,6 +35,7 @@ export function PlansList({
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     const forceLiveRefresh = refreshToken > 0;
 
     const updateConnectionStatus = (status: ConnectionStatus) => {
@@ -78,7 +79,7 @@ export function PlansList({
       try {
         setRefreshing(hasCachedPlans);
         updateConnectionStatus(hasCachedPlans ? 'cached' : 'checking');
-        const data = await fetchPlans(workspaceSettings);
+        const data = await fetchPlans(workspaceSettings, controller.signal);
         if (!active) return;
 
         setPlans(data);
@@ -112,6 +113,7 @@ export function PlansList({
 
     return () => {
       active = false;
+      controller.abort();
     };
   }, [workspaceReady, workspaceSettings, onPlansLoaded, onConnectionStatusChange, refreshToken]);
 

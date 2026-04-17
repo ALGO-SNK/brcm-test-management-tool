@@ -212,13 +212,14 @@ function buildBaseApiUrl(settings: WorkspaceConnectionSettings): string {
   return `https://dev.azure.com/${organization}/${project}/_apis`;
 }
 
-async function fetchJson<T>(url: string, patToken: string): Promise<T> {
+async function fetchJson<T>(url: string, patToken: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, {
     method: 'GET',
     headers: {
       Accept: 'application/json',
       Authorization: `Basic ${toBasicAuthToken(patToken)}`,
     },
+    signal,
   });
 
   if (!response.ok) {
@@ -519,12 +520,15 @@ export function clearTestCaseDetailCache(
   clearCacheEntry(getTestCaseDetailCacheKey(settings, caseId));
 }*/
 
-export async function fetchPlans(settings: WorkspaceConnectionSettings): Promise<ADOTestPlan[]> {
+export async function fetchPlans(
+  settings: WorkspaceConnectionSettings,
+  signal?: AbortSignal,
+): Promise<ADOTestPlan[]> {
   assertSettings(settings);
 
   const apiVersion = normalizeApiVersion(settings.apiVersion);
   const url = `${buildBaseApiUrl(settings)}/testplan/plans?api-version=${encodeURIComponent(apiVersion)}`;
-  const data = await fetchJson<ADOListResponse<ADOTestPlan>>(url, settings.patToken.trim());
+  const data = await fetchJson<ADOListResponse<ADOTestPlan>>(url, settings.patToken.trim(), signal);
 
   const plans = Array.isArray(data.value) ? data.value : [];
   writeCacheEntry(getPlansCacheKey(settings), plans);
@@ -534,6 +538,7 @@ export async function fetchPlans(settings: WorkspaceConnectionSettings): Promise
 export async function fetchSuitesForPlan(
   settings: WorkspaceConnectionSettings,
   plan: ADOTestPlan,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   assertSettings(settings);
 
@@ -544,7 +549,7 @@ export async function fetchSuitesForPlan(
     ? buildSuitesUrlFromSelf(selfHref, apiVersion)
     : `${buildBaseApiUrl(settings)}/testplan/Plans/${encodeURIComponent(String(plan.id))}/suites?asTreeView=True&api-version=${encodeURIComponent(apiVersion)}`;
 
-  const response = await fetchJson<unknown>(url, settings.patToken.trim());
+  const response = await fetchJson<unknown>(url, settings.patToken.trim(), signal);
   writeCacheEntry(getSuitesCacheKey(settings, plan.id), response);
   return response;
 }
@@ -555,6 +560,7 @@ export async function fetchTestCasesForSuite(
   suiteId: number,
   suiteTestCasesHref?: string,
   suiteSelfHref?: string,
+  signal?: AbortSignal,
 ): Promise<ADOTestCase[]> {
   assertSettings(settings);
 
@@ -588,7 +594,11 @@ export async function fetchTestCasesForSuite(
 
   for (const url of uniqueCandidateUrls) {
     try {
-      const response = await fetchJson<ADOListResponse<ADOTestCaseListItem | Record<string, unknown>>>(url, settings.patToken.trim());
+      const response = await fetchJson<ADOListResponse<ADOTestCaseListItem | Record<string, unknown>>>(
+        url,
+        settings.patToken.trim(),
+        signal,
+      );
       const selfHref = url.split('?')[0];
       const mappedCases = (response.value ?? [])
         .map((item) => mapTestCaseListItemToCase(item, selfHref))
@@ -620,6 +630,7 @@ export async function fetchTestCaseDetail(
   caseId: number,
   preferredHref?: string,
   fallbackCase?: ADOTestCase,
+  signal?: AbortSignal,
 ): Promise<ADOTestCase> {
   assertSettings(settings);
 
@@ -653,7 +664,7 @@ export async function fetchTestCaseDetail(
 
   for (const url of uniqueCandidateUrls) {
     try {
-      const workItem = await fetchJson<ADOWorkItem>(url, settings.patToken.trim());
+      const workItem = await fetchJson<ADOWorkItem>(url, settings.patToken.trim(), signal);
 
       // Debug: Log what fields are actually in the response
       if (workItem.fields) {

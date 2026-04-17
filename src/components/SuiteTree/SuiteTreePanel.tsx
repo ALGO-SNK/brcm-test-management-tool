@@ -67,6 +67,7 @@ export function SuiteTreePanel({
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
 
     const load = async () => {
       setError(null);
@@ -82,7 +83,7 @@ export function SuiteTreePanel({
       if (cached?.fresh) return;
 
       try {
-        const response = await fetchSuitesForPlan(workspaceSettings, plan);
+        const response = await fetchSuitesForPlan(workspaceSettings, plan, controller.signal);
         if (!active) return;
         setSuites(extractSuites(response));
       } catch (err) {
@@ -96,7 +97,7 @@ export function SuiteTreePanel({
     };
 
     load().then();
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, [plan, workspaceSettings]);
 
   const { children: visibleSuites } = useMemo(() => flattenRoot(suites), [suites]);

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -9,8 +9,14 @@ import {
 
 export function NotificationContextProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const removeNotification = useCallback((id: string) => {
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
     setNotifications((prev) => prev.filter((notification) => notification.id !== id));
   }, []);
 
@@ -22,9 +28,10 @@ export function NotificationContextProvider({ children }: { children: ReactNode 
       setNotifications(prev => [...prev, notification]);
 
       if (duration > 0) {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           removeNotification(id);
         }, duration);
+        timersRef.current.set(id, timer);
       }
 
       return id;
@@ -33,7 +40,14 @@ export function NotificationContextProvider({ children }: { children: ReactNode 
   );
 
   const clearNotifications = useCallback(() => {
+    timersRef.current.forEach((timer) => clearTimeout(timer));
+    timersRef.current.clear();
     setNotifications([]);
+  }, []);
+
+  useEffect(() => () => {
+    timersRef.current.forEach((timer) => clearTimeout(timer));
+    timersRef.current.clear();
   }, []);
 
   return (

@@ -6922,8 +6922,8 @@ input[type="radio"] {
 }
 
 .steps-editor__dynamic-control {
-    flex: 0 1 auto;
-    min-width: auto;
+    flex: 0 1 calc(25% - var(--space-3) * 0.25);
+    min-width: 100px;
     align-self: center;
     display: flex;
     flex-direction: row;
@@ -6964,8 +6964,8 @@ input[type="radio"] {
 }
 
 .steps-editor__field--replace-key-inline {
-    flex: 1 1 0;
-    min-width: 200px;
+    flex: 0 1 calc(75% - var(--space-3) * 0.75);
+    min-width: 250px;
 }
 
 /* Value: prominent, but not full-width */
