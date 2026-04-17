@@ -6605,7 +6605,7 @@ input[type="radio"] {
     font-weight: 600;
     color: var(--color-text);
     background: transparent;
-    border: 1px solid transparent;
+    border: 1px solid var(--color-border-soft);
     border-radius: var(--radius-md);
     transition: all var(--transition-fast);
 }
