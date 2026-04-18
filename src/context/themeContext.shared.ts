@@ -29,6 +29,10 @@ export type AppFontMode =
     | 'space-mono'
     | 'inter'
     | 'manrope'
+    | 'google-sans'
+    | 'montserrat'
+    | 'quicksand'
+    | 'caveat'
     | 'system';
 
 export interface ThemeModeOption {
@@ -67,6 +71,10 @@ export const APP_FONT_OPTIONS: AppFontOption[] = [
   { value: 'space-mono',      label: 'Space Mono',      mono: true },
   { value: 'inter',           label: 'Inter',           mono: false },
   { value: 'manrope',         label: 'Manrope',         mono: false },
+  { value: 'google-sans',     label: 'Google Sans',     mono: false },
+  { value: 'montserrat',      label: 'Montserrat',      mono: false },
+  { value: 'quicksand',       label: 'Quicksand',       mono: false },
+  { value: 'caveat',          label: 'Caveat',          mono: false },
   { value: 'system',          label: 'System UI',       mono: false },
 ];
 

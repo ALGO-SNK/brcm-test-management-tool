@@ -343,7 +343,8 @@ export function HelpGuide({ onBack }: HelpGuideProps) {
     if (shouldScroll) {
       window.requestAnimationFrame(() => {
         smoothScrollToMatch(target, articleRef.current);
-        target.focus({ preventScroll: true });
+        // Do NOT call target.focus() — it steals focus from the search input
+        // while the user is typing. Scrolling is sufficient visual feedback.
       });
     }
 
@@ -366,7 +367,8 @@ export function HelpGuide({ onBack }: HelpGuideProps) {
     if (matches.length > 0) {
       activeMatchIndexRef.current = 0;
       shouldAutoScrollToFirstMatchRef.current = false;
-      // Always scroll to first match when results appear (like browser find-in-page)
+      // Scroll to first match as user types, but don't disturb typing focus.
+      // The activateMatch call below only scrolls — it no longer focuses the mark.
       activateMatch(0, true);
     } else {
       shouldAutoScrollToFirstMatchRef.current = false;
