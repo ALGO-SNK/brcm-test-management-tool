@@ -213,7 +213,7 @@ export function HelpGuide({ onBack }: HelpGuideProps) {
   const highlightMatchesRef = useRef<HTMLElement[]>([]);
   const activeMatchIndexRef = useRef(0);
   const shouldAutoScrollToFirstMatchRef = useRef(false);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentQuery = searchBySection[section];
   const debouncedQuery = debouncedSearchBySection[section];
 
