@@ -56,7 +56,13 @@ export function PlanCard({ plan, onOpenSuites, onCreateSuite, workspaceSettings 
           <strong className="plan-card__meta-value">{plan.id}</strong>
         </div>
 
-        <div className="plan-card__meta-item">
+        <div
+          className="plan-card__meta-item"
+          style={{
+            borderLeft: '1px solid var(--color-border-soft)',
+            paddingLeft: 'var(--space-4)',
+          }}
+        >
           <span className="plan-card__meta-label">Iteration</span>
           <strong className="plan-card__meta-value">{plan.iteration || '-'}</strong>
         </div>
