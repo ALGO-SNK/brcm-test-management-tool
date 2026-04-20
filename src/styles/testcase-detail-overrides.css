@@ -1,0 +1,229 @@
+/* Inline row: search pill on one line */
+.case-detail-section__title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.case-detail-section__title-row h3 {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+/* Info button: preview a FETCH_SHARED_STEPS test case referenced by Value */
+.steps-editor__shared-step-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0 4px 0 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: border-color var(--transition-fast),
+              background-color var(--transition-fast),
+              color var(--transition-fast);
+}
+
+.steps-editor__shared-step-info:hover:not(:disabled) {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.steps-editor__shared-step-info:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.steps-editor__shared-step-info:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: var(--color-text-muted);
+}
+
+.steps-editor__shared-step-info .material-symbols {
+  font-size: 18px;
+}
+
+/* Sticky header bar — search + actions stay pinned while steps scroll */
+.case-detail-pane__header-fixed {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.case-detail-section__head--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--color-bg);
+}
+
+.case-detail-step-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.case-detail-step-search__input {
+  width: min(520px, 100%);
+  flex: 0 1 520px;
+  font-family: var(--font-sans), sans-serif;
+  margin-left: 0;
+}
+
+.case-detail-step-search__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  flex-shrink: 0;
+}
+
+.case-detail-pane .steps-editor__header .steps-editor__header-actions {
+  margin-left: 0;
+  padding-left: 0;
+  justify-content: flex-start;
+}
+
+.case-detail-step-search__controls .steps-editor__hint {
+  margin-right: 2px;
+  min-width: 46px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.case-detail-step-search__nav-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+
+.case-detail-step-search__nav-btn:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+}
+
+.case-detail-step-search__nav-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.case-detail-step-search__nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.case-detail-section__actions {
+  gap: 8px;
+}
+
+.case-detail-section__actions .btn.btn--secondary.btn--sm[aria-label] {
+  min-width: 40px;
+  min-height: 36px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.case-detail__azure-icon {
+  display: inline-block;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.case-detail__azure-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 12px;
+}
+
+.case-detail__azure-action-label {
+  font-weight: 600;
+  line-height: 1;
+}
+
+.case-detail-step-item__full strong {
+  font-weight: 700;
+  color: var(--color-text-heading);
+}
+
+.shared-step-preview__heading-copy {
+  width: 100%;
+  max-width: 100%;
+  padding-right: 52px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.shared-step-preview__title {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shared-step-preview__ado-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.case-detail-step-item.is-selected {
+  outline: 2px solid var(--color-primary-border);
+  outline-offset: 1px;
+  box-shadow: var(--shadow-xs);
+}
+
+.case-detail-step-item:focus-within {
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+@media (max-width: 900px) {
+  .case-detail-section__head--merged {
+    align-items: flex-start;
+  }
+
+  .case-detail-section__actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .case-detail-step-search {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .case-detail-step-search__input {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .case-detail-step-search__controls {
+    margin-top: 2px;
+  }
+}

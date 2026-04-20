@@ -1265,7 +1265,7 @@ export const DOC_ACTION_DEFINITIONS = {
       contract({
         element: UNUSED,
         elementCategory: UNUSED,
-        value: OPTIONAL,
+        value: REQUIRED,
         expectedValue: UNUSED,
         key: UNUSED,
         headers: UNUSED,

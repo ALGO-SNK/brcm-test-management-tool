@@ -1,8 +1,9 @@
 import React from 'react';
-import { IconPlus, IconOpenInNew } from '../Common/Icons';
+import { IconPlus } from '../Common/Icons';
 import type { ADOTestPlan } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { buildPlanAdoUrl } from '../../services/adoApi';
+import azureLogo from '../../assets/azure.png';
 
 interface PlanCardProps {
   plan: ADOTestPlan;
@@ -99,7 +100,7 @@ export function PlanCard({ plan, onOpenSuites, onCreateSuite, workspaceSettings 
           title={canOpenInAdo ? 'Open plan in Azure DevOps' : 'Configure workspace settings to open Azure DevOps'}
           aria-label="Open in Azure DevOps"
         >
-          <IconOpenInNew size={18} />
+          <img src={azureLogo} alt="" width={18} height={18} aria-hidden="true" />
         </button>
       </div>
     </article>

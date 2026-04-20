@@ -1,7 +1,7 @@
 {
   "name": "bcm-test-builder",
   "private": true,
-  "version": "2026.4.10",
+  "version": "2026.4.11",
   "author": "Bromcom",
   "description": "Bromcom Test Builder desktop app",
   "type": "module",

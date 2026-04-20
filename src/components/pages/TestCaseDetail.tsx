@@ -1,17 +1,19 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {MainLayout} from '../layouts/MainLayout';
 import {PageDetailLayout} from '../layouts/PageDetailLayout';
-import {IconEdit, IconOpenInNew, IconX} from '../Common/Icons';
+import {IconSearch, IconX} from '../Common/Icons';
 import type {ADOTestCase, ADOTestPlan, ADOTestSuite} from '../../types';
 import type {WorkspaceSettingsValues} from './WorkspaceSettings';
 import {buildWorkItemAdoUrl, fetchTestCaseDetail, updateTestCase} from '../../services/adoApi';
 import {parseXMLSteps} from '../../utils/xmlParser';
 import {buildTestCaseData} from '../../utils/testCaseBuilder';
 import type {ParsedStep} from '../TestCases/StepsEditor';
-import {StepsEditor} from '../TestCases/StepsEditor';
+import {StepsEditor, StepsSearchBar, useStepsSearch} from '../TestCases/StepsEditor';
+import {SharedStepPreviewModal} from '../TestCases/SharedStepPreviewModal';
 import {TestCaseFormFields} from '../TestCases/TestCaseFormFields';
 import {ACTION_REGISTRY} from '../../utils/actionRegistry';
 import {useNotification} from '../../context/useNotification';
+import azureLogo from '../../assets/azure.png';
 
 interface TestCaseDetailProps {
   plan: ADOTestPlan;
@@ -313,12 +315,18 @@ export function TestCaseDetail({
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [pendingExitAction, setPendingExitAction] = useState<'back' | 'exit' | 'window-close' | null>(null);
   const [confirmExitRequested, setConfirmExitRequested] = useState(false);
+  const [stepSearchQuery, setStepSearchQuery] = useState('');
+  const [activeStepSearchMatch, setActiveStepSearchMatch] = useState(0);
+  const [stepSearchScrollNonce, setStepSearchScrollNonce] = useState(0);
+  const editStepsSearch = useStepsSearch();
+  const [sharedStepPreviewId, setSharedStepPreviewId] = useState<string | null>(null);
   const reloadCaseControllerRef = useRef<AbortController | null>(null);
   const editBaselineRef = useRef<{
     formData: typeof editFormData;
     steps: ParsedStep[];
   } | null>(null);
   const allowWindowCloseRef = useRef(false);
+  const viewStepRefs = useRef<Record<string, HTMLElement | null>>({});
   const { addNotification } = useNotification();
 
   const workspaceReady = Boolean(
@@ -662,6 +670,63 @@ export function TestCaseDetail({
     return parseStepsForDisplay(testCase.fields['Microsoft.VSTS.TCM.Steps']);
   }, [testCase]);
 
+  const stepViewItems = useMemo(() => {
+    if (!testCase) return [];
+    const items: Array<{ key: string; index: number; name: string; fullText: string; isInitial?: boolean }> = [];
+    const initialStepsText = normalizeFieldText(testCase.fields?.['Custom.InitialStep']).trim();
+    if (initialStepsText) {
+      items.push({
+        key: `${testCase.id}-step-0`,
+        index: 0,
+        name: 'Initial Steps',
+        fullText: initialStepsText,
+        isInitial: true,
+      });
+    }
+
+    stepsForDisplay.forEach((step) => {
+      items.push({
+        key: `${testCase.id}-step-${step.index}`,
+        index: step.index,
+        name: step.name,
+        fullText: step.fullText,
+      });
+    });
+
+    return items;
+  }, [stepsForDisplay, testCase]);
+
+  const matchingViewStepIndices = useMemo(() => {
+    const query = stepSearchQuery.trim().toLowerCase();
+    if (!query) return [];
+
+    return stepViewItems
+      .map((step, index) => {
+        const haystack = `${step.index} ${step.name} ${step.fullText}`.toLowerCase();
+        return haystack.includes(query) ? index : -1;
+      })
+      .filter((index) => index >= 0);
+  }, [stepSearchQuery, stepViewItems]);
+
+  const activeMatchedViewStepIndex = matchingViewStepIndices[activeStepSearchMatch] ?? null;
+
+  useEffect(() => {
+    setActiveStepSearchMatch(0);
+  }, [stepSearchQuery]);
+
+  useEffect(() => {
+    if (activeStepSearchMatch > 0 && activeStepSearchMatch >= matchingViewStepIndices.length) {
+      setActiveStepSearchMatch(Math.max(0, matchingViewStepIndices.length - 1));
+    }
+  }, [activeStepSearchMatch, matchingViewStepIndices.length]);
+
+  useEffect(() => {
+    if (activeMatchedViewStepIndex === null) return;
+    const activeStep = stepViewItems[activeMatchedViewStepIndex];
+    if (!activeStep) return;
+    viewStepRefs.current[activeStep.key]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [activeMatchedViewStepIndex, stepViewItems, stepSearchScrollNonce]);
+
 
   const mainRows = useMemo(() => {
     if (!testCase) return [];
@@ -725,43 +790,135 @@ export function TestCaseDetail({
           {loadWarning && <p className="text-sm text-secondary mb-md">{loadWarning}</p>}
 
           <div className="case-detail-section__head case-detail-section__head--merged case-detail-section__head--fixed">
-                <div>
-                  <h3>Details & Steps</h3>
+                <div className="case-detail-section__title-row">
+                  {!isEditMode && stepViewItems.length > 0 && (
+                    <div className="help-guide__header-search help-guide__header-search--inline">
+                      <div className="help-guide__search-container">
+                        <label className="help-guide__search" htmlFor="case-step-search">
+                          <IconSearch size={16} aria-hidden="true" />
+                          <input
+                            id="case-step-search"
+                            type="text"
+                            value={stepSearchQuery}
+                            onChange={(event) => setStepSearchQuery(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key !== 'Enter') return;
+                              if (matchingViewStepIndices.length === 0) return;
+                              event.preventDefault();
+                              const delta = event.shiftKey ? -1 : 1;
+                              setActiveStepSearchMatch((current) =>
+                                (current + delta + matchingViewStepIndices.length) % matchingViewStepIndices.length,
+                              );
+                              setStepSearchScrollNonce((n) => n + 1);
+                            }}
+                            placeholder="Search steps"
+                            aria-label="Search steps"
+                            aria-controls="case-detail-step-list"
+                          />
+                          {stepSearchQuery.length > 0 && (
+                            <button
+                              type="button"
+                              className="help-guide__search-clear"
+                              onClick={() => setStepSearchQuery('')}
+                              aria-label="Clear search"
+                              title="Clear"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </label>
+                      </div>
+
+                      {stepSearchQuery.trim() && (
+                        <div className="help-guide__search-controls">
+                          <button
+                            type="button"
+                            className="btn btn--secondary btn--icon-sm"
+                            disabled={matchingViewStepIndices.length === 0}
+                            onClick={() => {
+                              if (matchingViewStepIndices.length === 0) return;
+                              setActiveStepSearchMatch((current) =>
+                                (current - 1 + matchingViewStepIndices.length) % matchingViewStepIndices.length,
+                              );
+                              setStepSearchScrollNonce((n) => n + 1);
+                            }}
+                            title="Previous match (Shift+Enter)"
+                            aria-label="Previous match"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--secondary btn--icon-sm"
+                            disabled={matchingViewStepIndices.length === 0}
+                            onClick={() => {
+                              if (matchingViewStepIndices.length === 0) return;
+                              setActiveStepSearchMatch((current) => (current + 1) % matchingViewStepIndices.length);
+                              setStepSearchScrollNonce((n) => n + 1);
+                            }}
+                            title="Next match (Enter)"
+                            aria-label="Next match"
+                          >
+                            ↓
+                          </button>
+                          <span className="help-guide__match-info" aria-live="polite">
+                            {matchingViewStepIndices.length === 0
+                              ? '0 / 0'
+                              : `${activeStepSearchMatch + 1} / ${matchingViewStepIndices.length}`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {isEditMode && (
+                    <StepsSearchBar
+                      controller={editStepsSearch}
+                      matchingCount={editStepsSearch.matchingCount}
+                      activeIndex={editStepsSearch.activeIndex}
+                      onActiveIndexChange={editStepsSearch.setActiveIndex}
+                      inputId="edit-step-search"
+                    />
+                  )}
                 </div>
                 <div className="case-detail-section__actions">
                   {!isEditMode && (
                     <>
                       <button
                         type="button"
-                        className="btn btn--secondary btn--sm"
+                        className="btn btn--secondary btn--sm case-detail__azure-action"
                         onClick={() => window.open(buildWorkItemAdoUrl(workspaceSettings, testCase.id), '_blank', 'noopener,noreferrer')}
+                        aria-label="Open in Azure DevOps"
+                        title="Open in Azure DevOps"
                         disabled={!canOpenInAdo}
                       >
-                        <IconOpenInNew size={15} />
-                        Open in ADO
+                        <img className="case-detail__azure-icon" src={azureLogo} alt="" width={16} height={16} aria-hidden="true" />
+                        <span className="case-detail__azure-action-label">Azure</span>
                       </button>
                       <button
                         type="button"
                         className={`btn btn--secondary btn--sm case-detail-pane__edit-btn${isEditMode ? ' is-active' : ''}`}
-                    onClick={() => setIsEditMode((prev) => !prev)}
-                    aria-pressed={isEditMode}
-                  >
-                    <IconEdit size={15} />
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--secondary btn--sm"
-                    onClick={() => setIsAdditionalModalOpen(true)}
-                    disabled={additionalRows.length === 0}
-                  >
-                    More Details
-                  </button>
-                  <button type="button" className="btn btn--secondary btn--sm" onClick={onBackToCases}>
-                    Back
-                  </button>
-                </>
-              )}
+                        onClick={() => setIsEditMode((prev) => !prev)}
+                        aria-pressed={isEditMode}
+                        aria-label="Edit"
+                        title="Edit"
+                      >
+                        <span className="material-symbols" aria-hidden="true">edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setIsAdditionalModalOpen(true)}
+                        aria-label="More details"
+                        title="More details"
+                        disabled={additionalRows.length === 0}
+                      >
+                        <span className="material-symbols" aria-hidden="true">info</span>
+                      </button>
+                      <button type="button" className="btn btn--secondary btn--sm" onClick={onBackToCases}>
+                        Back
+                      </button>
+                    </>
+                  )}
               {isEditMode && (
                 <>
                   <button
@@ -800,30 +957,23 @@ export function TestCaseDetail({
               )}
 
               <div className="case-detail-steps-container">
-                {(() => {
-                  const initialStepsText = normalizeFieldText(testCase.fields?.['Custom.InitialStep']);
-                  if (initialStepsText) {
-                    return (
-                      <article className="case-detail-step-item">
-                        <p className="case-detail-step-item__title">
-                          <span className="case-detail-step-item__index">Step 0:</span>
-                          <strong className="case-detail-step-item__name">Initial Steps</strong>
-                        </p>
-                        <pre className="case-detail-step-item__full">{initialStepsText}</pre>
-                      </article>
-                    );
-                  }
-                  return null;
-                })()}
-                {stepsForDisplay.length > 0 ? (
-                  <div className="case-detail-steps-list pt-md">
-                    {stepsForDisplay.map((step) => (
-                      <article key={`${testCase.id}-step-${step.index}`} className="case-detail-step-item">
+                {stepViewItems.length > 0 ? (
+                  <div id="case-detail-step-list" className="case-detail-steps-list pt-md">
+                    {stepViewItems.map((step, stepArrayIndex) => (
+                      <article
+                        key={step.key}
+                        ref={(element) => {
+                          viewStepRefs.current[step.key] = element;
+                        }}
+                        className={`case-detail-step-item${activeMatchedViewStepIndex === stepArrayIndex ? ' is-selected' : ''}`}
+                      >
                         <p className="case-detail-step-item__title">
                           <span className="case-detail-step-item__index">Step {step.index}:</span>
                           <strong className="case-detail-step-item__name">{step.name}</strong>
                         </p>
-                        <pre className="case-detail-step-item__full">{formatStepTextWithBoldLabels(step.fullText)}</pre>
+                        <pre className="case-detail-step-item__full">
+                          {step.isInitial ? step.fullText : formatStepTextWithBoldLabels(step.fullText)}
+                        </pre>
                       </article>
                     ))}
                   </div>
@@ -847,12 +997,23 @@ export function TestCaseDetail({
                 rawSteps={testCase.fields['Microsoft.VSTS.TCM.Steps']}
                 onChange={setEditSteps}
                 errors={editValidationErrors.filter((e) => e.toLowerCase().includes('step'))}
+                hideHeader
+                externalSearch={editStepsSearch}
+                onPreviewSharedStep={setSharedStepPreviewId}
               />
 
             </section>
           )}
         </div>
       </div>
+
+      {sharedStepPreviewId !== null && (
+        <SharedStepPreviewModal
+          testId={sharedStepPreviewId}
+          workspaceSettings={workspaceSettings}
+          onClose={() => setSharedStepPreviewId(null)}
+        />
+      )}
 
       {isAdditionalModalOpen && (
         <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Additional Details">

@@ -29,7 +29,7 @@ interface SuiteTreePanelProps {
 
 function normalizeSuite(raw: Record<string, unknown>): ADOTestSuite {
   const suite = raw as unknown as ADOTestSuite;
-  // ADO API may use different field names for test case count
+  // Azure DevOps API may use different field names for test case count
   if (suite.testCaseCount == null) {
     const count = (raw.testCaseCount ?? raw.testCasesCount ?? raw.TestCaseCount ?? raw.pointCount) as number | undefined;
     if (count != null) suite.testCaseCount = count;

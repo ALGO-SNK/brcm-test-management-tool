@@ -19,7 +19,7 @@ interface HeaderProps {
 }
 
 export function Header({
-  title = 'ADO Test Case Editor',
+  title = 'Azure DevOps Test Case Editor',
   contextTitle,
   contextMeta,
   actions,

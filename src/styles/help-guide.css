@@ -55,6 +55,39 @@
   box-sizing: border-box;
 }
 
+/* Inline variant — used outside the Help Guide header (e.g. TestCaseDetail
+   step search) where the prev/next/counter must sit next to the input on
+   the same line, with no decorative divider above. */
+.help-guide__header-search--inline {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+  flex-wrap: nowrap;
+  width: auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.help-guide__header-search--inline .help-guide__search-container {
+  flex: 0 0 420px;
+  min-width: 0;
+  max-width: 420px;
+}
+
+.help-guide__header-search--inline .help-guide__search {
+  height: 34px;
+}
+
+.help-guide__header-search--inline .help-guide__search-controls {
+  height: 34px;
+  padding: 2px 6px;
+}
+
+.help-guide__header-search--inline .help-guide__match-info {
+  min-width: 40px;
+  padding: 0 6px 0 4px;
+}
+
 .help-guide__search-container {
   flex: 1 1 320px;
   min-width: 280px;

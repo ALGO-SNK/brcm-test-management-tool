@@ -10,6 +10,7 @@ import { TestCaseList } from './components/pages/TestCaseList';
 import { HelpGuide } from './components/pages/HelpGuide';
 import { WorkspaceSettings, type WorkspaceSettingsValues } from './components/pages/WorkspaceSettings';
 import type { ADOTestPlan, ADOTestSuite, ADOTestCase } from './types';
+import type { AppFontMode } from './context/themeContext.shared';
 
 type PageType = 'landing' | 'cases' | 'detail' | 'settings' | 'help';
 type ContentPage = 'landing' | 'cases' | 'detail';
@@ -37,6 +38,73 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
   }
 }
 
+function resolveFontFamilies(font: AppFontMode): { body: string; display: string } {
+  switch (font) {
+    case 'droid-serif':
+      return {
+        body: '"Droid Serif", Georgia, serif',
+        display: '"Droid Serif", Georgia, serif',
+      };
+    case 'georgia':
+      return {
+        body: 'Georgia, "Times New Roman", serif',
+        display: 'Georgia, "Times New Roman", serif',
+      };
+    case 'helvetica':
+      return {
+        body: 'Helvetica, "Helvetica Neue", Arial, sans-serif',
+        display: 'Helvetica, "Helvetica Neue", Arial, sans-serif',
+      };
+    case 'lucida':
+      return {
+        body: '"Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", Geneva, Verdana, sans-serif',
+        display: '"Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", Geneva, Verdana, sans-serif',
+      };
+    case 'aptos-narrow':
+      return {
+        body: '"Aptos Narrow", "Segoe UI", sans-serif',
+        display: '"Aptos Narrow", "Segoe UI", sans-serif',
+      };
+    case 'jetbrains-mono':
+      return {
+        body: '"JetBrains Mono", "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        display: '"JetBrains Mono", "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+      };
+    case 'source-code-pro':
+      return {
+        body: '"Source Code Pro", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        display: '"Source Code Pro", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+      };
+    case 'manrope':
+      return {
+        body: '"Manrope", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        display: '"Manrope", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      };
+    case 'google-sans':
+      return {
+        body: '"Google Sans Text", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        display: '"Google Sans Text", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      };
+    case 'montserrat':
+      return {
+        body: '"Montserrat", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        display: '"Montserrat", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      };
+    case 'quicksand':
+      return {
+        body: '"Quicksand", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        display: '"Quicksand", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      };
+    case 'inter':
+    case 'system':
+    default:
+      return {
+        body: '"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        display: '"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      };
+  }
+}
+
 /* --------------------------------------------------------------------------
    MUI theme adapter
    Reads ThemeContext and builds a matching MUI palette so MUI Paper/Card
@@ -44,6 +112,7 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
    -------------------------------------------------------------------------- */
 function MuiThemeAdapter({ children }: { children: ReactNode }) {
   const { mode, font } = useThemeContext();
+  const fontFamilies = resolveFontFamilies(font);
 
   const muiTheme = useMemo(() => {
     const isLight        = mode === 'light';
@@ -77,13 +146,13 @@ function MuiThemeAdapter({ children }: { children: ReactNode }) {
         divider: isLight ? '#d8d8d8' : isPaper ? '#d8d5cc' : isHighContrast ? '#8a8a8a' : '#3a3a3a',
       },
       typography: {
-        fontFamily: 'var(--font-sans), sans-serif',
-        h1: { fontFamily: 'var(--font-display), sans-serif' },
-        h2: { fontFamily: 'var(--font-display), sans-serif' },
-        h3: { fontFamily: 'var(--font-display), sans-serif' },
-        h4: { fontFamily: 'var(--font-display), sans-serif' },
-        h5: { fontFamily: 'var(--font-display), sans-serif' },
-        h6: { fontFamily: 'var(--font-display), sans-serif' },
+        fontFamily: fontFamilies.body,
+        h1: { fontFamily: fontFamilies.display },
+        h2: { fontFamily: fontFamilies.display },
+        h3: { fontFamily: fontFamilies.display },
+        h4: { fontFamily: fontFamilies.display },
+        h5: { fontFamily: fontFamilies.display },
+        h6: { fontFamily: fontFamilies.display },
         fontSize: 14,
       },
       shape: { borderRadius: 10 },

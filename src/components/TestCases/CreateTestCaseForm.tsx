@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { IconX } from '../Common/Icons';
-import { StepsEditor } from './StepsEditor';
+import { StepsEditor, StepsSearchBar, useStepsSearch } from './StepsEditor';
 import { TestCaseFormFields } from './TestCaseFormFields';
+import { SharedStepPreviewModal } from './SharedStepPreviewModal';
 import type { ParsedStep } from './StepsEditor';
+import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 
 interface CreateTestCaseFormProps {
   suiteName: string;
   isLoading?: boolean;
   apiError?: string | null;
+  workspaceSettings: WorkspaceSettingsValues;
   onCancel: () => void;
   onSubmit: (formData: {
     title: string;
@@ -24,6 +27,7 @@ interface CreateTestCaseFormProps {
 export function CreateTestCaseForm({
   isLoading = false,
   apiError = null,
+  workspaceSettings,
   onCancel,
   onSubmit,
 }: CreateTestCaseFormProps) {
@@ -38,6 +42,8 @@ export function CreateTestCaseForm({
   });
 
   const [steps, setSteps] = useState<ParsedStep[]>([]);
+  const stepsSearch = useStepsSearch();
+  const [sharedStepPreviewId, setSharedStepPreviewId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [confirmDiscardRequested, setConfirmDiscardRequested] = useState(false);
@@ -190,9 +196,15 @@ export function CreateTestCaseForm({
         </div>
       )}
 
-        <div className="case-detail-section__head case-detail-section__head--merged case-detail-section__head--fixed">
-          <div>
-            <h3>Details & Steps</h3>
+        <div className="case-detail-section__head case-detail-section__head--merged case-detail-section__head--fixed case-detail-section__head--sticky">
+          <div className="case-detail-section__title-row">
+            <StepsSearchBar
+              controller={stepsSearch}
+              matchingCount={stepsSearch.matchingCount}
+              activeIndex={stepsSearch.activeIndex}
+              onActiveIndexChange={stepsSearch.setActiveIndex}
+              inputId="create-test-step-search"
+            />
           </div>
           <div className="case-detail-section__actions">
             <button
@@ -230,10 +242,20 @@ export function CreateTestCaseForm({
               rawSteps=""
               onChange={setSteps}
               errors={validationErrors.filter((e) => e.includes('step'))}
+              hideHeader
+              externalSearch={stepsSearch}
+              onPreviewSharedStep={setSharedStepPreviewId}
             />
           </section>
         </div>
       </form>
+      {sharedStepPreviewId !== null && (
+        <SharedStepPreviewModal
+          testId={sharedStepPreviewId}
+          workspaceSettings={workspaceSettings}
+          onClose={() => setSharedStepPreviewId(null)}
+        />
+      )}
       {showUnsavedConfirm && (
         <div className="steps-editor__confirm-overlay" role="dialog" aria-modal="true" aria-label="Discard unsaved changes">
           <button

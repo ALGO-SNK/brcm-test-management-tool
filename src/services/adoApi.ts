@@ -821,12 +821,12 @@ export async function fetchTestCaseDetail(
           'Custom.InitialStep': workItem.fields['Custom.InitialStep'],
         };
 
-        console.debug('[ADO API] ========== FULL FIELD DEBUG ==========');
-        console.debug('[ADO API] ✅ Successfully fetched Work Item ID:', workItem.id);
-        console.debug('[ADO API] API URL used:', url);
-        console.debug('[ADO API] All custom fields found:', customFields);
-        console.debug('[ADO API] ✅ CUSTOM FIELD VALUES:', requiredFields);
-        console.debug('[ADO API] Total fields in response:', Object.keys(workItem.fields).length);
+    console.debug('[Azure DevOps API] ========== FULL FIELD DEBUG ==========');
+    console.debug('[Azure DevOps API] ✅ Successfully fetched Work Item ID:', workItem.id);
+    console.debug('[Azure DevOps API] API URL used:', url);
+    console.debug('[Azure DevOps API] All custom fields found:', customFields);
+    console.debug('[Azure DevOps API] ✅ CUSTOM FIELD VALUES:', requiredFields);
+    console.debug('[Azure DevOps API] Total fields in response:', Object.keys(workItem.fields).length);
 
         // Show fields that might match our expected ones with different casing
         const possibleMatches = Object.keys(workItem.fields).filter(k =>
@@ -836,15 +836,15 @@ export async function fetchTestCaseDetail(
           k.toLowerCase().includes('step')
         );
         if (possibleMatches.length > 0) {
-          console.debug('[ADO API] Fields matching keywords:', possibleMatches);
+      console.debug('[Azure DevOps API] Fields matching keywords:', possibleMatches);
         }
-        console.debug('[ADO API] ====================================');
+    console.debug('[Azure DevOps API] ====================================');
 
         if (customFields.length === 0) {
-          console.warn('[ADO API] ⚠️ WARNING: No custom fields in this work item!');
-          console.warn('[ADO API] Work Item ID:', workItem.id, '(may not have values set)');
+      console.warn('[Azure DevOps API] ⚠️ WARNING: No custom fields in this work item!');
+      console.warn('[Azure DevOps API] Work Item ID:', workItem.id, '(may not have values set)');
         } else {
-          console.log('[ADO API] ✅ SUCCESS: Custom fields found and will be displayed');
+      console.log('[Azure DevOps API] ✅ SUCCESS: Custom fields found and will be displayed');
         }
       }
 
@@ -1068,7 +1068,7 @@ export async function createStaticSuite(
 }
 
 /**
- * Helper function to POST JSON data to ADO API
+ * Helper function to POST JSON data to Azure DevOps API
  */
 async function postJson<T>(
   url: string,
@@ -1197,10 +1197,10 @@ export async function createTestCase(
   }
 
   if (lastError instanceof Error) {
-    throw new Error(`Failed to create test case in ADO: ${lastError.message}`);
+    throw new Error(`Failed to create test case in Azure DevOps: ${lastError.message}`);
   }
 
-  throw new Error('Failed to create test case in ADO.');
+  throw new Error('Failed to create test case in Azure DevOps.');
 }
 */
 export async function createTestCase(

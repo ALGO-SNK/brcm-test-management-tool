@@ -4,10 +4,10 @@ import {
   IconFolder,
   IconFolderOpen,
   IconMoreHoriz,
-  IconOpenInNew,
   IconPlus,
 } from '../Common/Icons';
 import type { ADOTestSuite } from '../../types';
+import azureLogo from '../../assets/azure.png';
 
 interface SuiteTreeNodeProps {
   suite: ADOTestSuite;
@@ -184,8 +184,8 @@ export function SuiteTreeNode({
                 }}
                 disabled={!canOpenInAdo}
               >
-                <IconOpenInNew size={16} />
-                <span>Open in ADO</span>
+                <img src={azureLogo} alt="" width={16} height={16} aria-hidden="true" />
+                <span>Open in Azure DevOps</span>
               </button>
             </div>
           )}

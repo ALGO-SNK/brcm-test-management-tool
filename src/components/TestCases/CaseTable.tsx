@@ -387,6 +387,7 @@ export function CaseTable({
         suiteName={suiteName}
         isLoading={false}
         apiError={error}
+        workspaceSettings={workspaceSettings}
         onCancel={() => {
           setIsCreateMode(false);
           setError(null);

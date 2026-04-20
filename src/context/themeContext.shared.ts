@@ -22,17 +22,18 @@ export type ThemeMode =
    Font modes — match [data-font="..."] in style.css
    -------------------------------------------------------------------------- */
 export type AppFontMode =
-    | 'ibm-plex-mono'
     | 'jetbrains-mono'
-    | 'roboto-mono'
     | 'source-code-pro'
-    | 'space-mono'
+    | 'droid-serif'
+    | 'georgia'
+    | 'helvetica'
+    | 'lucida'
+    | 'aptos-narrow'
     | 'inter'
     | 'manrope'
     | 'google-sans'
     | 'montserrat'
     | 'quicksand'
-    | 'caveat'
     | 'system';
 
 export interface ThemeModeOption {
@@ -64,17 +65,18 @@ export const THEME_MODE_OPTIONS: ThemeModeOption[] = [
 ];
 
 export const APP_FONT_OPTIONS: AppFontOption[] = [
-  { value: 'ibm-plex-mono',   label: 'IBM Plex Mono',   mono: true },
   { value: 'jetbrains-mono',  label: 'JetBrains Mono',  mono: true },
-  { value: 'roboto-mono',     label: 'Roboto Mono',     mono: true },
   { value: 'source-code-pro', label: 'Source Code Pro', mono: true },
-  { value: 'space-mono',      label: 'Space Mono',      mono: true },
+  { value: 'droid-serif',     label: 'Droid Serif',     mono: false },
+  { value: 'georgia',         label: 'Georgia',         mono: false },
+  { value: 'helvetica',       label: 'Helvetica',       mono: false },
+  { value: 'lucida',          label: 'Lucida',          mono: false },
+  { value: 'aptos-narrow',    label: 'Aptos Narrow',    mono: false },
   { value: 'inter',           label: 'Inter',           mono: false },
   { value: 'manrope',         label: 'Manrope',         mono: false },
   { value: 'google-sans',     label: 'Google Sans',     mono: false },
   { value: 'montserrat',      label: 'Montserrat',      mono: false },
   { value: 'quicksand',       label: 'Quicksand',       mono: false },
-  { value: 'caveat',          label: 'Caveat',          mono: false },
   { value: 'system',          label: 'System UI',       mono: false },
 ];
 

@@ -43,6 +43,14 @@ function parseThemeMode(value: string | null): ThemeMode {
 }
 
 function parseFont(value: string | null): AppFontMode {
+  if (value === 'aptos') {
+    return 'aptos-narrow';
+  }
+
+  if (value === 'bookerly' || value === 'caecilia') {
+    return 'droid-serif';
+  }
+
   if (value && APP_FONT_OPTIONS.some((o) => o.value === value)) {
     return value as AppFontMode;
   }
