@@ -98,7 +98,7 @@ export function Landing({
             </div>
           </div>
 
-          <section className="mt-6" style={{ paddingInline: 'var(--space-4)' }}>
+          <section className="mt-6" style={{ paddingInline: 'var(--space-1)' }}>
             <div className="mb-4">
               <h2 className="text-xl font-semibold text-primary mb-2">Plans</h2>
               <p className="text-sm text-muted">

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { IconChevronDown, IconDelete, IconSearch, IconVisibility, IconX } from '../Common/Icons';
+import { IconChevronDown, IconDelete, IconDescription, IconSearch, IconX } from '../Common/Icons';
 import type { ADOTestCase } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { EmptyTestCases } from './EmptyTestCases';
 import { CreateTestCaseForm } from './CreateTestCaseForm';
-import { deleteTestCase, fetchTestCasesForSuite, getCachedTestCasesForSuite, createTestCase } from '../../services/adoApi';
+import { buildWorkItemAdoUrl, deleteTestCase, fetchTestCasesForSuite, getCachedTestCasesForSuite, createTestCase } from '../../services/adoApi';
 import { buildTestCaseData } from '../../utils/testCaseBuilder';
 import { useNotification } from '../../context/useNotification';
+import azureLogo from '../../assets/azure.png';
 
 function getInitials(name: string): string {
   const parts = name.split(/\s+/).filter(Boolean);
@@ -116,6 +117,7 @@ export function CaseTable({
       && workspaceSettings.projectName.trim()
       && workspaceSettings.patToken.trim(),
   );
+  const canOpenInAzureDevOps = workspaceReady;
 
   useEffect(() => {
     let active = true;
@@ -561,7 +563,7 @@ export function CaseTable({
               <th style={{ width: 220 }}>
                 <span>Assigned To</span>
               </th>
-              <th style={{ width: 100 }}>Actions</th>
+              <th style={{ width: 132 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -646,7 +648,17 @@ export function CaseTable({
                         onClick={() => onSelectCase(testCase)}
                         title="Open details"
                       >
-                        <IconVisibility size={16} />
+                        <IconDescription size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="cases-table__action-btn"
+                        onClick={() => window.open(buildWorkItemAdoUrl(workspaceSettings, testCase.id), '_blank', 'noopener,noreferrer')}
+                        title="Open in Azure DevOps"
+                        aria-label={`Open test case ${testCase.id} in Azure DevOps`}
+                        disabled={!canOpenInAzureDevOps}
+                      >
+                        <img src={azureLogo} alt="" width={16} height={16} aria-hidden="true" />
                       </button>
                       <button
                         type="button"

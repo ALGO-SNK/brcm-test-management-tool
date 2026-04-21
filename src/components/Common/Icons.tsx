@@ -76,6 +76,10 @@ export function IconVisibility(props: IconProps) {
   return <MaterialIcon name="visibility" {...props} />;
 }
 
+export function IconDescription(props: IconProps) {
+  return <MaterialIcon name="description" {...props} />;
+}
+
 export function IconEdit(props: IconProps) {
   return <MaterialIcon name="edit" {...props} />;
 }
@@ -111,6 +115,11 @@ export function IconFolder(props: IconProps) {
 export function IconFolderOpen(props: IconProps) {
   return <MaterialIcon name="folder_open" {...props} />;
 }
+
+export function IconCreateNewFolder(props: IconProps) {
+  return <MaterialIcon name="create_new_folder" {...props} />;
+}
+
 export function IconFilterList(props: IconProps) {
   return <MaterialIcon name="filter_list" {...props} />;
 }

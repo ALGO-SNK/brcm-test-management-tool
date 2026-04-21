@@ -1,5 +1,5 @@
 import React from 'react';
-import { IconPlus } from '../Common/Icons';
+import { IconArrowRight, IconCreateNewFolder } from '../Common/Icons';
 import type { ADOTestPlan } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { buildPlanAdoUrl } from '../../services/adoApi';
@@ -78,7 +78,7 @@ export function PlanCard({ plan, onOpenSuites, onCreateSuite, workspaceSettings 
           title="Open suite list"
           aria-label={`Open suite list for ${plan.name}`}
         >
-          Suite List
+          Suite List <IconArrowRight size={16} />
         </button>
 
         <button
@@ -89,7 +89,7 @@ export function PlanCard({ plan, onOpenSuites, onCreateSuite, workspaceSettings 
           title={canCreateSuite ? 'Add a static suite to this plan' : 'Configure workspace settings to create suites'}
           aria-label="Add suite"
         >
-          <IconPlus size={18} />
+          <IconCreateNewFolder size={18} />
         </button>
 
         <button

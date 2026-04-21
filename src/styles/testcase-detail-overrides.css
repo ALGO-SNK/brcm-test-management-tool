@@ -152,6 +152,11 @@
   vertical-align: middle;
 }
 
+.cases-table__azure-icon {
+  display: block;
+  object-fit: contain;
+}
+
 .case-detail__azure-action {
   display: inline-flex;
   align-items: center;

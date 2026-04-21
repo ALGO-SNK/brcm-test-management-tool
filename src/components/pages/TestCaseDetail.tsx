@@ -892,7 +892,7 @@ export function TestCaseDetail({
                         disabled={!canOpenInAdo}
                       >
                         <img className="case-detail__azure-icon" src={azureLogo} alt="" width={16} height={16} aria-hidden="true" />
-                        <span className="case-detail__azure-action-label">Azure</span>
+                        {/*<span className="case-detail__azure-action-label">Azure</span>*/}
                       </button>
                       <button
                         type="button"
