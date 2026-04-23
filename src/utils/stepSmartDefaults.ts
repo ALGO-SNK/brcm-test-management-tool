@@ -81,7 +81,7 @@ export function getSmartDefaults(step: ParsedStep): SmartDefaultSuggestion[] {
   }
 
   // Suggest ElementReplaceTextDataKey when dynamic locator is enabled
-  if (step.isElementPathDynamic && !step.elementReplaceTextDataKey && contract.elementReplaceTextDataKey !== 'not-used') {
+  if (step.isElementPathDynamic && !step.elementReplaceTextDataKey && contract.elementPathReplaceKey !== 'not-used') {
     suggestions.push({
       field: 'elementReplaceTextDataKey',
       value: 'save_key_name',
@@ -90,7 +90,7 @@ export function getSmartDefaults(step: ParsedStep): SmartDefaultSuggestion[] {
   }
 
   // Suggest ExpectedValue for verification actions
-  if (contract.expectedValue === 'required' && !step.expectedValue) {
+  if (contract.expectedVl === 'required' && !step.expectedValue) {
     const suggested = suggestExpectedValueForAction(step.action);
     if (suggested) {
       suggestions.push({

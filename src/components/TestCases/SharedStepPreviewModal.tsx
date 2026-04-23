@@ -259,8 +259,8 @@ export function SharedStepPreviewModal({
                             step.elementCategory && `ElementCategory=${step.elementCategory}`,
                             step.element && `Element=${step.element}`,
                             step.value && `Value=${step.value}`,
-                            step.expectedValue && `ExpectedValue=${step.expectedValue}`,
-                            step.key && `Key=${step.key}`,
+                            step.expectedValue && `ExpectedVl=${step.expectedValue}`,
+                            step.key && `DataKey=${step.key}`,
                             step.headers && `Headers=${step.headers}`,
                           ].filter(Boolean);
                           const fullText = partsList.join(' | ');

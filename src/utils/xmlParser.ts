@@ -329,13 +329,13 @@ function buildStepCommandText(step: {
   if (step.element) parts.push(`Element=${step.element}`);
   if (step.elementCategory) parts.push(`ElementCategory=${step.elementCategory}`);
   if (step.value) parts.push(`Value=${step.value}`);
-  if (step.expectedValue) parts.push(`ExpectedValue=${step.expectedValue}`);
+  if (step.expectedValue) parts.push(`ExpectedVl=${step.expectedValue}`);
   if (step.key) parts.push(`DataKey=${step.key}`);
   if (step.headers) parts.push(`Headers=${step.headers}`);
   if (step.description) parts.push(`Description=${step.description}`);
   if (step.isConcatenated) parts.push(`IsConcatenated=true`);
   if (step.isElementPathDynamic) parts.push(`IsElementPathDynamic=true`);
-  if (step.elementReplaceTextDataKey) parts.push(`ElementReplaceTextDataKey=${step.elementReplaceTextDataKey}`);
+  if (step.elementReplaceTextDataKey) parts.push(`ElementPathReplaceKey=${step.elementReplaceTextDataKey}`);
 
   let commandText = parts.join('|');
 
@@ -373,16 +373,39 @@ export function serializeStepsToXML(
     return '';
   }
 
-  // Calculate "last" attribute: use the highest step ID number
-  const lastId = Math.max(...steps.map(step => Number(step.id) || Number(step.order) + 1 || 0), 0);
+  // Assign unique, sequential step IDs following the ADO convention:
+  // id="0" is reserved for the <steps> root, id="1" is reserved, so
+  // child <step> ids start at 2. If an incoming step already has a valid,
+  // unique integer id >= 2, preserve it; otherwise allocate the next
+  // available id. This guarantees every step has a distinct id in the XML.
+  const used = new Set<number>();
+  const preliminaryIds: Array<number | null> = steps.map((step) => {
+    const parsed = Number(step.id);
+    if (Number.isInteger(parsed) && parsed >= 2 && !used.has(parsed)) {
+      used.add(parsed);
+      return parsed;
+    }
+    return null;
+  });
+
+  let nextId = 2;
+  const assignNextId = (): number => {
+    while (used.has(nextId)) nextId++;
+    used.add(nextId);
+    return nextId++;
+  };
+  const assignedIds: number[] = preliminaryIds.map((id) => (id === null ? assignNextId() : id));
+
+  // Calculate "last" attribute: the highest child id in the document
+  const lastId = Math.max(...assignedIds, 0);
 
   const lines = [
     '<?xml version="1.0" encoding="utf-16"?>',
     `<steps id="0" last="${lastId}">`,
   ];
 
-  steps.forEach(step => {
-    const stepId = String(step.id ?? (step.order ?? 0) + 1);
+  steps.forEach((step, i) => {
+    const stepId = String(assignedIds[i]);
     const commandText = buildStepCommandText(step);
 
     // Wrap in DIV/P tags and escape

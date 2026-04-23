@@ -13,6 +13,7 @@
  * Optional fields are hidden until added from the per-step popup, then remain
  * visible if they contain data. Required fields always show.
  */
+import { useEffect } from 'react';
 import { getElementAuthoringFields } from '../../utils/actionRegistry';
 import { ACTION_REGISTRY } from '../../utils/actionRegistry';
 import { supportsDynamicLocatorControls } from '../../utils/actionRegistry';
@@ -51,6 +52,24 @@ const ELEMENT_CATEGORY_OPTIONS = [
  * - Dynamic fields: follow the same contract-driven visibility rules
  */
 
+/**
+ * Map step-data field names (used throughout the app as `expectedValue`,
+ * `elementReplaceTextDataKey`) to contract keys defined in the generated
+ * action catalog (which uses Azure-template names `expectedVl`,
+ * `elementPathReplaceKey`).
+ */
+const FIELD_TO_CONTRACT_KEY: Record<string, keyof ParameterContract> = {
+  element: 'element',
+  elementCategory: 'elementCategory',
+  value: 'value',
+  expectedValue: 'expectedVl',
+  key: 'key',
+  headers: 'headers',
+  elementReplaceTextDataKey: 'elementPathReplaceKey',
+  isElementPathDynamic: 'isElementPathDynamic',
+  isConcatenated: 'isConcatenated',
+};
+
 function shouldRenderField(
   fieldName: string,
   contract: ParameterContract | undefined,
@@ -62,7 +81,8 @@ function shouldRenderField(
   // No contract yet (no action chosen) → show nothing else
   if (!contract) return false;
 
-  const contractField = contract[fieldName as keyof ParameterContract];
+  const contractKey = FIELD_TO_CONTRACT_KEY[fieldName];
+  const contractField = contractKey ? contract[contractKey] : undefined;
 
   // Completely unused by this action
   if (contractField === undefined || contractField === 'not-used') return false;
@@ -80,12 +100,13 @@ function shouldRenderField(
 function isFieldRequired(fieldName: string, contract: ParameterContract | undefined): boolean {
   if (fieldName === 'description') return true;
   if (!contract) return false;
-  return contract[fieldName as keyof ParameterContract] === 'required';
+  const contractKey = FIELD_TO_CONTRACT_KEY[fieldName];
+  return contractKey ? contract[contractKey] === 'required' : false;
 }
 
 function getRequiredMessage(fieldName: string): string {
   const labels: Record<string, string> = {
-    description: 'Summary',
+    description: 'Description',
     elementCategory: 'Locator Type',
     element: 'Locator',
     value: 'Value',
@@ -106,7 +127,7 @@ function getFieldLabel(fieldName: string): string {
     expectedValue: 'EXPECTED VALUE',
     key: 'DATA KEY',
     headers: 'HEADERS',
-    description: 'SUMMARY',
+    description: 'DESCRIPTION',
     elementReplaceTextDataKey: 'REPLACEMENT KEY(S)',
     isElementPathDynamic: 'DYNAMIC LOCATOR',
     isConcatenated: 'CONCATENATED',
@@ -173,6 +194,13 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
   const showExpectedError = showExpected && isFieldRequired('expectedValue', contract) && !step.expectedValue?.trim();
   const showKeyError = showKey && isFieldRequired('key', contract) && !step.key?.trim();
   const showHeadersError = showHeaders && isFieldRequired('headers', contract) && !step.headers?.trim();
+  // Default Expected Value to 'true' once the field becomes visible and is empty
+  useEffect(() => {
+    if (showExpected && !step.expectedValue) {
+      onFieldChange('expectedValue', 'true');
+    }
+  }, [showExpected, step.expectedValue, onFieldChange]);
+
   const showReplaceKeyError = showReplaceKey
     && isFieldRequired('elementReplaceTextDataKey', contract)
     && !step.elementReplaceTextDataKey?.trim();
@@ -322,13 +350,14 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
           <label className={labelClass(isFieldRequired('expectedValue', contract))}>
             {renderFieldLabel('expectedValue', contract)}
           </label>
-          <input
-            type="text"
-            className="steps-editor__input"
-            value={step.expectedValue || ''}
+          <select
+            className="steps-editor__select"
+            value={step.expectedValue === 'false' ? 'false' : 'true'}
             onChange={(e) => onFieldChange('expectedValue', e.target.value)}
-            placeholder={getFieldPlaceholder('expectedValue')}
-          />
+          >
+            <option value="true">True</option>
+            <option value="false">False</option>
+          </select>
           {showExpectedError && (
             <small className="steps-editor__field-error">{getRequiredMessage('expectedValue')}</small>
           )}

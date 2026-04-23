@@ -6,7 +6,23 @@ import type { ParsedStep } from '../components/TestCases/StepsEditor';
 import { getActionDefinition, validateElementAuthoringCombination } from './actionRegistry';
 import type { ParameterContract } from './actionRegistry';
 
-type ContractField = keyof Pick<ParsedStep, keyof ParameterContract>;
+// Step-data fields that the action contract governs. Step data uses
+// `expectedValue` / `elementReplaceTextDataKey`, while the generated
+// action catalog (ParameterContract) uses the Azure-template names
+// `expectedVl` / `elementPathReplaceKey`. The CONTRACT_KEY_MAP below
+// bridges the two when reading contract requirements.
+type ContractField = Extract<
+  keyof ParsedStep,
+  | 'element'
+  | 'elementCategory'
+  | 'value'
+  | 'expectedValue'
+  | 'key'
+  | 'headers'
+  | 'elementReplaceTextDataKey'
+  | 'isElementPathDynamic'
+  | 'isConcatenated'
+>;
 
 const CONTRACT_FIELDS: ContractField[] = [
   'element',
@@ -19,6 +35,18 @@ const CONTRACT_FIELDS: ContractField[] = [
   'isElementPathDynamic',
   'isConcatenated',
 ];
+
+const CONTRACT_KEY_MAP: Record<ContractField, keyof ParameterContract> = {
+  element: 'element',
+  elementCategory: 'elementCategory',
+  value: 'value',
+  expectedValue: 'expectedVl',
+  key: 'key',
+  headers: 'headers',
+  elementReplaceTextDataKey: 'elementPathReplaceKey',
+  isElementPathDynamic: 'isElementPathDynamic',
+  isConcatenated: 'isConcatenated',
+};
 
 const CSV_INPUT_KEY_ACTIONS = new Set([
   'ADD_MULTIPLE_NUMBERS',
@@ -451,7 +479,8 @@ export function validateStep(step: ParsedStep): ValidationResult {
 
   // Validate required fields
   CONTRACT_FIELDS.forEach((field) => {
-    if (contract[field] === 'required') {
+    const contractKey = CONTRACT_KEY_MAP[field];
+    if (contract[contractKey] === 'required') {
       errors.push(...validateRequired(step[field], field, true));
     }
   });
@@ -495,7 +524,7 @@ export function validateStep(step: ParsedStep): ValidationResult {
 
   if (
     step.expectedValue
-    && contract.expectedValue === 'required'
+    && contract.expectedVl === 'required'
     && (
       step.action.startsWith('IS')
       || step.action.startsWith('CHECK_')

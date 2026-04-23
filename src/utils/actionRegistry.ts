@@ -10,10 +10,10 @@ export type ParameterContract = {
   element: 'required' | 'optional' | 'not-used';
   elementCategory: 'required' | 'optional' | 'not-used';
   value: 'required' | 'optional' | 'not-used';
-  expectedValue: 'required' | 'optional' | 'not-used';
+  expectedVl: 'required' | 'optional' | 'not-used';
   key: 'required' | 'optional' | 'not-used';
   headers: 'required' | 'optional' | 'not-used';
-  elementReplaceTextDataKey?: 'required' | 'optional' | 'not-used';
+  elementPathReplaceKey?: 'required' | 'optional' | 'not-used';
   isElementPathDynamic?: 'required' | 'optional' | 'not-used';
   isConcatenated?: 'required' | 'optional' | 'not-used';
 };
@@ -105,7 +105,7 @@ export function getElementAuthoringFields(
     showElementCategory: contract.elementCategory !== 'not-used',
     showElementPath: contract.element !== 'not-used',
     showIsElementPathDynamic: supportsDynamicLocatorControls(actionDef),
-    showElementReplaceTextDataKey: contract.elementReplaceTextDataKey !== 'not-used',
+    showElementReplaceTextDataKey: contract.elementPathReplaceKey !== 'not-used',
     showValue: contract.value !== 'not-used',
     elementCategoryHint: ELEMENT_CATEGORY_HINTS[elementCategory] ?? '',
   };

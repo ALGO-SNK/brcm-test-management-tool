@@ -373,11 +373,11 @@ export function validateElementAuthoringWithKeys(
     return { valid: true, pattern, issues: [] };
   }
 
-  // Dynamic locator pattern - requires ElementReplaceTextDataKey
+  // Dynamic locator pattern - requires ElementPathReplaceKey
   if (hasDynamicToken) {
     if (!step.elementReplaceTextDataKey) {
       issues.push(
-        'Element contains replacement tokens but ElementReplaceTextDataKey is empty. ' +
+        'Element contains replacement tokens but ElementPathReplaceKey is empty. ' +
         'Provide the key name(s) to replace.'
       );
     } else {
@@ -396,7 +396,7 @@ export function validateElementAuthoringWithKeys(
         if (tokensInElement !== keys.length) {
           issues.push(
             `Mismatch: Element has ${tokensInElement} Datakey tokens but ` +
-            `ElementReplaceTextDataKey specifies ${keys.length} keys`
+            `ElementPathReplaceKey specifies ${keys.length} keys`
           );
         }
         keys.forEach((keyName) => {
@@ -406,7 +406,7 @@ export function validateElementAuthoringWithKeys(
         });
       } else {
         issues.push(
-          'ElementReplaceTextDataKey format issue: provide comma-separated key names'
+          'ElementPathReplaceKey format issue: provide comma-separated key names'
         );
       }
     }

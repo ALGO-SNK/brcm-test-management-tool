@@ -156,7 +156,7 @@ function buildFullTextFromParsedStep(step: {
     ['ElementCategory', step.elementCategory],
     ['Description', step.description],
     ['Value', step.value],
-    ['ExpectedValue', step.expectedValue],
+    ['ExpectedVl', step.expectedValue],
     ['DataKey', step.key],
     ['Headers', step.headers],
   ]
@@ -321,6 +321,7 @@ export function TestCaseDetail({
   const editStepsSearch = useStepsSearch();
   const [sharedStepPreviewId, setSharedStepPreviewId] = useState<string | null>(null);
   const reloadCaseControllerRef = useRef<AbortController | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const editBaselineRef = useRef<{
     formData: typeof editFormData;
     steps: ParsedStep[];
@@ -555,6 +556,47 @@ export function TestCaseDetail({
     setIsEditMode(false);
   }, [confirmExitRequested, onBackToCases, pendingExitAction, showUnsavedConfirm]);
 
+  const handleRefresh = useCallback(async () => {
+    if (!testCase || isRefreshing) return;
+    if (!workspaceReady) {
+      addNotification('error', 'Configure Organization, Project, and PAT in Settings before refreshing.');
+      return;
+    }
+    if (isEditMode && isEditDirty) {
+      const proceed = window.confirm(
+        'Refreshing will discard unsaved changes in Edit mode. Continue?',
+      );
+      if (!proceed) return;
+    }
+
+    reloadCaseControllerRef.current?.abort();
+    const controller = new AbortController();
+    reloadCaseControllerRef.current = controller;
+    setIsRefreshing(true);
+    try {
+      const href = testCase._links?.workItem?.href ?? testCase._links?.self?.href;
+      const updated = await fetchTestCaseDetail(
+        workspaceSettings,
+        testCase.id,
+        href,
+        undefined,
+        controller.signal,
+      );
+      setTestCase(updated);
+      setLoadWarning(null);
+      addNotification('success', `Refreshed test case #${updated.id}.`);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const message = error instanceof Error ? error.message : 'Failed to refresh test case.';
+      addNotification('error', message);
+    } finally {
+      if (reloadCaseControllerRef.current === controller) {
+        reloadCaseControllerRef.current = null;
+      }
+      setIsRefreshing(false);
+    }
+  }, [addNotification, isEditDirty, isEditMode, isRefreshing, testCase, workspaceReady, workspaceSettings]);
+
   const handleSaveChanges = useCallback(async () => {
     if (!testCase || isSaving) return;
 
@@ -580,7 +622,7 @@ export function TestCaseDetail({
       }
 
       if (!step.description?.trim()) {
-        errors.push(`Step ${idx + 1}: Step Summary is required`);
+        errors.push(`Step ${idx + 1}: Step Description is required`);
       }
     });
 
@@ -885,6 +927,22 @@ export function TestCaseDetail({
                     <>
                       <button
                         type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => { void handleRefresh(); }}
+                        aria-label="Refresh"
+                        title="Refresh from Azure DevOps"
+                        disabled={isRefreshing || !workspaceReady}
+                      >
+                        <span
+                          className="material-symbols"
+                          aria-hidden="true"
+                          style={isRefreshing ? { animation: 'spin 1s linear infinite' } : undefined}
+                        >
+                          refresh
+                        </span>
+                      </button>
+                      <button
+                        type="button"
                         className="btn btn--secondary btn--sm case-detail__azure-action"
                         onClick={() => window.open(buildWorkItemAdoUrl(workspaceSettings, testCase.id), '_blank', 'noopener,noreferrer')}
                         aria-label="Open in Azure DevOps"
@@ -921,6 +979,22 @@ export function TestCaseDetail({
                   )}
               {isEditMode && (
                 <>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => { void handleRefresh(); }}
+                    aria-label="Refresh"
+                    title="Refresh from Azure DevOps (discards unsaved changes)"
+                    disabled={isRefreshing || isSaving || !workspaceReady}
+                  >
+                    <span
+                      className="material-symbols"
+                      aria-hidden="true"
+                      style={isRefreshing ? { animation: 'spin 1s linear infinite' } : undefined}
+                    >
+                      refresh
+                    </span>
+                  </button>
                   <button
                     type="button"
                     className="btn btn--primary btn--sm"

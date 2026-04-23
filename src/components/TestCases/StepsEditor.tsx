@@ -43,6 +43,23 @@ interface StepEditorState extends ParsedStep {
 
 const DEFAULT_ELEMENT_CATEGORY = 'XPATH';
 
+/**
+ * Map step-data field names → contract keys in the generated action catalog.
+ * Step data uses `expectedValue` / `elementReplaceTextDataKey`; the catalog
+ * uses Azure-template names `expectedVl` / `elementPathReplaceKey`.
+ */
+const FIELD_TO_CONTRACT_KEY: Record<string, keyof ParameterContract> = {
+  element: 'element',
+  elementCategory: 'elementCategory',
+  value: 'value',
+  expectedValue: 'expectedVl',
+  key: 'key',
+  headers: 'headers',
+  elementReplaceTextDataKey: 'elementPathReplaceKey',
+  isElementPathDynamic: 'isElementPathDynamic',
+  isConcatenated: 'isConcatenated',
+};
+
 export interface StepsEditorSearchController {
   query: string;
   setQuery: (query: string) => void;
@@ -101,7 +118,8 @@ function toEditorStep(step: ParsedStep): StepEditorState {
       .forEach((field) => {
         const value = step[field];
         const hasValue = typeof value === 'boolean' ? value : Boolean(value?.trim());
-        if (contract[field] === 'optional' && hasValue) {
+        const contractKey = FIELD_TO_CONTRACT_KEY[field] ?? field;
+        if (contract[contractKey as keyof ParameterContract] === 'optional' && hasValue) {
           visibleOptionalFields.push(field);
         }
       });
@@ -192,7 +210,8 @@ function getOptionalFieldsForContract(contract: ParameterContract | undefined): 
         && contract.isElementPathDynamic !== 'not-used';
     }
 
-    return contract[field] === 'optional';
+    const contractKey = FIELD_TO_CONTRACT_KEY[field] ?? field;
+    return contract[contractKey as keyof ParameterContract] === 'optional';
   });
 }
 
@@ -1034,9 +1053,9 @@ export function StepsEditor({ rawSteps, onChange, errors = [], hideHeader = fals
             </p>
 
             <div className="steps-editor__confirm-meta">
-              <span className="steps-editor__confirm-meta-label">Summary</span>
+              <span className="steps-editor__confirm-meta-label">Description</span>
               <strong className="steps-editor__confirm-meta-value">
-                {steps[deleteTargetIndex].description || 'No summary provided'}
+                {steps[deleteTargetIndex].description || 'No description provided'}
               </strong>
             </div>
 
