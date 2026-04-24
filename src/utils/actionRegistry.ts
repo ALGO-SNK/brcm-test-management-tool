@@ -7,11 +7,11 @@ import { DOC_ACTION_DEFINITIONS } from './actionCatalog.generated';
 
 // Export the type for parameter contracts
 export type ParameterContract = {
-  element: 'required' | 'optional' | 'not-used';
-  elementCategory: 'required' | 'optional' | 'not-used';
+  locator: 'required' | 'optional' | 'not-used';
+  locatorType: 'required' | 'optional' | 'not-used';
   value: 'required' | 'optional' | 'not-used';
   expectedVl: 'required' | 'optional' | 'not-used';
-  key: 'required' | 'optional' | 'not-used';
+  dataKey: 'required' | 'optional' | 'not-used';
   headers: 'required' | 'optional' | 'not-used';
   elementPathReplaceKey?: 'required' | 'optional' | 'not-used';
   isElementPathDynamic?: 'required' | 'optional' | 'not-used';
@@ -41,8 +41,8 @@ export function supportsDynamicLocatorControls(
   const contract = actionDef.contract;
 
   return (
-    contract.element === 'required'
-    && contract.elementCategory === 'required'
+    contract.locator === 'required'
+    && contract.locatorType === 'required'
     && contract.isElementPathDynamic !== 'not-used'
   );
 }
@@ -101,9 +101,9 @@ export function getElementAuthoringFields(
   const contract = actionDef.contract;
 
   return {
-    showElement: contract.element !== 'not-used',
-    showElementCategory: contract.elementCategory !== 'not-used',
-    showElementPath: contract.element !== 'not-used',
+    showElement: contract.locator !== 'not-used',
+    showElementCategory: contract.locatorType !== 'not-used',
+    showElementPath: contract.locator !== 'not-used',
     showIsElementPathDynamic: supportsDynamicLocatorControls(actionDef),
     showElementReplaceTextDataKey: contract.elementPathReplaceKey !== 'not-used',
     showValue: contract.value !== 'not-used',
@@ -152,13 +152,14 @@ export function validateElementAuthoringCombination(
 
   const contract = actionDef.contract;
 
-  if (contract.element === 'not-used') {
+  if (contract.locator === 'not-used') {
     return { valid: false, message: 'This action does not use element locators' };
   }
 
-  if (contract.elementCategory === 'not-used') {
+  if (contract.locatorType === 'not-used') {
     return { valid: false, message: 'This action does not use element categories' };
   }
 
   return { valid: true };
 }
+

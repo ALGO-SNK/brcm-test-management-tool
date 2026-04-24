@@ -37,11 +37,11 @@ const CONTRACT_FIELDS: ContractField[] = [
 ];
 
 const CONTRACT_KEY_MAP: Record<ContractField, keyof ParameterContract> = {
-  element: 'element',
-  elementCategory: 'elementCategory',
+  element: 'locator',
+  elementCategory: 'locatorType',
   value: 'value',
   expectedValue: 'expectedVl',
-  key: 'key',
+  key: 'dataKey',
   headers: 'headers',
   elementReplaceTextDataKey: 'elementPathReplaceKey',
   isElementPathDynamic: 'isElementPathDynamic',
@@ -318,7 +318,7 @@ function validateRequired(
   if (value === undefined || value === null || value === '') {
     const fieldNames: Record<string, string> = {
       action: 'Action',
-      element: 'Locator',
+      element: 'locator',
       elementCategory: 'Locator Type',
       value: 'Value',
       expectedValue: 'Expected Value',
@@ -603,3 +603,5 @@ export function getValidationSummary(
     totalWarnings,
   };
 }
+
+

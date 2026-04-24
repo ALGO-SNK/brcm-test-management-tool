@@ -59,11 +59,11 @@ const ELEMENT_CATEGORY_OPTIONS = [
  * `elementPathReplaceKey`).
  */
 const FIELD_TO_CONTRACT_KEY: Record<string, keyof ParameterContract> = {
-  element: 'element',
-  elementCategory: 'elementCategory',
+  element: 'locator',
+  elementCategory: 'locatorType',
   value: 'value',
   expectedValue: 'expectedVl',
-  key: 'key',
+  key: 'dataKey',
   headers: 'headers',
   elementReplaceTextDataKey: 'elementPathReplaceKey',
   isElementPathDynamic: 'isElementPathDynamic',
@@ -108,7 +108,7 @@ function getRequiredMessage(fieldName: string): string {
   const labels: Record<string, string> = {
     description: 'Description',
     elementCategory: 'Locator Type',
-    element: 'Locator',
+    element: 'locator',
     value: 'Value',
     expectedValue: 'Expected Value',
     key: 'Data Key',
@@ -419,3 +419,5 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
     </>
   );
 }
+
+
