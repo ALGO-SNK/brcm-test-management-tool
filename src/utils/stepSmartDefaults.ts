@@ -68,7 +68,7 @@ export function getSmartDefaults(step: ParsedStep): SmartDefaultSuggestion[] {
   if (
     step.element &&
     !step.elementCategory &&
-    contract.elementCategory !== 'not-used'
+    contract.locatorType !== 'not-used'
   ) {
     const suggestedCategory = inferElementCategoryFromRegistry(step.element);
     if (suggestedCategory) {

@@ -221,7 +221,7 @@ export function validateStepKeyReferences(
     });
   }
 
-  if (actionDef?.contract.key === 'required' && !step.key?.trim()) {
+  if (actionDef?.contract.dataKey === 'required' && !step.key?.trim()) {
     issues.push('Data key is required for this action');
   }
 
