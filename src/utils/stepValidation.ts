@@ -476,62 +476,82 @@ export function validateStep(step: ParsedStep): ValidationResult {
   }
 
   const contract = actionDef.contract;
+  const normalizedStep: ParsedStep = {
+    ...step,
+    element: contract.locator === 'not-used' ? '' : step.element,
+    elementCategory: contract.locatorType === 'not-used' ? '' : step.elementCategory,
+    value: contract.value === 'not-used' ? '' : step.value,
+    expectedValue: contract.expectedVl === 'not-used' ? '' : step.expectedValue,
+    key: contract.dataKey === 'not-used' ? '' : step.key,
+    headers: contract.headers === 'not-used' ? '' : step.headers,
+    elementReplaceTextDataKey: contract.elementPathReplaceKey === 'not-used' ? '' : step.elementReplaceTextDataKey,
+    isElementPathDynamic: (
+      contract.locator === 'required'
+      && contract.locatorType === 'required'
+      && contract.isElementPathDynamic !== 'not-used'
+    ) ? step.isElementPathDynamic : false,
+    isConcatenated: contract.isConcatenated === 'not-used' ? false : step.isConcatenated,
+  };
 
   // Validate required fields
   CONTRACT_FIELDS.forEach((field) => {
     const contractKey = CONTRACT_KEY_MAP[field];
     if (contract[contractKey] === 'required') {
-      errors.push(...validateRequired(step[field], field, true));
+      errors.push(...validateRequired(normalizedStep[field], field, true));
     }
   });
 
   // Validate element-specific rules
-  if (step.element && step.elementCategory) {
-    errors.push(...validateElementByCategory(step.element, step.elementCategory));
+  if (normalizedStep.element && normalizedStep.elementCategory) {
+    errors.push(...validateElementByCategory(normalizedStep.element, normalizedStep.elementCategory));
   }
 
   // Validate element + ElementCategory authoring combinations
   const combinationResult = validateElementAuthoringCombination(
-    step.action,
-    step.elementCategory ?? ''
+    normalizedStep.action,
+    normalizedStep.elementCategory ?? ''
   );
-  if (!combinationResult.valid && combinationResult.message) {
+  if (
+    !combinationResult.valid
+    && combinationResult.message
+    && (normalizedStep.element?.trim() || normalizedStep.elementCategory?.trim())
+  ) {
     errors.push({ field: 'element', message: combinationResult.message, severity: 'error' });
   }
 
   // Validate dynamic locator
-  errors.push(...validateDynamicLocator(step));
+  errors.push(...validateDynamicLocator(normalizedStep));
 
   // Action-specific validation
-  if (step.action === 'COMPARE_ELEMENT_VALUE_WITH_REGEX' && step.expectedValue) {
-    errors.push(...validateRegex(step.expectedValue));
+  if (normalizedStep.action === 'COMPARE_ELEMENT_VALUE_WITH_REGEX' && normalizedStep.expectedValue) {
+    errors.push(...validateRegex(normalizedStep.expectedValue));
   }
 
-  if (step.key && CSV_INPUT_KEY_ACTIONS.has(step.action)) {
-    const expectedCount = step.action === 'CALCULATE_PERCENTAGE'
+  if (normalizedStep.key && CSV_INPUT_KEY_ACTIONS.has(normalizedStep.action)) {
+    const expectedCount = normalizedStep.action === 'CALCULATE_PERCENTAGE'
       ? 2
       : parseCSVKeyCount(`${actionDef.description} ${actionDef.notes ?? ''}`) ?? undefined;
-    errors.push(...validateCSVSavedKeys(step.key, expectedCount));
+    errors.push(...validateCSVSavedKeys(normalizedStep.key, expectedCount));
   }
 
-  if (step.value && UNION_VALUE_ACTIONS.has(step.action)) {
-    errors.push(...validateUnionType(step.value, ['count', 'take:x,skip:y']));
+  if (normalizedStep.value && UNION_VALUE_ACTIONS.has(normalizedStep.action)) {
+    errors.push(...validateUnionType(normalizedStep.value, ['count', 'take:x,skip:y']));
   }
 
-  if (step.value && DICTIONARY_VALUE_ACTIONS.has(step.action)) {
-    errors.push(...validateDictionaryPayload(step.value, DICTIONARY_REQUIRED_FIELDS[step.action] ?? []));
+  if (normalizedStep.value && DICTIONARY_VALUE_ACTIONS.has(normalizedStep.action)) {
+    errors.push(...validateDictionaryPayload(normalizedStep.value, DICTIONARY_REQUIRED_FIELDS[normalizedStep.action] ?? []));
   }
 
   if (
-    step.expectedValue
+    normalizedStep.expectedValue
     && contract.expectedVl === 'required'
     && (
-      step.action.startsWith('IS')
-      || step.action.startsWith('CHECK_')
-      || step.action.includes('VERIFY_')
+      normalizedStep.action.startsWith('IS')
+      || normalizedStep.action.startsWith('CHECK_')
+      || normalizedStep.action.includes('VERIFY_')
     )
   ) {
-    const normalized = step.expectedValue.trim().toLowerCase();
+    const normalized = normalizedStep.expectedValue.trim().toLowerCase();
     if (normalized !== 'true' && normalized !== 'false') {
       errors.push({
         field: 'expectedValue',

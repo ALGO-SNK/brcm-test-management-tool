@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { IconChevronDown, IconDelete, IconDescription, IconSearch, IconX } from '../Common/Icons';
+import { IconArrowDownward, IconArrowUpward, IconDelete, IconDescription, IconRefresh, IconSearch, IconSort, IconX } from '../Common/Icons';
 import type { ADOTestCase } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { EmptyTestCases } from './EmptyTestCases';
@@ -8,6 +8,7 @@ import { buildWorkItemAdoUrl, deleteTestCase, fetchTestCasesForSuite, getCachedT
 import { buildTestCaseData } from '../../utils/testCaseBuilder';
 import { useNotification } from '../../context/useNotification';
 import azureLogo from '../../assets/azure.png';
+import type { CloneSourceMeta, CreateTestCaseDraft } from '../../utils/testCaseClone';
 
 function getInitials(name: string): string {
   const parts = name.split(/\s+/).filter(Boolean);
@@ -27,25 +28,25 @@ interface CaseTableProps {
   onTestCaseCreated?: (newCase: ADOTestCase) => void;
   isCreateMode?: boolean;
   onCreateModeChange?: (isCreateMode: boolean) => void;
+  initialCreateDraft?: CreateTestCaseDraft | null;
+  createSourceCase?: CloneSourceMeta | null;
+  onRequestCreate?: () => void;
+  refreshToken?: number;
 }
 
-type SortField = 'id' | 'name' | 'state' | 'priority';
+type SortField = 'order' | 'id' | 'name' | 'state';
 type SortOrder = 'asc' | 'desc';
 
 interface SortOption {
-  key: string;
   label: string;
   field: SortField;
-  order: SortOrder;
 }
 
 const SORT_OPTIONS: SortOption[] = [
-  { key: 'latest-id', label: 'Latest ID', field: 'id', order: 'desc' },
-  { key: 'oldest-id', label: 'Oldest Id', field: 'id', order: 'asc' },
-  { key: 'name-asc', label: 'Name: A to Z', field: 'name', order: 'asc' },
-  { key: 'name-desc', label: 'Name: Z to A', field: 'name', order: 'desc' },
-  { key: 'priority-high', label: 'Priority: High to Low', field: 'priority', order: 'desc' },
-  { key: 'priority-low', label: 'Priority: Low to High', field: 'priority', order: 'asc' },
+  { label: 'Order', field: 'order' },
+  { label: 'TC Id', field: 'id' },
+  { label: 'Test Case Title', field: 'name' },
+  { label: 'State', field: 'state' },
 ];
 
 function getStatusBadgeClass(status: string): string {
@@ -83,6 +84,10 @@ export function CaseTable({
   onTestCaseCreated,
   isCreateMode: propIsCreateMode,
   onCreateModeChange,
+  initialCreateDraft = null,
+  createSourceCase = null,
+  onRequestCreate,
+  refreshToken = 0,
 }: CaseTableProps) {
   const showSelectionColumn = false;
 
@@ -94,10 +99,8 @@ export function CaseTable({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortField, setSortField] = useState<SortField>('id');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const sortMenuRef = useRef<HTMLDivElement>(null);
+  const [sortField, setSortField] = useState<SortField>('order');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [localIsCreateMode, setLocalIsCreateMode] = useState(false);
   const createModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleteTargetCase, setDeleteTargetCase] = useState<ADOTestCase | null>(null);
@@ -111,6 +114,10 @@ export function CaseTable({
     onCreateModeChange?.(value);
     setLocalIsCreateMode(value);
   };
+  const handleStartCreate = () => {
+    onRequestCreate?.();
+    setIsCreateMode(true);
+  };
 
   const workspaceReady = Boolean(
     workspaceSettings.organization.trim()
@@ -119,11 +126,16 @@ export function CaseTable({
   );
   const canOpenInAzureDevOps = workspaceReady;
 
+  const loadCases = useRef<((forceRefresh?: boolean) => Promise<void>) | null>(null);
+  const previousRefreshTokenRef = useRef(refreshToken);
+
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
+    const shouldForceRefresh = refreshToken !== previousRefreshTokenRef.current;
+    previousRefreshTokenRef.current = refreshToken;
 
-    const loadCases = async () => {
+    const fetchCases = async (forceRefresh = false) => {
       if (!workspaceReady) {
         setCases([]);
         setLoading(false);
@@ -133,7 +145,7 @@ export function CaseTable({
         return;
       }
 
-      const cached = getCachedTestCasesForSuite(workspaceSettings, planId, suiteId);
+      const cached = forceRefresh ? null : getCachedTestCasesForSuite(workspaceSettings, planId, suiteId);
       const hasCachedCases = Boolean(cached && cached.data.length > 0);
 
       setError(null);
@@ -162,6 +174,7 @@ export function CaseTable({
           suiteTestCasesHref,
           suiteSelfHref,
           controller.signal,
+          { forceRefresh },
         );
         if (!active) return;
         setCases(data);
@@ -180,12 +193,22 @@ export function CaseTable({
       }
     };
 
-    loadCases().then();
+    loadCases.current = fetchCases;
+    fetchCases(shouldForceRefresh).then();
     return () => {
       active = false;
       controller.abort();
+      loadCases.current = null;
     };
-  }, [planId, suiteId, suiteSelfHref, suiteTestCasesHref, workspaceReady, workspaceSettings]);
+  }, [planId, refreshToken, suiteId, suiteSelfHref, suiteTestCasesHref, workspaceReady, workspaceSettings]);
+
+  const handleRefreshCases = async () => {
+    if (!workspaceReady || loading || refreshing) {
+      return;
+    }
+
+    await loadCases.current?.(true);
+  };
 
   useEffect(() => {
     if (!loading) {
@@ -216,21 +239,6 @@ export function CaseTable({
     };
   }, [blockedRemovalCase, deleteTargetCase, isDeleting]);
 
-  useEffect(() => {
-    if (!sortMenuOpen) return;
-
-    const handleDocumentMouseDown = (event: MouseEvent) => {
-      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
-        setSortMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleDocumentMouseDown);
-    return () => {
-      document.removeEventListener('mousedown', handleDocumentMouseDown);
-    };
-  }, [sortMenuOpen]);
-
   const filteredCases = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -250,6 +258,10 @@ export function CaseTable({
       let bVal: string | number = '';
 
       switch (sortField) {
+        case 'order':
+          aVal = a.order ?? Number.MAX_SAFE_INTEGER;
+          bVal = b.order ?? Number.MAX_SAFE_INTEGER;
+          break;
         case 'id':
           aVal = a.id;
           bVal = b.id;
@@ -262,10 +274,6 @@ export function CaseTable({
           aVal = a.state.toLowerCase();
           bVal = b.state.toLowerCase();
           break;
-        case 'priority':
-          aVal = a.priority;
-          bVal = b.priority;
-          break;
       }
 
       if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
@@ -276,10 +284,6 @@ export function CaseTable({
 
   const hasActiveFilter = searchTerm.trim().length > 0;
   const noFilteredData = cases.length > 0 && sortedCases.length === 0;
-
-  const selectedSortOption = useMemo(() => {
-    return SORT_OPTIONS.find((option) => option.field === sortField && option.order === sortOrder) ?? SORT_OPTIONS[0];
-  }, [sortField, sortOrder]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -326,6 +330,8 @@ export function CaseTable({
           suiteId,
           suiteTestCasesHref,
           suiteSelfHref,
+          undefined,
+          { forceRefresh: true },
         );
         setCases(updatedCases);
       } catch (refreshError) {
@@ -347,6 +353,39 @@ export function CaseTable({
     }
 
     setDeleteTargetCase(testCase);
+  };
+
+  const handleSortToggle = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+
+    setSortField(field);
+    setSortOrder(field === 'order' ? 'asc' : 'desc');
+  };
+
+  const renderSortableHeader = (option: SortOption, width?: number) => {
+    const isActive = sortField === option.field;
+
+    return (
+      <th
+        key={option.field}
+        style={width ? { width } : undefined}
+        className={`sortable${isActive ? ' sorted' : ''}`}
+        onClick={() => handleSortToggle(option.field)}
+        aria-sort={isActive ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        <span>{option.label}</span>
+        <span className="sort-arrow" aria-hidden="true">
+          {isActive ? (
+            sortOrder === 'asc' ? <IconArrowUpward size={12} /> : <IconArrowDownward size={12} />
+          ) : (
+            <IconSort size={10} />
+          )}
+        </span>
+      </th>
+    );
   };
 
   if (loading) {
@@ -386,81 +425,86 @@ export function CaseTable({
           </div>
         )}
         <CreateTestCaseForm
-        suiteName={suiteName}
-        isLoading={false}
-        apiError={error}
-        workspaceSettings={workspaceSettings}
-        onCancel={() => {
-          setIsCreateMode(false);
-          setError(null);
-        }}
-        onSubmit={async (formData) => {
-          try {
-            const testCaseData = buildTestCaseData(formData, formData.steps);
-            const newCase = await createTestCase(
-              workspaceSettings,
-              planId,
-              suiteId,
-              {
-                ...testCaseData,
-                title: testCaseData.title!,
-              }
-            );
-
-            // Success: show message and refresh test list
-            setSuccessMessage(`✅ Test case "${newCase.name}" created successfully!`);
-            addNotification('success', `Test case "${newCase.name}" created successfully.`);
+          key={createSourceCase ? `clone-${createSourceCase.id}` : `blank-${suiteId}`}
+          suiteName={suiteName}
+          isLoading={false}
+          apiError={error}
+          workspaceSettings={workspaceSettings}
+          initialDraft={initialCreateDraft}
+          sourceCaseMeta={createSourceCase}
+          onCancel={() => {
+            setIsCreateMode(false);
             setError(null);
-            setWarning(null);
-            onTestCaseCreated?.(newCase);
-
-            // Refresh test cases list to show the newly created case
+          }}
+          onSubmit={async (formData) => {
             try {
-              const updatedCases = await fetchTestCasesForSuite(
+              const testCaseData = buildTestCaseData(formData, formData.steps);
+              const newCase = await createTestCase(
                 workspaceSettings,
                 planId,
                 suiteId,
-                suiteTestCasesHref,
-                suiteSelfHref,
+                {
+                  ...testCaseData,
+                  title: testCaseData.title!,
+                }
               );
-              setCases(updatedCases);
-            } catch (err) {
-              console.warn('Failed to refresh test cases after creation:', err);
-              // Still add the new case locally even if refresh fails
-              setCases([...cases, newCase]);
-            }
 
-            // Auto-exit create mode after showing success
-            if (createModeTimerRef.current) {
-              clearTimeout(createModeTimerRef.current);
-            }
-            createModeTimerRef.current = setTimeout(() => {
-              setIsCreateMode(false);
-              setSuccessMessage(null);
-            }, 2000);
-          } catch (error) {
-            // Extract error message from API response
-            let errorMessage = 'Failed to create test case';
+              // Success: show message and refresh test list
+              setSuccessMessage(`✅ Test case "${newCase.name}" created successfully!`);
+              addNotification('success', `Test case "${newCase.name}" created successfully.`);
+              setError(null);
+              setWarning(null);
+              onTestCaseCreated?.(newCase);
 
-            if (error instanceof Error) {
-              errorMessage = error.message;
-            } else if (typeof error === 'object' && error !== null && 'message' in error) {
-              errorMessage = (error as { message: string }).message;
-            }
+              // Refresh test cases list to show the newly created case
+              try {
+                const updatedCases = await fetchTestCasesForSuite(
+                  workspaceSettings,
+                  planId,
+                  suiteId,
+                  suiteTestCasesHref,
+                  suiteSelfHref,
+                  undefined,
+                  { forceRefresh: true },
+                );
+                setCases(updatedCases);
+              } catch (err) {
+                console.warn('Failed to refresh test cases after creation:', err);
+                // Still add the new case locally even if refresh fails
+                setCases([...cases, newCase]);
+              }
 
-            // Display validation error to user
-            setError(errorMessage);
-            console.error('Failed to create test case:', error);
-          }
-        }}
-      />
+              // Auto-exit create mode after showing success
+              if (createModeTimerRef.current) {
+                clearTimeout(createModeTimerRef.current);
+              }
+              createModeTimerRef.current = setTimeout(() => {
+                setIsCreateMode(false);
+                setSuccessMessage(null);
+              }, 2000);
+            } catch (error) {
+              // Extract error message from API response
+              let errorMessage = 'Failed to create test case';
+
+              if (error instanceof Error) {
+                errorMessage = error.message;
+              } else if (typeof error === 'object' && error !== null && 'message' in error) {
+                errorMessage = (error as { message: string }).message;
+              }
+
+              // Display validation error to user
+              setError(errorMessage);
+              console.error('Failed to create test case:', error);
+            }
+          }}
+        />
       </div>
     );
   }
 
   if (cases.length === 0) {
     return (
-      <EmptyTestCases suiteName={suiteName} onAddTestCase={() => setIsCreateMode(true)} />
+      <EmptyTestCases suiteName={suiteName} onAddTestCase={handleStartCreate} />
     );
   }
 
@@ -481,49 +525,24 @@ export function CaseTable({
         <div className="cases-toolbar__filters">
           <button
             type="button"
+            className="btn btn--secondary btn--sm"
+            onClick={() => { void handleRefreshCases(); }}
+            title="Refresh test cases"
+            aria-label="Refresh test cases"
+            disabled={!workspaceReady || loading || refreshing}
+          >
+            <IconRefresh size={16} />
+          </button>
+
+          <button
+            type="button"
             className="btn btn--primary btn--sm"
-            onClick={() => setIsCreateMode(true)}
+            onClick={handleStartCreate}
             title="Add a new test case to this suite"
           >
             + Add Test Case
           </button>
 
-          <div className="cases-toolbar__sort" ref={sortMenuRef}>
-            <button
-              type="button"
-              className={`cases-toolbar__sort-trigger${sortMenuOpen ? ' is-open' : ''}`}
-              onClick={() => setSortMenuOpen((open) => !open)}
-              aria-haspopup="menu"
-              aria-expanded={sortMenuOpen}
-            >
-              <span className="cases-toolbar__sort-label">Sort by :</span>
-              <strong className="cases-toolbar__sort-value">{selectedSortOption.label}</strong>
-              <IconChevronDown
-                size={15}
-                className={`cases-toolbar__sort-icon${sortMenuOpen ? ' is-open' : ''}`}
-              />
-            </button>
-            {sortMenuOpen && (
-              <div className="cases-toolbar__sort-menu" role="menu">
-                {SORT_OPTIONS.map((option) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={option.key === selectedSortOption.key}
-                    className={`cases-toolbar__sort-item${option.key === selectedSortOption.key ? ' is-active' : ''}`}
-                    onClick={() => {
-                      setSortField(option.field);
-                      setSortOrder(option.order);
-                      setSortMenuOpen(false);
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -551,15 +570,10 @@ export function CaseTable({
                   />
                 </th>
               )}
-              <th style={{ width: 88 }}>
-                <span>TC Id</span>
-              </th>
-              <th>
-                <span>Test Case Title</span>
-              </th>
-              <th style={{ width: 140 }}>
-                <span>Status</span>
-              </th>
+              {renderSortableHeader(SORT_OPTIONS[0], 88)}
+              {renderSortableHeader(SORT_OPTIONS[1], 88)}
+              {renderSortableHeader(SORT_OPTIONS[2])}
+              {renderSortableHeader(SORT_OPTIONS[3], 140)}
               <th style={{ width: 220 }}>
                 <span>Assigned To</span>
               </th>
@@ -569,7 +583,7 @@ export function CaseTable({
           <tbody>
             {noFilteredData ? (
               <tr>
-                <td colSpan={showSelectionColumn ? 6 : 5}>
+                <td colSpan={showSelectionColumn ? 7 : 6}>
                   <div className="cases-table__no-data">
                     <strong>No data</strong>
                     <span>
@@ -592,6 +606,9 @@ export function CaseTable({
                       />
                     </td>
                   )}
+                  <td>
+                    <span className="text-secondary">{typeof testCase.order === 'number' ? testCase.order : '-'}</span>
+                  </td>
                   <td>
                     <span className="text-primary font-semibold">{testCase.id}</span>
                   </td>

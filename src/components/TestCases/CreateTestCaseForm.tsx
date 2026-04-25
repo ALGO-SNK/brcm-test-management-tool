@@ -1,16 +1,33 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IconX } from '../Common/Icons';
 import { StepsEditor, StepsSearchBar, useStepsSearch } from './StepsEditor';
 import { TestCaseFormFields } from './TestCaseFormFields';
 import { SharedStepPreviewModal } from './SharedStepPreviewModal';
 import type { ParsedStep } from './StepsEditor';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
+import type { CloneSourceMeta, CreateTestCaseDraft, CreateTestCaseDraftFormData } from '../../utils/testCaseClone';
+import { validateAllSteps } from '../../utils/stepValidation';
+
+type MainFieldName = 'title' | 'status' | 'method' | 'region' | 'execProcess' | 'pltpProcess' | 'initialSteps';
+
+const DEFAULT_FORM_DATA: CreateTestCaseDraftFormData = {
+  title: '',
+  status: 'Design',
+  method: 'Selenium',
+  region: 'All Region',
+  execProcess: '',
+  pltpProcess: '',
+  initialSteps: '',
+};
+const EMPTY_STEPS: ParsedStep[] = [];
 
 interface CreateTestCaseFormProps {
   suiteName: string;
   isLoading?: boolean;
   apiError?: string | null;
   workspaceSettings: WorkspaceSettingsValues;
+  initialDraft?: CreateTestCaseDraft | null;
+  sourceCaseMeta?: CloneSourceMeta | null;
   onCancel: () => void;
   onSubmit: (formData: {
     title: string;
@@ -28,67 +45,85 @@ export function CreateTestCaseForm({
   isLoading = false,
   apiError = null,
   workspaceSettings,
+  initialDraft = null,
+  sourceCaseMeta = null,
   onCancel,
   onSubmit,
 }: CreateTestCaseFormProps) {
-  const [formData, setFormData] = useState({
-    title: '',
-    status: 'Design',
-    method: 'Selenium',
-    region: 'All Region',
-    execProcess: '',
-    pltpProcess: '',
-    initialSteps: '',
-  });
-
-  const [steps, setSteps] = useState<ParsedStep[]>([]);
+  const initialFormData = useMemo(() => initialDraft?.formData ?? DEFAULT_FORM_DATA, [initialDraft]);
+  const initialSteps = useMemo(() => initialDraft?.steps ?? EMPTY_STEPS, [initialDraft]);
+  const [formData, setFormData] = useState(initialFormData);
+  const [steps, setSteps] = useState<ParsedStep[]>(initialSteps);
   const stepsSearch = useStepsSearch();
   const [sharedStepPreviewId, setSharedStepPreviewId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [invalidMainFields, setInvalidMainFields] = useState<Set<MainFieldName>>(new Set());
+  const [stepFieldErrors, setStepFieldErrors] = useState<Map<number, Set<keyof ParsedStep>>>(new Map());
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [confirmDiscardRequested, setConfirmDiscardRequested] = useState(false);
   const [pendingDiscardAction, setPendingDiscardAction] = useState<'cancel' | 'window-close' | null>(null);
   const allowWindowCloseRef = useRef(false);
 
-  const isDirty = formData.title.trim() !== ''
-    || formData.status !== 'Design'
-    || formData.method !== 'Selenium'
-    || formData.region !== 'All Region'
-    || formData.execProcess.trim() !== ''
-    || formData.pltpProcess.trim() !== ''
-    || formData.initialSteps.trim() !== ''
-    || steps.length > 0;
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(initialFormData)
+    || JSON.stringify(steps) !== JSON.stringify(initialSteps);
 
   const handleSubmit = useCallback((e?: React.FormEvent) => {
     e?.preventDefault();
 
-    // Validate required fields
     const errors: string[] = [];
+    const nextInvalidMainFields = new Set<MainFieldName>();
+    const nextStepFieldErrors = new Map<number, Set<keyof ParsedStep>>();
+
     if (!formData.title.trim()) {
       errors.push('❌ Test case title is required');
+      nextInvalidMainFields.add('title');
     }
     if (!formData.status.trim()) {
       errors.push('❌ Status is required');
+      nextInvalidMainFields.add('status');
     }
     if (!formData.method.trim()) {
       errors.push('❌ Testing method is required');
+      nextInvalidMainFields.add('method');
     }
     if (!formData.region.trim()) {
       errors.push('❌ Region is required');
+      nextInvalidMainFields.add('region');
     }
     if (!formData.execProcess.trim()) {
       errors.push('❌ Executive process is required');
+      nextInvalidMainFields.add('execProcess');
     }
     if (!formData.pltpProcess.trim()) {
       errors.push('❌ PLTP process area is required');
+      nextInvalidMainFields.add('pltpProcess');
     }
+    if (steps.length === 0) {
+      errors.push('❌ At least one step is required');
+    }
+    const validationResults = validateAllSteps(steps);
+    validationResults.forEach((result, stepIndex) => {
+      if (!result.errors.length) return;
+      const invalidFieldsForStep = new Set<keyof ParsedStep>();
+      result.errors.forEach((error) => {
+        errors.push(`Step ${stepIndex}: ${error.message}`);
+        invalidFieldsForStep.add(error.field);
+      });
+      nextStepFieldErrors.set(stepIndex, invalidFieldsForStep);
+    });
 
-    if (errors.length > 0) {
-      setValidationErrors(errors);
+    const mergedErrors = Array.from(new Set(errors));
+
+    if (mergedErrors.length > 0) {
+      setValidationErrors(mergedErrors);
+      setInvalidMainFields(nextInvalidMainFields);
+      setStepFieldErrors(nextStepFieldErrors);
       return;
     }
 
     setValidationErrors([]);
+    setInvalidMainFields(new Set());
+    setStepFieldErrors(new Map());
     onSubmit({
       ...formData,
       steps,
@@ -190,9 +225,21 @@ export function CreateTestCaseForm({
   return (
     <>
     <form onSubmit={handleSubmit} className="case-detail-pane case-detail-pane--edit">
+      {sourceCaseMeta && (
+        <div className="alert alert--warning" style={{ marginBottom: '16px' }}>
+          Cloning from Test Case {sourceCaseMeta.id}
+        </div>
+      )}
       {apiError && (
         <div className="case-detail-edit-errors">
           <p className="case-detail-edit-error">❌ API Error: {apiError}</p>
+        </div>
+      )}
+      {validationErrors.length > 0 && (
+        <div className="case-detail-edit-errors">
+          {validationErrors.map((error, idx) => (
+            <p key={idx} className="case-detail-edit-error">{error}</p>
+          ))}
         </div>
       )}
 
@@ -233,15 +280,17 @@ export function CreateTestCaseForm({
               onChange={(updatedData) => setFormData(prev => ({ ...prev, ...updatedData }))}
               isLoading={isLoading}
               showTitle={true}
-              validationErrors={validationErrors}
+              showValidationSummary={false}
+              invalidFields={invalidMainFields}
               titlePlaceholder="Enter test case title"
             />
 
             {/* Steps Editor - Identical to Edit Mode */}
             <StepsEditor
               rawSteps=""
+              initialSteps={initialSteps}
               onChange={setSteps}
-              errors={validationErrors.filter((e) => e.includes('step'))}
+              stepFieldErrors={stepFieldErrors}
               hideHeader
               externalSearch={stepsSearch}
               onPreviewSharedStep={setSharedStepPreviewId}

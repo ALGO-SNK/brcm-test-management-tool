@@ -6,6 +6,7 @@ import { TestCaseDetail } from './TestCaseDetail';
 import { PageDetailLayout } from '../layouts/PageDetailLayout';
 import type { ADOTestPlan, ADOTestSuite, ADOTestCase } from '../../types';
 import type { WorkspaceSettingsValues } from './WorkspaceSettings';
+import type { CloneSourceMeta, CreateTestCaseDraft } from '../../utils/testCaseClone';
 
 interface TestCaseListProps {
   plan: ADOTestPlan;
@@ -44,6 +45,9 @@ export function TestCaseList({
   const [isDragging, setIsDragging] = useState(false);
   const [suiteCaseCountBySuiteId, setSuiteCaseCountBySuiteId] = useState<Record<number, number>>({});
   const [isCreateMode, setIsCreateMode] = useState(false);
+  const [createDraft, setCreateDraft] = useState<CreateTestCaseDraft | null>(null);
+  const [createSourceCase, setCreateSourceCase] = useState<CloneSourceMeta | null>(null);
+  const [caseTableRefreshToken, setCaseTableRefreshToken] = useState(0);
   const dragging = useRef(false);
   const preserveCreateModeOnSuiteChangeRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -90,13 +94,42 @@ export function TestCaseList({
       return;
     }
     setIsCreateMode(false);
+    setCreateDraft(null);
+    setCreateSourceCase(null);
   }, [suite?.id]);
 
   const handleAddTestCaseFromSuite = useCallback((targetSuite: ADOTestSuite, path: ADOTestSuite[]) => {
     preserveCreateModeOnSuiteChangeRef.current = true;
     onSelectSuite(targetSuite, path);
     setIsCreateMode(true);
+    setCreateDraft(null);
+    setCreateSourceCase(null);
   }, [onSelectSuite]);
+
+  const handleCreateModeChange = useCallback((nextIsCreateMode: boolean) => {
+    setIsCreateMode(nextIsCreateMode);
+    if (!nextIsCreateMode) {
+      setCreateDraft(null);
+      setCreateSourceCase(null);
+    }
+  }, []);
+
+  const handleRequestBlankCreate = useCallback(() => {
+    setCreateDraft(null);
+    setCreateSourceCase(null);
+  }, []);
+
+  const handleCloneCase = useCallback((draft: CreateTestCaseDraft, sourceMeta: CloneSourceMeta) => {
+    setCreateDraft(draft);
+    setCreateSourceCase(sourceMeta);
+    setIsCreateMode(true);
+    onBackToCases();
+  }, [onBackToCases]);
+
+  const handleBackToCasesWithRefresh = useCallback(() => {
+    setCaseTableRefreshToken((current) => current + 1);
+    onBackToCases();
+  }, [onBackToCases]);
 
   const currentSuiteCount = suite
     ? suiteCaseCountBySuiteId[suite.id] ?? (typeof suite.testCaseCount === 'number' ? suite.testCaseCount : null)
@@ -168,8 +201,9 @@ export function TestCaseList({
                     caseId={selectedCase.id}
                     caseData={selectedCase}
                     workspaceSettings={workspaceSettings}
-                    onBackToCases={onBackToCases}
+                    onBackToCases={handleBackToCasesWithRefresh}
                     onSettingsClick={onSettingsClick}
+                    onClone={handleCloneCase}
                     embedded
                   />
                 ) : (
@@ -197,7 +231,11 @@ export function TestCaseList({
                       onSelectCase(newCase);
                     }}
                     isCreateMode={isCreateMode}
-                    onCreateModeChange={setIsCreateMode}
+                    onCreateModeChange={handleCreateModeChange}
+                    initialCreateDraft={createDraft}
+                    createSourceCase={createSourceCase}
+                    onRequestCreate={handleRequestBlankCreate}
+                    refreshToken={caseTableRefreshToken}
                   />
                 )}
               </PageDetailLayout>

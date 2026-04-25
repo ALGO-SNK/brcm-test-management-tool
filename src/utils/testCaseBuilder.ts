@@ -5,6 +5,7 @@
 
 import { serializeStepsToXML } from './xmlParser';
 import type { ParsedStep } from '../components/TestCases/StepsEditor';
+import { getActionDefinition } from './actionRegistry';
 
 export interface TestCaseDataRequest {
   title?: string;
@@ -29,6 +30,34 @@ export interface TestCaseFormData {
   initialSteps?: string;
 }
 
+function sanitizeStepForPersistence(step: ParsedStep): ParsedStep {
+  const actionDef = getActionDefinition(step.action);
+  const contract = actionDef?.contract;
+
+  if (!contract) {
+    return step;
+  }
+
+  const allowsDynamicLocator = (
+    contract.locator === 'required'
+    && contract.locatorType === 'required'
+    && contract.isElementPathDynamic !== 'not-used'
+  );
+
+  return {
+    ...step,
+    element: contract.locator === 'not-used' ? '' : step.element,
+    elementCategory: contract.locatorType === 'not-used' ? '' : step.elementCategory,
+    value: contract.value === 'not-used' ? '' : step.value,
+    expectedValue: contract.expectedVl === 'not-used' ? '' : step.expectedValue,
+    key: contract.dataKey === 'not-used' ? '' : step.key,
+    headers: contract.headers === 'not-used' ? '' : step.headers,
+    elementReplaceTextDataKey: contract.elementPathReplaceKey === 'not-used' ? '' : step.elementReplaceTextDataKey,
+    isElementPathDynamic: allowsDynamicLocator ? step.isElementPathDynamic : false,
+    isConcatenated: contract.isConcatenated === 'not-used' ? false : step.isConcatenated,
+  };
+}
+
 /**
  * Build test case data for API requests (create or update)
  * Reuses the same format for both operations
@@ -41,7 +70,8 @@ export function buildTestCaseData(
   formData: TestCaseFormData,
   steps: ParsedStep[],
 ): TestCaseDataRequest {
-  const stepsXml = steps.length > 0 ? serializeStepsToXML(steps) : '';
+  const sanitizedSteps = steps.map(sanitizeStepForPersistence);
+  const stepsXml = sanitizedSteps.length > 0 ? serializeStepsToXML(sanitizedSteps) : '';
 
   return {
     title: formData.title,

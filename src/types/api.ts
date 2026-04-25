@@ -87,6 +87,7 @@ export interface ADOTestCase {
   id: number;
   name: string;
   state: string;
+  order?: number;
   priority: number;
   testPlanName?: string;
   testSuiteName?: string;
@@ -106,6 +107,8 @@ export interface ADOTestCase {
 }
 
 export interface ADOTestCaseListItem {
+  order?: number;
+  sequenceNumber?: number;
   testPlan?: {
     id: number;
     name: string;

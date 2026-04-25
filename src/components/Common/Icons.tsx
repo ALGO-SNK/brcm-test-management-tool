@@ -128,6 +128,10 @@ export function IconUnfoldMore(props: IconProps) {
   return <MaterialIcon name="unfold_more" {...props} />;
 }
 
+export function IconSort(props: IconProps) {
+  return <MaterialIcon name="height" {...props} />;
+}
+
 export function IconUnfoldLess(props: IconProps) {
   return <MaterialIcon name="unfold_less" {...props} />;
 }

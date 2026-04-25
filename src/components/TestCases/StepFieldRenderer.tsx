@@ -26,6 +26,7 @@ interface StepFieldRendererProps {
   step: ParsedStep;
   onFieldChange: (field: keyof ParsedStep, value: string | boolean) => void;
   visibleOptionalFields: OptionalStepField[];
+  invalidFields?: Set<keyof ParsedStep>;
 }
 
 const ELEMENT_CATEGORY_OPTIONS = [
@@ -104,21 +105,6 @@ function isFieldRequired(fieldName: string, contract: ParameterContract | undefi
   return contractKey ? contract[contractKey] === 'required' : false;
 }
 
-function getRequiredMessage(fieldName: string): string {
-  const labels: Record<string, string> = {
-    description: 'Description',
-    elementCategory: 'Locator Type',
-    element: 'locator',
-    value: 'Value',
-    expectedValue: 'Expected Value',
-    key: 'Data Key',
-    headers: 'Headers',
-    elementReplaceTextDataKey: 'Replacement Key',
-  };
-
-  return `${labels[fieldName] ?? fieldName} is required`;
-}
-
 function getFieldLabel(fieldName: string): string {
   const labels: Record<string, string> = {
     element: 'LOCATOR',
@@ -171,7 +157,12 @@ function renderFieldLabel(
   );
 }
 
-export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }: StepFieldRendererProps) {
+export function StepFieldRenderer({
+  step,
+  onFieldChange,
+  visibleOptionalFields,
+  invalidFields = new Set(),
+}: StepFieldRendererProps) {
   const actionDef = ACTION_REGISTRY[step.action];
   const contract = actionDef?.contract;
   const elementFields = getElementAuthoringFields(actionDef, step.elementCategory ?? 'XPATH');
@@ -187,23 +178,12 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
   const showKey        = shouldRenderField('key',                 contract, visibleOptionalFields);
   const showHeaders    = shouldRenderField('headers',             contract, visibleOptionalFields);
   const showConcat     = shouldRenderField('isConcatenated',      contract, visibleOptionalFields);
-  const showSummaryError = false;
-  const showLocTypeError = showLocType && isFieldRequired('elementCategory', contract) && !step.elementCategory?.trim();
-  const showLocatorError = showLocator && isFieldRequired('element', contract) && !step.element?.trim();
-  const showValueError = showValue && isFieldRequired('value', contract) && !step.value?.trim();
-  const showExpectedError = showExpected && isFieldRequired('expectedValue', contract) && !step.expectedValue?.trim();
-  const showKeyError = showKey && isFieldRequired('key', contract) && !step.key?.trim();
-  const showHeadersError = showHeaders && isFieldRequired('headers', contract) && !step.headers?.trim();
   // Default Expected Value to 'true' once the field becomes visible and is empty
   useEffect(() => {
     if (showExpected && !step.expectedValue) {
       onFieldChange('expectedValue', 'true');
     }
   }, [showExpected, step.expectedValue, onFieldChange]);
-
-  const showReplaceKeyError = showReplaceKey
-    && isFieldRequired('elementReplaceTextDataKey', contract)
-    && !step.elementReplaceTextDataKey?.trim();
 
   return (
     <>
@@ -215,14 +195,12 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
           </label>
           <input
             type="text"
-            className="steps-editor__input"
+            className={`steps-editor__input${invalidFields.has('description') ? ' steps-editor__input--invalid' : ''}`}
             value={step.description || ''}
             onChange={(e) => onFieldChange('description', e.target.value)}
             placeholder={getFieldPlaceholder('description')}
+            aria-invalid={invalidFields.has('description')}
           />
-          {showSummaryError && (
-            <small className="steps-editor__field-error">{getRequiredMessage('description')}</small>
-          )}
         </div>
       )}
 
@@ -233,7 +211,7 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
             {renderFieldLabel('elementCategory', contract)}
           </label>
           <select
-            className="steps-editor__select"
+            className={`steps-editor__select${invalidFields.has('elementCategory') ? ' steps-editor__select--invalid' : ''}`}
             value={step.elementCategory || ''}
             onChange={(e) => {
               onFieldChange('elementCategory', e.target.value);
@@ -244,6 +222,7 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
               }
             }}
             title={elementFields.elementCategoryHint}
+            aria-invalid={invalidFields.has('elementCategory')}
           >
             <option value="" disabled>
               {NOT_SELECTED_LABEL}
@@ -254,9 +233,6 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
               </option>
             ))}
           </select>
-          {showLocTypeError && (
-            <small className="steps-editor__field-error">{getRequiredMessage('elementCategory')}</small>
-          )}
         </div>
       )}
 
@@ -268,16 +244,14 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
           </label>
           <input
             type="text"
-            className="steps-editor__input"
+            className={`steps-editor__input${invalidFields.has('element') ? ' steps-editor__input--invalid' : ''}`}
             style={{ fontFamily: 'var(--font-mono)' }}
             value={step.element || ''}
             onChange={(e) => onFieldChange('element', e.target.value)}
             placeholder={elementFields.elementCategoryHint || getFieldPlaceholder('element')}
             title={elementFields.elementCategoryHint}
+            aria-invalid={invalidFields.has('element')}
           />
-          {showLocatorError && (
-            <small className="steps-editor__field-error">{getRequiredMessage('element')}</small>
-          )}
         </div>
       )}
 
@@ -301,7 +275,7 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
           </label>
           <input
             type="text"
-            className="steps-editor__input"
+            className={`steps-editor__input${invalidFields.has('elementReplaceTextDataKey') ? ' steps-editor__input--invalid' : ''}`}
             style={{
               fontFamily: 'var(--font-mono)',
               borderColor: !step.elementReplaceTextDataKey ? '' : undefined,
@@ -309,10 +283,8 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
             value={step.elementReplaceTextDataKey || ''}
             onChange={(e) => onFieldChange('elementReplaceTextDataKey', e.target.value)}
             placeholder={getFieldPlaceholder('elementReplaceTextDataKey')}
+            aria-invalid={invalidFields.has('elementReplaceTextDataKey')}
           />
-          {showReplaceKeyError && (
-            <small className="steps-editor__field-error">{getRequiredMessage('elementReplaceTextDataKey')}</small>
-          )}
         </div>
       )}
 
@@ -326,7 +298,7 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
           </label>
           <input
             type="text"
-            className="steps-editor__input"
+            className={`steps-editor__input${invalidFields.has('value') ? ' steps-editor__input--invalid' : ''}`}
             value={step.value || ''}
             onChange={(e) => onFieldChange('value', e.target.value)}
             placeholder={
@@ -336,10 +308,8 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
                 ? 'Expected error message'
               : getFieldPlaceholder('value')
             }
+            aria-invalid={invalidFields.has('value')}
           />
-          {showValueError && (
-            <small className="steps-editor__field-error">{getRequiredMessage('value')}</small>
-          )}
         </div>
       )}
 
@@ -351,16 +321,14 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
             {renderFieldLabel('expectedValue', contract)}
           </label>
           <select
-            className="steps-editor__select"
+            className={`steps-editor__select${invalidFields.has('expectedValue') ? ' steps-editor__select--invalid' : ''}`}
             value={step.expectedValue === 'false' ? 'false' : 'true'}
             onChange={(e) => onFieldChange('expectedValue', e.target.value)}
+            aria-invalid={invalidFields.has('expectedValue')}
           >
             <option value="true">True</option>
             <option value="false">False</option>
           </select>
-          {showExpectedError && (
-            <small className="steps-editor__field-error">{getRequiredMessage('expectedValue')}</small>
-          )}
         </div>
       )}
 
@@ -371,14 +339,12 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
           </label>
           <input
             type="text"
-            className="steps-editor__input"
+            className={`steps-editor__input${invalidFields.has('key') ? ' steps-editor__input--invalid' : ''}`}
             value={step.key || ''}
             onChange={(e) => onFieldChange('key', e.target.value)}
             placeholder={getFieldPlaceholder('key')}
+            aria-invalid={invalidFields.has('key')}
           />
-          {showKeyError && (
-            <small className="steps-editor__field-error">{getRequiredMessage('key')}</small>
-          )}
         </div>
       )}
 
@@ -389,15 +355,13 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
           </label>
           <input
             type="text"
-            className="steps-editor__input"
+            className={`steps-editor__input${invalidFields.has('headers') ? ' steps-editor__input--invalid' : ''}`}
             style={{ fontFamily: 'var(--font-mono)' }}
             value={step.headers || ''}
             onChange={(e) => onFieldChange('headers', e.target.value)}
             placeholder={getFieldPlaceholder('headers')}
+            aria-invalid={invalidFields.has('headers')}
           />
-          {showHeadersError && (
-            <small className="steps-editor__field-error">{getRequiredMessage('headers')}</small>
-          )}
         </div>
       )}
 
@@ -407,9 +371,10 @@ export function StepFieldRenderer({ step, onFieldChange, visibleOptionalFields }
             {renderFieldLabel('isConcatenated', contract)}
           </label>
           <select
-            className="steps-editor__select"
+            className={`steps-editor__select${invalidFields.has('isConcatenated') ? ' steps-editor__select--invalid' : ''}`}
             value={step.isConcatenated ? 'true' : 'false'}
             onChange={(e) => onFieldChange('isConcatenated', e.target.value === 'true')}
+            aria-invalid={invalidFields.has('isConcatenated')}
           >
             <option value="false">False</option>
             <option value="true">True</option>

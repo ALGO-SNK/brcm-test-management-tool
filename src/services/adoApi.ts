@@ -554,6 +554,11 @@ function mapTestCaseListItemToCase(
   const lastUpdatedBy = toIdentity(fields['System.ChangedBy'] ?? fields['Microsoft.VSTS.Common.ActivatedBy']);
   const pointAssignment = normalizedItem.pointAssignments?.[0];
   const tester = toIdentity(pointAssignment?.tester ?? undefined);
+  const order = typeof normalizedItem.sequenceNumber === 'number'
+    ? normalizedItem.sequenceNumber
+    : typeof normalizedItem.order === 'number'
+      ? normalizedItem.order
+      : undefined;
 
   const selfHref = normalizedItem.links?._self?.href ?? fallbackSelfHref;
   const workItemHref = normalizedItem.links?.workItem?.href;
@@ -561,6 +566,7 @@ function mapTestCaseListItemToCase(
     id: workItemId,
     name: normalizedItem.workItem?.name?.trim() || normalizeFieldText(normalizedItem.name).trim() || `Test Case ${workItemId}`,
     state,
+    order,
     priority: normalizePriority(fields['Microsoft.VSTS.Common.Priority']),
     testPlanName: normalizedItem.testPlan?.name,
     testSuiteName: normalizedItem.testSuite?.name,
@@ -576,6 +582,41 @@ function mapTestCaseListItemToCase(
     _links: {
       self: { href: selfHref },
       workItem: workItemHref ? { href: workItemHref } : undefined,
+    },
+  };
+}
+
+function mergeCaseListItemWithDetailCache(listCase: ADOTestCase, cachedCase?: ADOTestCase | null): ADOTestCase {
+  if (!cachedCase) {
+    return listCase;
+  }
+
+  const resolvedState = listCase.state && listCase.state !== 'Design'
+    ? listCase.state
+    : cachedCase.state || listCase.state;
+
+  return {
+    ...cachedCase,
+    ...listCase,
+    name: listCase.name || cachedCase.name,
+    state: resolvedState,
+    order: listCase.order ?? cachedCase.order,
+    priority: listCase.priority || cachedCase.priority,
+    testPlanName: listCase.testPlanName ?? cachedCase.testPlanName,
+    testSuiteName: listCase.testSuiteName ?? cachedCase.testSuiteName,
+    configurationName: listCase.configurationName ?? cachedCase.configurationName,
+    automationStatus: listCase.automationStatus ?? cachedCase.automationStatus,
+    assignedTo: listCase.assignedTo ?? cachedCase.assignedTo,
+    tester: listCase.tester ?? cachedCase.tester,
+    lastUpdatedDate: listCase.lastUpdatedDate || cachedCase.lastUpdatedDate,
+    lastUpdatedBy: listCase.lastUpdatedBy ?? cachedCase.lastUpdatedBy,
+    fields: {
+      ...(cachedCase.fields ?? {}),
+      ...(listCase.fields ?? {}),
+    },
+    _links: {
+      ...(cachedCase._links ?? {}),
+      ...(listCase._links ?? {}),
     },
   };
 }
@@ -704,8 +745,18 @@ export async function fetchTestCasesForSuite(
   suiteTestCasesHref?: string,
   suiteSelfHref?: string,
   signal?: AbortSignal,
+  options?: {
+    forceRefresh?: boolean;
+  },
 ): Promise<ADOTestCase[]> {
   assertSettings(settings);
+
+  const forceRefresh = Boolean(options?.forceRefresh);
+  const cacheKey = getTestCasesCacheKey(settings, planId, suiteId);
+
+  if (forceRefresh) {
+    clearCacheEntry(cacheKey);
+  }
 
   const apiVersions = getApiVersionCandidates(settings.apiVersion);
   const encodedPlanId = encodeURIComponent(String(planId));
@@ -714,6 +765,17 @@ export async function fetchTestCasesForSuite(
   const candidateUrls: string[] = [];
 
   for (const apiVersion of apiVersions) {
+    const encodedApiVersion = encodeURIComponent(apiVersion);
+    const preferredUrls = [
+      `${baseApi}/testplan/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/TestCase?api-version=${encodedApiVersion}`,
+      `${baseApi}/testplan/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/TestCases?api-version=${encodedApiVersion}`,
+      `${baseApi}/test/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/testcases?api-version=${encodedApiVersion}`,
+    ];
+
+    if (forceRefresh) {
+      candidateUrls.push(...preferredUrls);
+    }
+
     if (suiteTestCasesHref) {
       candidateUrls.push(withApiVersion(suiteTestCasesHref, apiVersion));
       candidateUrls.push(withApiVersion(suiteTestCasesHref.replace(/\/TestCase(\?|$)/i, '/TestCases$1'), apiVersion));
@@ -725,10 +787,7 @@ export async function fetchTestCasesForSuite(
       candidateUrls.push(deriveTestCaseUrlFromSuiteSelf(suiteSelfHref, apiVersion, true));
     }
 
-    const encodedApiVersion = encodeURIComponent(apiVersion);
-    candidateUrls.push(`${baseApi}/testplan/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/TestCase?api-version=${encodedApiVersion}`);
-    candidateUrls.push(`${baseApi}/testplan/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/TestCases?api-version=${encodedApiVersion}`);
-    candidateUrls.push(`${baseApi}/test/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/testcases?api-version=${encodedApiVersion}`);
+    candidateUrls.push(...preferredUrls);
   }
 
   const uniqueCandidateUrls = Array.from(new Set(candidateUrls));
@@ -746,9 +805,13 @@ export async function fetchTestCasesForSuite(
       const selfHref = url.split('?')[0];
       const mappedCases = (response.value ?? [])
         .map((item) => mapTestCaseListItemToCase(item, selfHref))
-        .filter((item): item is ADOTestCase => item !== null);
+        .filter((item): item is ADOTestCase => item !== null)
+        .map((item) => {
+          const cachedDetail = readCacheEntry<ADOTestCase>(getTestCaseDetailCacheKey(settings, item.id))?.data ?? null;
+          return mergeCaseListItemWithDetailCache(item, cachedDetail);
+        });
 
-      writeCacheEntry(getTestCasesCacheKey(settings, planId, suiteId), mappedCases);
+      writeCacheEntry(cacheKey, mappedCases);
       for (const mappedCase of mappedCases) {
         writeCacheEntry(getTestCaseDetailCacheKey(settings, mappedCase.id), mappedCase);
       }
@@ -1334,6 +1397,7 @@ export async function createTestCase(
 
       const mappedCase = mapWorkItemToTestCase(createdWorkItem);
       writeCacheEntry(getTestCaseDetailCacheKey(settings, createdWorkItem.id), mappedCase);
+      clearCacheEntry(getTestCasesCacheKey(settings, planId, suiteId));
 
       return mappedCase;
     } catch (error) {

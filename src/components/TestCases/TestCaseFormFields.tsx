@@ -23,6 +23,8 @@ interface TestCaseFormFieldsProps {
   isLoading?: boolean;
   showTitle?: boolean;
   validationErrors?: string[];
+  showValidationSummary?: boolean;
+  invalidFields?: Set<'title' | 'status' | 'method' | 'region' | 'execProcess' | 'pltpProcess' | 'initialSteps'>;
   titlePlaceholder?: string;
 }
 
@@ -35,6 +37,8 @@ export function TestCaseFormFields({
   isLoading = false,
   showTitle = true,
   validationErrors = [],
+  showValidationSummary = true,
+  invalidFields = new Set(),
   titlePlaceholder = 'Enter test case title',
 }: TestCaseFormFieldsProps) {
   const handleChange = (field: string, value: string) => {
@@ -52,7 +56,7 @@ export function TestCaseFormFields({
   return (
     <>
       {/* Validation Errors */}
-      {validationErrors.length > 0 && (
+      {showValidationSummary && validationErrors.length > 0 && (
         <div className="case-detail-edit-errors">
           {validationErrors.map((error, idx) => (
             <p key={idx} className="case-detail-edit-error">{error}</p>
@@ -69,12 +73,13 @@ export function TestCaseFormFields({
               <label className="case-detail-edit-form__label">Test Case Title *</label>
               <input
                 type="text"
-                className="case-detail-edit-form__input"
+                className={`case-detail-edit-form__input${invalidFields.has('title') ? ' case-detail-edit-form__input--invalid' : ''}`}
                 value={formData.title || ''}
                 onChange={(e) => handleChange('title', e.target.value)}
                 placeholder={titlePlaceholder}
                 disabled={isLoading}
                 autoFocus
+                aria-invalid={invalidFields.has('title')}
               />
             </div>
           )}
@@ -82,11 +87,12 @@ export function TestCaseFormFields({
             <label className="case-detail-edit-form__label">Initial Steps</label>
             <input
               type="text"
-              className="case-detail-edit-form__input"
+              className={`case-detail-edit-form__input${invalidFields.has('initialSteps') ? ' case-detail-edit-form__input--invalid' : ''}`}
               value={formData.initialSteps}
               onChange={(e) => handleChange('initialSteps', e.target.value)}
               placeholder="Enter initial setup steps or preconditions..."
               disabled={isLoading}
+              aria-invalid={invalidFields.has('initialSteps')}
             />
           </div>
         </div>
@@ -96,10 +102,11 @@ export function TestCaseFormFields({
           <div className="case-detail-edit-form__field" style={{ flex: 1 }}>
             <label className="case-detail-edit-form__label">Status</label>
             <select
-              className="steps-editor__select"
+              className={`steps-editor__select${invalidFields.has('status') ? ' steps-editor__select--invalid' : ''}`}
               value={formData.status || ''}
               onChange={(e) => handleChange('status', e.target.value)}
               disabled={isLoading}
+              aria-invalid={invalidFields.has('status')}
             >
               {!formData.status && (
                 <option value="" disabled>
@@ -116,10 +123,11 @@ export function TestCaseFormFields({
           <div className="case-detail-edit-form__field" style={{ flex: 1 }}>
             <label className="case-detail-edit-form__label">Testing Method</label>
             <select
-              className="case-detail-edit-form__input"
+              className={`case-detail-edit-form__input${invalidFields.has('method') ? ' case-detail-edit-form__input--invalid' : ''}`}
               value={formData.method || ''}
               onChange={(e) => handleChange('method', e.target.value)}
               disabled={isLoading}
+              aria-invalid={invalidFields.has('method')}
             >
               {!formData.method && (
                 <option value="" disabled>
@@ -137,11 +145,12 @@ export function TestCaseFormFields({
             <label className="case-detail-edit-form__label">Region</label>
             <input
               type="text"
-              className="case-detail-edit-form__input"
+              className={`case-detail-edit-form__input${invalidFields.has('region') ? ' case-detail-edit-form__input--invalid' : ''}`}
               value={formData.region}
               onChange={(e) => handleChange('region', e.target.value)}
               placeholder="e.g., All Region, US, EU"
               disabled={isLoading}
+              aria-invalid={invalidFields.has('region')}
             />
           </div>
         </div>
@@ -152,22 +161,24 @@ export function TestCaseFormFields({
             <label className="case-detail-edit-form__label">Executive Process</label>
             <input
               type="text"
-              className="case-detail-edit-form__input"
+              className={`case-detail-edit-form__input${invalidFields.has('execProcess') ? ' case-detail-edit-form__input--invalid' : ''}`}
               value={formData.execProcess}
               onChange={(e) => handleChange('execProcess', e.target.value)}
               placeholder="Enter executive process"
               disabled={isLoading}
+              aria-invalid={invalidFields.has('execProcess')}
             />
           </div>
           <div className="case-detail-edit-form__field" style={{ flex: 1 }}>
             <label className="case-detail-edit-form__label">PLTP Process</label>
             <input
               type="text"
-              className="case-detail-edit-form__input"
+              className={`case-detail-edit-form__input${invalidFields.has('pltpProcess') ? ' case-detail-edit-form__input--invalid' : ''}`}
               value={formData.pltpProcess}
               onChange={(e) => handleChange('pltpProcess', e.target.value)}
               placeholder="Enter PLTP process area"
               disabled={isLoading}
+              aria-invalid={invalidFields.has('pltpProcess')}
             />
           </div>
         </div>

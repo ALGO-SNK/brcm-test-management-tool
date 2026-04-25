@@ -207,6 +207,25 @@
   box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 
+.case-detail-edit-form__input--invalid,
+.steps-editor__input--invalid,
+.steps-editor__select--invalid {
+  border-color: #d84c2f !important;
+  box-shadow: 0 0 0 1px rgba(216, 76, 47, 0.18);
+  background: rgba(216, 76, 47, 0.06);
+}
+
+.case-detail-edit-form__input--invalid:focus,
+.steps-editor__input--invalid:focus,
+.steps-editor__select--invalid:focus {
+  border-color: #d84c2f !important;
+  box-shadow: 0 0 0 3px rgba(216, 76, 47, 0.18);
+}
+
+.steps-editor__text--invalid {
+  color: #d84c2f;
+}
+
 @media (max-width: 900px) {
   .case-detail-section__head--merged {
     align-items: flex-start;

@@ -196,7 +196,6 @@ function recoverFromPipeDelimited(xmlString: string): StepData[] {
  */
 function normalizeElementCategory(category: string): ElementCategory {
   const known: ElementCategory[] = ['XPATH', 'ID', 'TAGNAME', 'CSSSELECTOR', 'LINKTEXT', 'NAME', 'URL', 'JSPATH', 'VERIFY', 'VERIFYERROR'];
-
   const normalized = category.toUpperCase().trim();
   if (known.includes(normalized as ElementCategory)) {
     return normalized as ElementCategory;
