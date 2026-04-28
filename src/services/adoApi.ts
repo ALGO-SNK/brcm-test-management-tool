@@ -124,13 +124,30 @@ function normalizeOrganization(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return '';
 
-  const withoutProtocol = trimmed
-    .replace(/^https?:\/\//i, '')
-    .replace(/^dev\.azure\.com\//i, '')
-    .replace(/^\/+|\/+$/g, '');
+  try {
+    const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const parsed = new URL(withProtocol);
+    const host = parsed.hostname.toLowerCase();
+    const pathSegments = parsed.pathname.split('/').filter(Boolean);
 
-  const firstSegment = withoutProtocol.split('/').filter(Boolean)[0];
-  return firstSegment ?? '';
+    if (host === 'dev.azure.com') {
+      return pathSegments[0] ?? '';
+    }
+
+    const visualStudioMatch = host.match(/^([^.]+)\.visualstudio\.com$/i);
+    if (visualStudioMatch?.[1]) {
+      return visualStudioMatch[1];
+    }
+  } catch {
+    // Fall through to string normalization.
+  }
+
+  const withoutProtocol = trimmed.replace(/^https?:\/\//i, '').replace(/^\/+|\/+$/g, '');
+  const withoutKnownHosts = withoutProtocol
+    .replace(/^dev\.azure\.com\//i, '')
+    .replace(/^([^.]+)\.visualstudio\.com(?:\/|$)/i, '$1/');
+  const firstSegment = withoutKnownHosts.split('/').filter(Boolean)[0] ?? '';
+  return firstSegment.replace(/\.visualstudio\.com$/i, '');
 }
 
 function normalizeProjectName(input: string): string {
@@ -284,10 +301,23 @@ function assertSettings(settings: WorkspaceConnectionSettings): void {
   }
 }
 
-function buildBaseApiUrl(settings: WorkspaceConnectionSettings): string {
+function buildPrimaryBaseApiUrl(settings: WorkspaceConnectionSettings): string {
+  const organization = normalizeOrganization(settings.organization);
+  const project = encodeURIComponent(normalizeProjectName(settings.projectName));
+  return `https://${organization}.visualstudio.com/${project}/_apis`;
+}
+
+function buildFallbackBaseApiUrl(settings: WorkspaceConnectionSettings): string {
   const organization = normalizeOrganization(settings.organization);
   const project = encodeURIComponent(normalizeProjectName(settings.projectName));
   return `https://dev.azure.com/${organization}/${project}/_apis`;
+}
+
+function buildBaseApiUrls(settings: WorkspaceConnectionSettings): string[] {
+  return Array.from(new Set([
+    buildPrimaryBaseApiUrl(settings),
+    buildFallbackBaseApiUrl(settings),
+  ]));
 }
 
 function buildBaseWebUrl(settings: WorkspaceConnectionSettings): string {
@@ -711,12 +741,31 @@ export async function fetchPlans(
   assertSettings(settings);
 
   const apiVersion = normalizeApiVersion(settings.apiVersion);
-  const url = `${buildBaseApiUrl(settings)}/testplan/plans?api-version=${encodeURIComponent(apiVersion)}`;
-  const data = await fetchJsonWithAction<ADOListResponse<ADOTestPlan>>(url, settings.patToken.trim(), 'load test plans', signal);
+  const candidateUrls = buildBaseApiUrls(settings).map(
+    (baseApi) => `${baseApi}/testplan/plans?api-version=${encodeURIComponent(apiVersion)}`,
+  );
+  let lastError: unknown = null;
 
-  const plans = Array.isArray(data.value) ? data.value : [];
-  writeCacheEntry(getPlansCacheKey(settings), plans);
-  return plans;
+  for (const url of candidateUrls) {
+    try {
+      const data = await fetchJsonWithAction<ADOListResponse<ADOTestPlan>>(url, settings.patToken.trim(), 'load test plans', signal);
+      const plans = Array.isArray(data.value) ? data.value : [];
+      writeCacheEntry(getPlansCacheKey(settings), plans);
+      return plans;
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load test plans', lastError);
+  }
+
+  throw new Error("We couldn't load test plans. Please try again.");
 }
 
 export async function fetchSuitesForPlan(
@@ -729,13 +778,32 @@ export async function fetchSuitesForPlan(
   const apiVersion = normalizeApiVersion(settings.apiVersion);
   const selfHref = getPlanSelfHref(plan);
 
-  const url = selfHref
-    ? buildSuitesUrlFromSelf(selfHref, apiVersion)
-    : `${buildBaseApiUrl(settings)}/testplan/Plans/${encodeURIComponent(String(plan.id))}/suites?asTreeView=True&api-version=${encodeURIComponent(apiVersion)}`;
+  const candidateUrls = selfHref
+    ? [buildSuitesUrlFromSelf(selfHref, apiVersion)]
+    : buildBaseApiUrls(settings).map(
+      (baseApi) => `${baseApi}/testplan/Plans/${encodeURIComponent(String(plan.id))}/suites?asTreeView=True&api-version=${encodeURIComponent(apiVersion)}`,
+    );
+  let lastError: unknown = null;
 
-  const response = await fetchJsonWithAction<unknown>(url, settings.patToken.trim(), 'load test suites', signal);
-  writeCacheEntry(getSuitesCacheKey(settings, plan.id), response);
-  return response;
+  for (const url of candidateUrls) {
+    try {
+      const response = await fetchJsonWithAction<unknown>(url, settings.patToken.trim(), 'load test suites', signal);
+      writeCacheEntry(getSuitesCacheKey(settings, plan.id), response);
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load test suites', lastError);
+  }
+
+  throw new Error("We couldn't load test suites. Please try again.");
 }
 
 export async function fetchTestCasesForSuite(
@@ -761,16 +829,16 @@ export async function fetchTestCasesForSuite(
   const apiVersions = getApiVersionCandidates(settings.apiVersion);
   const encodedPlanId = encodeURIComponent(String(planId));
   const encodedSuiteId = encodeURIComponent(String(suiteId));
-  const baseApi = buildBaseApiUrl(settings);
+  const baseApis = buildBaseApiUrls(settings);
   const candidateUrls: string[] = [];
 
   for (const apiVersion of apiVersions) {
     const encodedApiVersion = encodeURIComponent(apiVersion);
-    const preferredUrls = [
+    const preferredUrls = baseApis.flatMap((baseApi) => [
       `${baseApi}/testplan/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/TestCase?api-version=${encodedApiVersion}`,
       `${baseApi}/testplan/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/TestCases?api-version=${encodedApiVersion}`,
       `${baseApi}/test/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/testcases?api-version=${encodedApiVersion}`,
-    ];
+    ]);
 
     if (forceRefresh) {
       candidateUrls.push(...preferredUrls);
@@ -843,7 +911,7 @@ export async function fetchTestCaseDetail(
 
   const apiVersions = getApiVersionCandidates(settings.apiVersion);
   const encodedCaseId = encodeURIComponent(String(caseId));
-  const baseApi = buildBaseApiUrl(settings);
+  const baseApis = buildBaseApiUrls(settings);
   const preferredLinks = [
     preferredHref,
     fallbackCase?._links?.workItem?.href,
@@ -862,8 +930,10 @@ export async function fetchTestCaseDetail(
 
     const encodedApiVersion = encodeURIComponent(apiVersion);
     // Try both with and without expand parameter - custom fields should be included by default
-    candidateUrls.push(`${baseApi}/wit/workitems/${encodedCaseId}?api-version=${encodedApiVersion}`);
-    candidateUrls.push(`${baseApi}/wit/workItems/${encodedCaseId}?api-version=${encodedApiVersion}`);
+    for (const baseApi of baseApis) {
+      candidateUrls.push(`${baseApi}/wit/workitems/${encodedCaseId}?api-version=${encodedApiVersion}`);
+      candidateUrls.push(`${baseApi}/wit/workItems/${encodedCaseId}?api-version=${encodedApiVersion}`);
+    }
   }
 
   const uniqueCandidateUrls = Array.from(new Set(candidateUrls));
@@ -942,6 +1012,8 @@ export async function updateTestCase(
     pltpProcess?: string;
     initialSteps?: string;
     stepsXml?: string;
+    automatedTestName?: string | null;
+    automatedTestStorage?: string | null;
   },
   preferredHref?: string,
 ): Promise<ADOTestCase> {
@@ -949,7 +1021,7 @@ export async function updateTestCase(
 
   const apiVersions = getApiVersionCandidates(settings.apiVersion);
   const encodedCaseId = encodeURIComponent(String(caseId));
-  const baseApi = buildBaseApiUrl(settings);
+  const baseApis = buildBaseApiUrls(settings);
 
   const candidateUrls: string[] = [];
   for (const apiVersion of apiVersions) {
@@ -960,8 +1032,10 @@ export async function updateTestCase(
         candidateUrls.push(withApiVersion(normalizedWorkItemHref, apiVersion));
       }
     }
-    candidateUrls.push(`${baseApi}/wit/workitems/${encodedCaseId}?api-version=${encodedApiVersion}`);
-    candidateUrls.push(`${baseApi}/wit/workItems/${encodedCaseId}?api-version=${encodedApiVersion}`);
+    for (const baseApi of baseApis) {
+      candidateUrls.push(`${baseApi}/wit/workitems/${encodedCaseId}?api-version=${encodedApiVersion}`);
+      candidateUrls.push(`${baseApi}/wit/workItems/${encodedCaseId}?api-version=${encodedApiVersion}`);
+    }
   }
 
   // Build PATCH operations using "add" operation (more reliable than "replace")
@@ -988,6 +1062,20 @@ export async function updateTestCase(
   }
   if (updateData.initialSteps !== undefined && updateData.initialSteps.trim()) {
     operations.push({ op: 'add', path: '/fields/Custom.InitialStep', value: updateData.initialSteps });
+  }
+  if (Object.prototype.hasOwnProperty.call(updateData, 'automatedTestName')) {
+    operations.push({
+      op: 'add',
+      path: '/fields/Microsoft.VSTS.TCM.AutomatedTestName',
+      value: typeof updateData.automatedTestName === 'string' ? updateData.automatedTestName : '',
+    });
+  }
+  if (Object.prototype.hasOwnProperty.call(updateData, 'automatedTestStorage')) {
+    operations.push({
+      op: 'add',
+      path: '/fields/Microsoft.VSTS.TCM.AutomatedTestStorage',
+      value: typeof updateData.automatedTestStorage === 'string' ? updateData.automatedTestStorage : '',
+    });
   }
   // Always update steps XML if provided (most important field)
   if (updateData.stepsXml) {
@@ -1042,23 +1130,25 @@ export async function deleteTestCase(
   const encodedPlanId = encodeURIComponent(String(suiteCache.planId));
   const encodedSuiteId = encodeURIComponent(String(suiteCache.suiteId));
   const encodedCaseId = encodeURIComponent(String(caseId));
-  const baseApi = buildBaseApiUrl(settings);
+  const baseApis = buildBaseApiUrls(settings);
   let lastError: unknown = null;
 
   for (const apiVersion of apiVersions) {
     const encodedApiVersion = encodeURIComponent(apiVersion);
-    const url = `${baseApi}/test/Plans/${encodedPlanId}/suites/${encodedSuiteId}/testcases/${encodedCaseId}?api-version=${encodedApiVersion}`;
+    for (const baseApi of baseApis) {
+      const url = `${baseApi}/test/Plans/${encodedPlanId}/suites/${encodedSuiteId}/testcases/${encodedCaseId}?api-version=${encodedApiVersion}`;
 
-    try {
-      await deleteRequest(url, settings.patToken.trim(), 'remove the test case from the suite');
-      clearCacheEntry(getTestCasesCacheKey(settings, suiteCache.planId, suiteCache.suiteId));
-      return;
-    } catch (error) {
-      lastError = error;
-      if (error instanceof ADORequestError && error.status === 404) {
-        continue;
+      try {
+        await deleteRequest(url, settings.patToken.trim(), 'remove the test case from the suite');
+        clearCacheEntry(getTestCasesCacheKey(settings, suiteCache.planId, suiteCache.suiteId));
+        return;
+      } catch (error) {
+        lastError = error;
+        if (error instanceof ADORequestError && error.status === 404) {
+          continue;
+        }
+        throw error;
       }
-      throw error;
     }
   }
 
@@ -1083,12 +1173,11 @@ export async function createStaticSuite(
 
   const apiVersions = getApiVersionCandidates(settings.apiVersion);
   const encodedPlanId = encodeURIComponent(String(planId));
-  const baseApi = buildBaseApiUrl(settings);
+  const baseApis = buildBaseApiUrls(settings);
   let lastError: unknown = null;
 
   for (const apiVersion of apiVersions) {
     const encodedApiVersion = encodeURIComponent(apiVersion);
-    const url = `${baseApi}/testplan/Plans/${encodedPlanId}/suites?api-version=${encodedApiVersion}`;
     const body: {
       suiteType: 'staticTestSuite';
       name: string;
@@ -1104,22 +1193,26 @@ export async function createStaticSuite(
       body.parentSuite = { id: parentSuiteId };
     }
 
-    try {
-      const createdSuite = await postJson<ADOTestSuite>(
-        url,
-        settings.patToken.trim(),
-        body,
-        'application/json',
-        'create the suite',
-      );
-      clearCacheEntry(getSuitesCacheKey(settings, planId));
-      return createdSuite;
-    } catch (error) {
-      lastError = error;
-      if (error instanceof ADORequestError && error.status === 404) {
-        continue;
+    for (const baseApi of baseApis) {
+      const url = `${baseApi}/testplan/Plans/${encodedPlanId}/suites?api-version=${encodedApiVersion}`;
+
+      try {
+        const createdSuite = await postJson<ADOTestSuite>(
+          url,
+          settings.patToken.trim(),
+          body,
+          'application/json',
+          'create the suite',
+        );
+        clearCacheEntry(getSuitesCacheKey(settings, planId));
+        return createdSuite;
+      } catch (error) {
+        lastError = error;
+        if (error instanceof ADORequestError && error.status === 404) {
+          continue;
+        }
+        throw error;
       }
-      throw error;
     }
   }
 
@@ -1289,123 +1382,125 @@ export async function createTestCase(
   }
 
   const apiVersions = getApiVersionCandidates(settings.apiVersion);
-  const baseApi = buildBaseApiUrl(settings);
+  const baseApis = buildBaseApiUrls(settings);
 
   let lastError: unknown = null;
 
   for (const apiVersion of apiVersions) {
     const encodedApiVersion = encodeURIComponent(apiVersion);
 
-    try {
-      // STEP 1: Create work item using same style as updateTestCase
-      const createUrl =
-          `${baseApi}/wit/workitems/$Test%20Case?api-version=${encodedApiVersion}`;
+    for (const baseApi of baseApis) {
+      try {
+        // STEP 1: Create work item using same style as updateTestCase
+        const createUrl =
+            `${baseApi}/wit/workitems/$Test%20Case?api-version=${encodedApiVersion}`;
 
-      const operations: Array<{ op: string; path: string; value: unknown }> = [
-        { op: 'add', path: '/fields/System.Title', value: newCaseData.title },
-      ];
+        const operations: Array<{ op: string; path: string; value: unknown }> = [
+          { op: 'add', path: '/fields/System.Title', value: newCaseData.title },
+        ];
 
-      if (newCaseData.description) {
-        operations.push({
-          op: 'add',
-          path: '/fields/System.Description',
-          value: newCaseData.description,
-        });
+        if (newCaseData.description) {
+          operations.push({
+            op: 'add',
+            path: '/fields/System.Description',
+            value: newCaseData.description,
+          });
+        }
+
+        if (newCaseData.status) {
+          operations.push({
+            op: 'add',
+            path: '/fields/System.State',
+            value: newCaseData.status,
+          });
+        }
+
+        if (newCaseData.method) {
+          operations.push({
+            op: 'add',
+            path: '/fields/Custom.TestingMethod',
+            value: newCaseData.method,
+          });
+        }
+
+        if (newCaseData.region) {
+          operations.push({
+            op: 'add',
+            path: '/fields/Custom.ApplicableRegions',
+            value: newCaseData.region,
+          });
+        }
+
+        if (newCaseData.execProcess) {
+          operations.push({
+            op: 'add',
+            path: '/fields/Custom.ExecutiveProcess',
+            value: newCaseData.execProcess,
+          });
+        }
+
+        if (newCaseData.pltpProcess) {
+          operations.push({
+            op: 'add',
+            path: '/fields/Custom.PLTPProcessArea',
+            value: newCaseData.pltpProcess,
+          });
+        }
+
+        if (newCaseData.initialSteps?.trim()) {
+          operations.push({
+            op: 'add',
+            path: '/fields/Custom.InitialStep',
+            value: newCaseData.initialSteps,
+          });
+        }
+
+        if (newCaseData.stepsXml) {
+          operations.push({
+            op: 'add',
+            path: '/fields/Microsoft.VSTS.TCM.Steps',
+            value: newCaseData.stepsXml,
+          });
+        }
+
+        const createdWorkItem = await patchJson<ADOWorkItem>(
+            createUrl,
+            settings.patToken.trim(),
+            operations,
+            'create the test case',
+        );
+
+        // STEP 2: Add created work item to selected suite
+        const addToSuiteUrl =
+            `${baseApi}/testplan/Plans/${encodeURIComponent(String(planId))}` +
+            `/Suites/${encodeURIComponent(String(suiteId))}` +
+            `/TestCase?api-version=${encodedApiVersion}`;
+
+        await postJson(
+            addToSuiteUrl,
+            settings.patToken.trim(),
+            [
+              {
+                workItem: { id: createdWorkItem.id },
+                pointAssignments: [],
+              },
+            ],
+            'application/json',
+            'add the test case to the suite',
+        );
+
+        const mappedCase = mapWorkItemToTestCase(createdWorkItem);
+        writeCacheEntry(getTestCaseDetailCacheKey(settings, createdWorkItem.id), mappedCase);
+        clearCacheEntry(getTestCasesCacheKey(settings, planId, suiteId));
+
+        return mappedCase;
+      } catch (error) {
+        lastError = error;
+        if (error instanceof ADORequestError && error.status === 404) {
+          continue;
+        }
+        throw error;
       }
-
-      if (newCaseData.status) {
-        operations.push({
-          op: 'add',
-          path: '/fields/System.State',
-          value: newCaseData.status,
-        });
-      }
-
-      if (newCaseData.method) {
-        operations.push({
-          op: 'add',
-          path: '/fields/Custom.TestingMethod',
-          value: newCaseData.method,
-        });
-      }
-
-      if (newCaseData.region) {
-        operations.push({
-          op: 'add',
-          path: '/fields/Custom.ApplicableRegions',
-          value: newCaseData.region,
-        });
-      }
-
-      if (newCaseData.execProcess) {
-        operations.push({
-          op: 'add',
-          path: '/fields/Custom.ExecutiveProcess',
-          value: newCaseData.execProcess,
-        });
-      }
-
-      if (newCaseData.pltpProcess) {
-        operations.push({
-          op: 'add',
-          path: '/fields/Custom.PLTPProcessArea',
-          value: newCaseData.pltpProcess,
-        });
-      }
-
-      if (newCaseData.initialSteps?.trim()) {
-        operations.push({
-          op: 'add',
-          path: '/fields/Custom.InitialStep',
-          value: newCaseData.initialSteps,
-        });
-      }
-
-      if (newCaseData.stepsXml) {
-        operations.push({
-          op: 'add',
-          path: '/fields/Microsoft.VSTS.TCM.Steps',
-          value: newCaseData.stepsXml,
-        });
-      }
-
-      const createdWorkItem = await patchJson<ADOWorkItem>(
-          createUrl,
-          settings.patToken.trim(),
-          operations,
-          'create the test case',
-      );
-
-      // STEP 2: Add created work item to selected suite
-      const addToSuiteUrl =
-          `${baseApi}/testplan/Plans/${encodeURIComponent(String(planId))}` +
-          `/Suites/${encodeURIComponent(String(suiteId))}` +
-          `/TestCase?api-version=${encodedApiVersion}`;
-
-      await postJson(
-          addToSuiteUrl,
-          settings.patToken.trim(),
-          [
-            {
-              workItem: { id: createdWorkItem.id },
-              pointAssignments: [],
-            },
-          ],
-          'application/json',
-          'add the test case to the suite',
-      );
-
-      const mappedCase = mapWorkItemToTestCase(createdWorkItem);
-      writeCacheEntry(getTestCaseDetailCacheKey(settings, createdWorkItem.id), mappedCase);
-      clearCacheEntry(getTestCasesCacheKey(settings, planId, suiteId));
-
-      return mappedCase;
-    } catch (error) {
-      lastError = error;
-      if (error instanceof ADORequestError && error.status === 404) {
-        continue;
-      }
-      throw error;
     }
   }
 

@@ -400,19 +400,19 @@ export function HelpGuide({ onBack }: HelpGuideProps) {
   }, [activeGuide, activateMatch, debouncedQuery]);
 
   return (
-    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Help guide">
+    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Developer guide">
       <button
         type="button"
         className="settings-overlay__backdrop"
         onClick={onBack}
-        aria-label="Close help guide"
+        aria-label="Close developer guide"
       />
       <div className="settings-dock settings-dock--help">
         <section className="settings-workbench help-guide">
           <header className="settings-workbench__header">
             <div>
               <p className="settings-workbench__crumb">Help / Action Authoring</p>
-              <h1 className="settings-workbench__title">Help Guide</h1>
+              <h1 className="settings-workbench__title">Developer Guide</h1>
               <p className="settings-workbench__subtitle">
                 Combined reference for parameter authoring, execution behavior, and action-specific field contracts.
               </p>
@@ -421,8 +421,8 @@ export function HelpGuide({ onBack }: HelpGuideProps) {
               type="button"
               className="settings-workbench__close"
               onClick={onBack}
-              aria-label="Close help guide"
-              title="Close help guide"
+              aria-label="Close developer guide"
+              title="Close developer guide"
             >
               <IconX size={18} />
             </button>

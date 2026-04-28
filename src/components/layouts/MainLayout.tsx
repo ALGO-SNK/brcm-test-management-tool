@@ -4,14 +4,29 @@ import { Header } from './Header';
 interface MainLayoutProps {
   children: ReactNode;
   title?: string;
+  onBrowseSeleniumScripts?: () => void;
+  canBrowseSeleniumScripts?: boolean;
   onHelpClick?: () => void;
   onSettingsClick?: () => void;
 }
 
-export function MainLayout({ children, title, onHelpClick, onSettingsClick }: MainLayoutProps) {
+export function MainLayout({
+  children,
+  title,
+  onBrowseSeleniumScripts,
+  canBrowseSeleniumScripts,
+  onHelpClick,
+  onSettingsClick,
+}: MainLayoutProps) {
   return (
     <div className="app-shell">
-      <Header title={title} onHelpClick={onHelpClick} onSettingsClick={onSettingsClick} />
+      <Header
+        title={title}
+        onBrowseSeleniumScripts={onBrowseSeleniumScripts}
+        canBrowseSeleniumScripts={canBrowseSeleniumScripts}
+        onHelpClick={onHelpClick}
+        onSettingsClick={onSettingsClick}
+      />
       <main className="app-main app-main--scroll">
         {children}
       </main>

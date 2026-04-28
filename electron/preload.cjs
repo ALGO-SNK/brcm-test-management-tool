@@ -33,4 +33,16 @@ contextBridge.exposeInMainWorld('desktop', {
       shouldClose: Boolean(shouldClose),
     });
   },
+  selectDirectory(options) {
+    return ipcRenderer.invoke('desktop:select-directory', options ?? {});
+  },
+  listDirectory(targetPath) {
+    return ipcRenderer.invoke('desktop:list-directory', targetPath);
+  },
+  readTextFile(targetPath) {
+    return ipcRenderer.invoke('desktop:read-text-file', targetPath);
+  },
+  writeTextFile(targetPath, content) {
+    return ipcRenderer.invoke('desktop:write-text-file', targetPath, content);
+  },
 });

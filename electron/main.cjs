@@ -204,6 +204,71 @@ function setupAutoUpdate() {
   });
 }
 
+function normalizeDirectoryPath(input) {
+  if (typeof input !== 'string') {
+    throw new Error('A folder path is required.');
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new Error('A folder path is required.');
+  }
+
+  const resolved = path.resolve(trimmed);
+  if (!fs.existsSync(resolved)) {
+    throw new Error('The selected folder does not exist.');
+  }
+
+  const stats = fs.statSync(resolved);
+  if (!stats.isDirectory()) {
+    throw new Error('The selected path is not a folder.');
+  }
+
+  return resolved;
+}
+
+function readDirectoryEntries(targetPath) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  const entries = fs.readdirSync(normalizedPath, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() || entry.isFile())
+    .map((entry) => ({
+      name: entry.name,
+      path: path.join(normalizedPath, entry.name),
+      type: entry.isDirectory() ? 'directory' : 'file',
+    }))
+    .sort((left, right) => {
+      if (left.type !== right.type) {
+        return left.type === 'directory' ? -1 : 1;
+      }
+      return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+  return entries;
+}
+
+function normalizeFilePath(input) {
+  if (typeof input !== 'string') {
+    throw new Error('A file path is required.');
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new Error('A file path is required.');
+  }
+
+  const resolved = path.resolve(trimmed);
+  if (!fs.existsSync(resolved)) {
+    throw new Error('The selected file does not exist.');
+  }
+
+  const stats = fs.statSync(resolved);
+  if (!stats.isFile()) {
+    throw new Error('The selected path is not a file.');
+  }
+
+  return resolved;
+}
+
 app.setAppUserModelId(APP_ID);
 
 app.whenReady().then(() => {
@@ -235,6 +300,37 @@ app.on('window-all-closed', () => {
 });
 
 ipcMain.handle('app:get-version', () => app.getVersion());
+ipcMain.handle('desktop:select-directory', async (_event, options) => {
+  const result = await dialog.showOpenDialog({
+    title: typeof options?.title === 'string' && options.title.trim() ? options.title.trim() : 'Select folder',
+    defaultPath: typeof options?.defaultPath === 'string' && options.defaultPath.trim() ? options.defaultPath.trim() : undefined,
+    properties: ['openDirectory'],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  return result.filePaths[0];
+});
+
+ipcMain.handle('desktop:list-directory', (_event, targetPath) => {
+  return readDirectoryEntries(targetPath);
+});
+
+ipcMain.handle('desktop:read-text-file', (_event, targetPath) => {
+  const normalizedPath = normalizeFilePath(targetPath);
+  return fs.readFileSync(normalizedPath, 'utf8');
+});
+
+ipcMain.handle('desktop:write-text-file', (_event, targetPath, content) => {
+  const normalizedPath = normalizeFilePath(targetPath);
+  if (typeof content !== 'string') {
+    throw new Error('File content must be text.');
+  }
+  fs.writeFileSync(normalizedPath, content, 'utf8');
+});
+
 ipcMain.on('app:set-unsaved-changes', (event, payload) => {
   const source = typeof payload?.source === 'string' ? payload.source : '';
   if (!source) {

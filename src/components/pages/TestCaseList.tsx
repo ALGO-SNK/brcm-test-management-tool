@@ -17,6 +17,7 @@ interface TestCaseListProps {
   onSelectCase: (testCase: ADOTestCase) => void;
   onBackToCases: () => void;
   onBackToPlan: () => void;
+  onBrowseSeleniumScripts?: () => void;
   onHelpClick: () => void;
   onSettingsClick: () => void;
   workspaceSettings: WorkspaceSettingsValues;
@@ -36,6 +37,7 @@ export function TestCaseList({
   onSelectCase,
   onBackToCases,
   onBackToPlan,
+  onBrowseSeleniumScripts,
   onHelpClick,
   onSettingsClick,
   workspaceSettings,
@@ -155,7 +157,13 @@ export function TestCaseList({
 
   return (
     <div className="app-shell">
-      <Header title={plan.name} onHelpClick={onHelpClick} onSettingsClick={onSettingsClick} />
+      <Header
+        title={plan.name}
+        onBrowseSeleniumScripts={onBrowseSeleniumScripts}
+        canBrowseSeleniumScripts={Boolean(workspaceSettings.seleniumRepoPath.trim())}
+        onHelpClick={onHelpClick}
+        onSettingsClick={onSettingsClick}
+      />
 
       <div className="split-pane" ref={containerRef}>
         {/* Sidebar */}

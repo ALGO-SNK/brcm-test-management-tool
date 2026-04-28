@@ -32,6 +32,22 @@ export function IconHelp(props: IconProps) {
   return <MaterialIcon name="help" {...props} />;
 }
 
+export function IconFolderCode(props: IconProps) {
+  return <MaterialIcon name="folder_code" {...props} />;
+}
+
+export function IconCode(props: IconProps) {
+  return <MaterialIcon name="code" {...props} />;
+}
+
+export function IconAddLink(props: IconProps) {
+  return <MaterialIcon name="add_link" {...props} />;
+}
+
+export function IconLinkOff(props: IconProps) {
+  return <MaterialIcon name="link_off" {...props} />;
+}
+
 export function IconArrowRight(props: IconProps) {
   return <MaterialIcon name="arrow_forward" {...props} />;
 }

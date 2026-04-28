@@ -96,13 +96,11 @@ export function CaseTable({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('order');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [localIsCreateMode, setLocalIsCreateMode] = useState(false);
-  const createModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleteTargetCase, setDeleteTargetCase] = useState<ADOTestCase | null>(null);
   const [blockedRemovalCase, setBlockedRemovalCase] = useState<ADOTestCase | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -215,13 +213,6 @@ export function CaseTable({
       onCaseCountChange?.(cases.length);
     }
   }, [cases.length, loading, onCaseCountChange]);
-
-  useEffect(() => () => {
-    if (createModeTimerRef.current) {
-      clearTimeout(createModeTimerRef.current);
-      createModeTimerRef.current = null;
-    }
-  }, []);
 
   useEffect(() => {
     if (!deleteTargetCase && !blockedRemovalCase) return;
@@ -419,11 +410,6 @@ export function CaseTable({
   if (isCreateMode) {
     return (
       <div>
-        {successMessage && (
-          <div className="alert alert--success" style={{ marginBottom: '16px' }}>
-            {successMessage}
-          </div>
-        )}
         <CreateTestCaseForm
           key={createSourceCase ? `clone-${createSourceCase.id}` : `blank-${suiteId}`}
           suiteName={suiteName}
@@ -449,8 +435,7 @@ export function CaseTable({
                 }
               );
 
-              // Success: show message and refresh test list
-              setSuccessMessage(`✅ Test case "${newCase.name}" created successfully!`);
+              // Success: refresh cached list data, then let parent navigate to the new detail view
               addNotification('success', `Test case "${newCase.name}" created successfully.`);
               setError(null);
               setWarning(null);
@@ -473,15 +458,6 @@ export function CaseTable({
                 // Still add the new case locally even if refresh fails
                 setCases([...cases, newCase]);
               }
-
-              // Auto-exit create mode after showing success
-              if (createModeTimerRef.current) {
-                clearTimeout(createModeTimerRef.current);
-              }
-              createModeTimerRef.current = setTimeout(() => {
-                setIsCreateMode(false);
-                setSuccessMessage(null);
-              }, 2000);
             } catch (error) {
               // Extract error message from API response
               let errorMessage = 'Failed to create test case';

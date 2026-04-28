@@ -16,6 +16,7 @@ export interface WorkspaceSettingsValues {
   projectName: string;
   patToken: string;
   apiVersion: string;
+  seleniumRepoPath: string;
 }
 
 interface WorkspaceSettingsProps {
@@ -71,7 +72,7 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
   const sectionSubtitle = section === 'appearance'
     ? 'Theme modes, accent palettes, and typography controls.'
     : section === 'workspace'
-    ? 'Manage saved workspace connection and API defaults.'
+    ? 'Manage Azure connection settings and the Selenium repository location.'
     : 'About Bromcom Test Builder and system information.';
 
   const updateField = (field: keyof WorkspaceSettingsValues, value: string) => {
@@ -105,6 +106,29 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
   const handleFontChange = (value: string) => {
     if (!isAppFontMode(value) || value === font) return;
     setFont(value);
+  };
+
+  const handleBrowseSeleniumRepo = async () => {
+    try {
+      if (!window.desktop?.selectDirectory) {
+        throw new Error('Desktop folder picker is unavailable. Restart the app to load the latest Electron changes.');
+      }
+
+      const selectedPath = await window.desktop?.selectDirectory?.({
+        title: 'Select Selenium workspace or repo',
+        defaultPath: form.seleniumRepoPath,
+      });
+
+      if (!selectedPath) {
+        return;
+      }
+
+      updateField('seleniumRepoPath', selectedPath);
+      addNotification('success', 'Selenium repo path selected.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to select Selenium repo path.';
+      addNotification('error', message);
+    }
   };
 
   const statusLabel = isConnectionConfigured ? 'Connected' : 'Incomplete';
@@ -256,7 +280,7 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                 <section className="settings-pane">
                   <div className="settings-chip-row">
                     <div className="settings-summary-chip">
-                      <span>Mode</span>
+                      <span>Azure</span>
                       <strong>{statusLabel}</strong>
                     </div>
                     <div className="settings-summary-chip">
@@ -271,12 +295,16 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                       <span>API</span>
                       <strong>{form.apiVersion || '7.2'}</strong>
                     </div>
+                    <div className="settings-summary-chip">
+                      <span>Selenium Repo</span>
+                      <strong>{form.seleniumRepoPath.trim() || 'Not set'}</strong>
+                    </div>
                   </div>
 
                   <form className="settings-form" onSubmit={handleSubmit}>
                     <div className="settings-panel">
                       <div className="settings-panel__head">
-                        <h3 className="settings-panel__title">Connection</h3>
+                        <h3 className="settings-panel__title">Azure Settings</h3>
                         <p className="settings-panel__sub">
                           Use a PAT with access to Test Plans and work item data in your Azure DevOps project.
                         </p>
@@ -333,6 +361,7 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                             ))}
                           </datalist>
                         </label>
+
                       </div>
 
                       <div className="settings-actions">
@@ -348,6 +377,44 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                       <div className="settings-status-row">
                         <span className={statusClassName}>{statusLabel}</span>
                         <span className={validationClassName}>{validationMessage}</span>
+                      </div>
+                    </div>
+
+                    <div className="settings-panel">
+                      <div className="settings-panel__head">
+                        <h3 className="settings-panel__title">Selenium Repo Settings</h3>
+                        <p className="settings-panel__sub">
+                          Set the local Selenium workspace or repository path used by the in-app script browser.
+                        </p>
+                      </div>
+
+                      <div className="settings-field-grid">
+                        <label className="settings-field settings-field--full" htmlFor="seleniumRepoPath">
+                          <span className="settings-field__label">Selenium workspace or repo path</span>
+                          <div className="settings-inline-row">
+                            <input
+                              id="seleniumRepoPath"
+                              className="settings-input"
+                              value={form.seleniumRepoPath}
+                              onChange={(event) => updateField('seleniumRepoPath', event.target.value)}
+                              placeholder="C:\\Repos\\selenium-tests"
+                            />
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm"
+                              onClick={() => { void handleBrowseSeleniumRepo(); }}
+                            >
+                              Browse
+                            </button>
+                          </div>
+                        </label>
+                      </div>
+
+                      <div className="settings-actions">
+                        <button type="submit" className="btn btn--primary btn--sm">
+                          <IconSave size={16} />
+                          Save settings
+                        </button>
                       </div>
                     </div>
                   </form>

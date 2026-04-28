@@ -6239,6 +6239,16 @@ input[type="radio"] {
     grid-column: 1/-1;
 }
 
+.settings-inline-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-inline-row .settings-input {
+    flex: 1 1 auto;
+}
+
 .settings-field__label {
     color: var(--color-text-muted);
     font-size: var(--text-xs);
@@ -6251,6 +6261,279 @@ input[type="radio"] {
     gap: 8px;
     padding: 0 16px 14px;
     display: flex;
+}
+
+.repo-browser {
+    width: min(980px, 100vw - 44px);
+}
+
+.repo-browser__header-actions {
+    align-items: center;
+    gap: 10px;
+    display: flex;
+}
+
+.repo-browser__body {
+    grid-template-columns: 1fr;
+}
+
+.repo-browser__panel {
+    min-height: 320px;
+    max-height: calc(100vh - 280px);
+    padding: 12px 0 16px 14px;
+    overflow: auto;
+}
+
+.repo-browser__tree {
+    flex-direction: column;
+    gap: 2px;
+    display: flex;
+}
+
+.repo-browser__row {
+    padding-right: 12px;
+}
+
+.repo-browser__toolbar {
+    padding: 0 16px 12px;
+}
+
+.repo-browser__search {
+    width: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    display: inline-flex;
+}
+
+.repo-browser__search--header {
+    width: min(340px, 42vw);
+    margin-right: 4px;
+}
+
+.repo-browser__search:focus-within {
+    border-color: var(--color-primary-border);
+    box-shadow: 0 0 0 2px var(--color-focus-ring);
+}
+
+.repo-browser__search input {
+    width: 100%;
+    min-height: 38px;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    outline: 0;
+}
+
+.repo-browser__item {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    text-align: left;
+    cursor: pointer;
+    display: inline-flex;
+}
+
+.repo-browser__item:hover {
+    background: var(--color-primary-soft);
+}
+
+.repo-browser__item--file {
+    cursor: default;
+    display: flex;
+}
+
+.repo-browser__item.is-clickable {
+    cursor: pointer;
+}
+
+.repo-browser__item.is-selected {
+    background: var(--color-primary-soft);
+    color: var(--color-text-heading);
+}
+
+.repo-browser__item--file:hover {
+    background: transparent;
+}
+
+.repo-browser__item--file.is-clickable:hover {
+    background: var(--color-primary-soft);
+}
+
+.repo-browser__chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--color-text-subtle);
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.16s ease;
+    display: inline-flex;
+}
+
+.repo-browser__chevron.is-expanded {
+    transform: rotate(90deg);
+}
+
+.repo-browser__chevron--placeholder {
+    opacity: 0;
+}
+
+.repo-browser__toggle-btn {
+    width: 20px;
+    height: 20px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-text-subtle);
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    cursor: pointer;
+    transition: background-color var(--transition-fast), transform 0.16s ease;
+    display: inline-flex;
+}
+
+.repo-browser__toggle-btn:hover {
+    background: var(--color-primary-soft);
+}
+
+.repo-browser__toggle-btn.is-expanded {
+    transform: rotate(90deg);
+}
+
+.repo-browser__label {
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.repo-browser__item-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.repo-browser__meta {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    line-height: 1.4;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.repo-browser__method-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-bottom: 4px;
+}
+
+.repo-browser__method-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    color: var(--color-text-muted);
+    width: 100%;
+    border-radius: 10px;
+}
+
+.repo-browser__method-row.is-selected {
+    background: var(--color-primary-soft);
+    color: var(--color-text-heading);
+}
+
+.repo-browser__method-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.repo-browser__state {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    padding: 12px 16px;
+}
+
+.repo-browser__state--error {
+    color: var(--color-danger);
+}
+
+.repo-browser__preview {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.repo-browser__preview-title {
+    color: var(--color-text-heading);
+    font-size: var(--text-sm);
+    font-weight: 700;
+}
+
+.repo-browser__preview-line {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.repo-browser__assign-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px 16px;
+    border-top: 1px solid var(--color-border-soft);
+}
+
+.repo-browser__action-btn {
+    width: 28px;
+    height: 28px;
+    margin-left: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    cursor: pointer;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+    display: inline-flex;
+}
+
+.repo-browser__action-btn:hover:not(:disabled) {
+    border-color: var(--color-primary-border);
+    background: var(--color-primary-soft);
+    color: var(--color-text-heading);
+}
+
+.repo-browser__action-btn:disabled {
+    opacity: var(--state-disabled-opacity, 0.5);
+    cursor: not-allowed;
+}
+
+.repo-browser__action-btn--danger:hover:not(:disabled) {
+    border-color: var(--color-danger-border);
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
 }
 
 .settings-status-row {

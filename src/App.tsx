@@ -9,6 +9,7 @@ import { Landing } from './components/pages/Landing';
 import { TestCaseList } from './components/pages/TestCaseList';
 import { HelpGuide } from './components/pages/HelpGuide';
 import { WorkspaceSettings, type WorkspaceSettingsValues } from './components/pages/WorkspaceSettings';
+import { SeleniumRepoBrowserModal } from './components/TestCases/SeleniumRepoBrowserModal';
 import type { ADOTestPlan, ADOTestSuite, ADOTestCase } from './types';
 import type { AppFontMode } from './context/themeContext.shared';
 
@@ -23,6 +24,7 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
     projectName: '',
     patToken: '',
     apiVersion: '7.1',
+    seleniumRepoPath: '',
   };
   try {
     const raw = localStorage.getItem(WORKSPACE_SETTINGS_KEY);
@@ -183,6 +185,7 @@ export function App() {
   const [planSuiteCreateRequest, setPlanSuiteCreateRequest] = useState(0);
   const [workspaceSettings, setWorkspaceSettings] =
     useState<WorkspaceSettingsValues>(getInitialWorkspaceSettings);
+  const [isSeleniumRepoBrowserOpen, setIsSeleniumRepoBrowserOpen] = useState(false);
 
   const handleSelectPlan = (plan: ADOTestPlan) => {
     setSelectedPlan(plan);
@@ -238,6 +241,15 @@ export function App() {
     setWorkspaceSettings(values);
     localStorage.setItem(WORKSPACE_SETTINGS_KEY, JSON.stringify(values));
   };
+  const handleOpenSeleniumRepoBrowser = () => {
+    if (!workspaceSettings.seleniumRepoPath.trim()) {
+      return;
+    }
+    setIsSeleniumRepoBrowserOpen(true);
+  };
+  const handleCloseSeleniumRepoBrowser = () => {
+    setIsSeleniumRepoBrowserOpen(false);
+  };
 
   const isSettingsOpen = currentPage === 'settings';
   const isHelpOpen = currentPage === 'help';
@@ -255,6 +267,7 @@ export function App() {
             <Landing
               onSelectPlan={handleSelectPlan}
               onCreateSuiteForPlan={handleCreateSuiteForPlan}
+              onBrowseSeleniumScripts={handleOpenSeleniumRepoBrowser}
               onHelpClick={handleHelpClick}
               onSettingsClick={handleSettingsClick}
               workspaceSettings={workspaceSettings}
@@ -271,6 +284,7 @@ export function App() {
               onSelectCase={handleSelectCase}
               onBackToCases={handleBackToCases}
               onBackToPlan={handleBackToPlan}
+              onBrowseSeleniumScripts={handleOpenSeleniumRepoBrowser}
               onHelpClick={handleHelpClick}
               onSettingsClick={handleSettingsClick}
               workspaceSettings={workspaceSettings}
@@ -288,6 +302,13 @@ export function App() {
 
           {isHelpOpen && (
             <HelpGuide onBack={handleBackFromHelp} />
+          )}
+
+          {isSeleniumRepoBrowserOpen && workspaceSettings.seleniumRepoPath.trim() && (
+            <SeleniumRepoBrowserModal
+              repoPath={workspaceSettings.seleniumRepoPath.trim()}
+              onClose={handleCloseSeleniumRepoBrowser}
+            />
           )}
         </NotificationContextProvider>
       </MuiThemeAdapter>
