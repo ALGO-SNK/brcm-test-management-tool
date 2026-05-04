@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 /*import { useThemeContext } from '../../context/useThemeContext';*/
 import {
+  IconDatabase,
   IconFolderCode,
   IconHelp,
  /* IconMoon,
@@ -17,6 +18,7 @@ interface HeaderProps {
   actions?: ReactNode;
   onBrowseSeleniumScripts?: () => void;
   canBrowseSeleniumScripts?: boolean;
+  onOpenDbUpdater?: () => void;
   onHelpClick?: () => void;
   onSettingsClick?: () => void;
 }
@@ -28,6 +30,7 @@ export function Header({
   actions,
   onBrowseSeleniumScripts,
   canBrowseSeleniumScripts = false,
+  onOpenDbUpdater,
   onHelpClick,
   onSettingsClick,
 }: HeaderProps) {
@@ -35,6 +38,7 @@ export function Header({
   const canOpenHelp = typeof onHelpClick === 'function';
   const canOpenSettings = typeof onSettingsClick === 'function';
   const canOpenSeleniumRepo = typeof onBrowseSeleniumScripts === 'function' && canBrowseSeleniumScripts;
+  const canOpenDbUpdater = typeof onOpenDbUpdater === 'function';
   /*const isLightMode = mode === 'light';*/
 
   return (
@@ -65,6 +69,14 @@ export function Header({
           title={canOpenSeleniumRepo ? 'Browse Selenium scripts' : 'Set Selenium repo path in Settings first'}
         >
           <IconFolderCode size={18} />
+        </button>
+        <button
+          className="app-header__icon-btn"
+          onClick={onOpenDbUpdater}
+          disabled={!canOpenDbUpdater}
+          title="Refresh Local DB"
+        >
+          <IconDatabase size={18} />
         </button>
         {/*Hiiden for now*/}
         {/*<button className="app-header__icon-btn" title="Search">

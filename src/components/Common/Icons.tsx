@@ -36,6 +36,14 @@ export function IconFolderCode(props: IconProps) {
   return <MaterialIcon name="folder_code" {...props} />;
 }
 
+export function IconDatabase(props: IconProps) {
+  return <MaterialIcon name="database" {...props} />;
+}
+
+export function IconBranch(props: IconProps) {
+  return <MaterialIcon name="account_tree" {...props} />;
+}
+
 export function IconCode(props: IconProps) {
   return <MaterialIcon name="code" {...props} />;
 }

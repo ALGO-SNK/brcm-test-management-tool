@@ -82,9 +82,9 @@ function normalizeFieldText(value: unknown): string {
   return '';
 }
 
-function isUnsetAutomatedTestName(value: unknown): boolean {
-  const normalized = normalizeFieldText(value).trim();
-  return normalized.length === 0 || normalized.toLowerCase() === 'not set';
+function hasAutomationFieldValue(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 && normalized !== 'not set';
 }
 
 function decodeHtmlEntities(input: string): string {
@@ -291,6 +291,7 @@ function buildAdditionalDetailRows(testCase: ADOTestCase, plan: ADOTestPlan): De
     {label: 'Area Path', value: toDisplayValue(fields['System.AreaPath']) || plan.areaPath},
     {label: 'Tester', value: testCase.tester?.displayName || ''},
     {label: 'Automated Test Name', value: toDisplayValue(fields['Microsoft.VSTS.TCM.AutomatedTestName'])},
+    {label: 'Automated Test Storage', value: toDisplayValue(fields['Microsoft.VSTS.TCM.AutomatedTestStorage'])},
     {label: 'Created Date', value: formatDateTime(fields['System.CreatedDate'])},
     {label: 'Created By', value: toIdentityDisplay(fields['System.CreatedBy'])},
     {label: 'Changed Date', value: formatDateTime(fields['System.ChangedDate'])},
@@ -766,6 +767,14 @@ export function TestCaseDetail({
   const parsedAutomationAssociation = useMemo(() => {
     return parseAutomatedTestFullName(currentAutomatedTestName);
   }, [currentAutomatedTestName]);
+  const hasExistingAutomationMetadata = Boolean(
+    parsedAutomationAssociation?.methodName
+      && hasAutomationFieldValue(currentAutomatedTestName)
+      && hasAutomationFieldValue(currentAutomatedTestStorage),
+  );
+  const effectiveAutomationMethodName = hasExistingAutomationMetadata
+    ? parsedAutomationAssociation?.methodName ?? ''
+    : automationMethodName;
 
   const handleClone = useCallback(() => {
     if (!testCase || !onClone) return;
@@ -792,7 +801,7 @@ export function TestCaseDetail({
   }, [addNotification, automationManagerDisabledReason, canOpenAutomationManager, seleniumRepoPath]);
 
   const handleWriteAutomationCode = useCallback(async (filePath: string) => {
-    if (!testCase || !automationMethodName) {
+    if (!testCase || !effectiveAutomationMethodName) {
       return;
     }
     if (!window.desktop?.readTextFile || !window.desktop?.writeTextFile) {
@@ -803,10 +812,10 @@ export function TestCaseDetail({
     setIsAutomationActionBusy(true);
     try {
       const fileContent = await window.desktop.readTextFile(filePath);
-      ensureMethodDoesNotExist(fileContent, automationMethodName);
+      ensureMethodDoesNotExist(fileContent, effectiveAutomationMethodName);
       const nextFileContent = insertAutomatedTestMethod(
         fileContent,
-        buildAutomatedMethodCode(automationMethodName),
+        buildAutomatedMethodCode(effectiveAutomationMethodName),
       );
       await window.desktop.writeTextFile(filePath, nextFileContent);
       setAutomationRefreshToken((current) => current + 1);
@@ -817,7 +826,7 @@ export function TestCaseDetail({
     } finally {
       setIsAutomationActionBusy(false);
     }
-  }, [addNotification, automationMethodName, testCase]);
+  }, [addNotification, effectiveAutomationMethodName, testCase]);
 
   const handleAddAutomationAssociation = useCallback(async (filePath: string, methodName: string) => {
     if (!testCase) {
@@ -831,7 +840,7 @@ export function TestCaseDetail({
         testCase.id,
         {
           automatedTestName: buildAutomatedTestFullName(className, methodName),
-          automatedTestStorage: 'BromCom.Tests.dll',
+          automatedTestStorage: currentAutomatedTestStorage || 'BromCom.Tests.dll',
         },
         testCase._links?.workItem?.href ?? testCase._links?.self?.href,
       );
@@ -842,7 +851,7 @@ export function TestCaseDetail({
     } finally {
       setIsAutomationActionBusy(false);
     }
-  }, [addNotification, reloadCurrentTestCase, testCase, workspaceSettings]);
+  }, [addNotification, currentAutomatedTestStorage, reloadCurrentTestCase, testCase, workspaceSettings]);
 
   const handleRemoveAutomationAssociation = useCallback(async (_filePath: string, methodName: string) => {
     if (!testCase) {
@@ -1297,7 +1306,7 @@ export function TestCaseDetail({
         <SeleniumRepoBrowserModal
           repoPath={seleniumRepoPath}
           mode="manage-automation"
-          generatedMethodName={automationMethodName}
+          generatedMethodName={effectiveAutomationMethodName}
           associatedMethodName={parsedAutomationAssociation?.methodName ?? null}
           associatedClassName={parsedAutomationAssociation?.className ?? null}
           onWriteCode={(filePath) => { void handleWriteAutomationCode(filePath); }}

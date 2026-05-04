@@ -17,6 +17,9 @@ export interface WorkspaceSettingsValues {
   patToken: string;
   apiVersion: string;
   seleniumRepoPath: string;
+  dbDirectory: string;
+  mainDbName: string;
+  worldPayDbName: string;
 }
 
 interface WorkspaceSettingsProps {
@@ -127,6 +130,29 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
       addNotification('success', 'Selenium repo path selected.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to select Selenium repo path.';
+      addNotification('error', message);
+    }
+  };
+
+  const handleBrowseDbDirectory = async () => {
+    try {
+      if (!window.desktop?.selectDirectory) {
+        throw new Error('Desktop folder picker is unavailable. Restart the app to load the latest Electron changes.');
+      }
+
+      const selectedPath = await window.desktop.selectDirectory({
+        title: 'Select Local DB storage folder',
+        defaultPath: form.dbDirectory,
+      });
+
+      if (!selectedPath) {
+        return;
+      }
+
+      updateField('dbDirectory', selectedPath);
+      addNotification('success', 'Local DB storage folder selected.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to select Local DB storage folder.';
       addNotification('error', message);
     }
   };
@@ -299,6 +325,10 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                       <span>Selenium Repo</span>
                       <strong>{form.seleniumRepoPath.trim() || 'Not set'}</strong>
                     </div>
+                    <div className="settings-summary-chip">
+                      <span>DB Folder</span>
+                      <strong>{form.dbDirectory.trim() || 'Not set'}</strong>
+                    </div>
                   </div>
 
                   <form className="settings-form" onSubmit={handleSubmit}>
@@ -407,6 +437,66 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                               Browse
                             </button>
                           </div>
+                        </label>
+                      </div>
+
+                      <div className="settings-actions">
+                        <button type="submit" className="btn btn--primary btn--sm">
+                          <IconSave size={16} />
+                          Save settings
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="settings-panel">
+                      <div className="settings-panel__head">
+                        <h3 className="settings-panel__title">Local DB Updater Settings</h3>
+                        <p className="settings-panel__sub">
+                          Set the local SQLite folder and file names used by Local DB Refresh and plan data preview.
+                        </p>
+                      </div>
+
+                      <div className="settings-field-grid">
+                        <label className="settings-field settings-field--full" htmlFor="dbDirectory">
+                          <span className="settings-field__label">Local DB storage folder</span>
+                          <div className="settings-inline-row">
+                            <input
+                              id="dbDirectory"
+                              className="settings-input"
+                              value={form.dbDirectory}
+                              onChange={(event) => updateField('dbDirectory', event.target.value)}
+                              placeholder="C:\\Automation Tests\\Database"
+                            />
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm"
+                              onClick={() => { void handleBrowseDbDirectory(); }}
+                            >
+                              Browse
+                            </button>
+                          </div>
+                        </label>
+
+                        <label className="settings-field" htmlFor="mainDbName">
+                          <span className="settings-field__label">Main plan DB file</span>
+                          <input
+                            id="mainDbName"
+                            className="settings-input"
+                            value={form.mainDbName}
+                            onChange={(event) => updateField('mainDbName', event.target.value)}
+                            placeholder="BromcomTestCases.db"
+                          />
+                        </label>
+
+                        <label className="settings-field" htmlFor="worldPayDbName">
+                          <span className="settings-field__label">WorldPay plan DB file</span>
+                          <input
+                            id="worldPayDbName"
+                            className="settings-input"
+                            value={form.worldPayDbName}
+                            onChange={(event) => updateField('worldPayDbName', event.target.value)}
+                            placeholder="BromcomWorldPayTestCases.db"
+                          />
                         </label>
                       </div>
 

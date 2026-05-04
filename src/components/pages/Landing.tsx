@@ -9,6 +9,7 @@ interface LandingProps {
   onSelectPlan: (plan: ADOTestPlan) => void;
   onCreateSuiteForPlan: (plan: ADOTestPlan) => void;
   onBrowseSeleniumScripts?: () => void;
+  onOpenDbUpdater?: () => void;
   onHelpClick: () => void;
   onSettingsClick: () => void;
   workspaceSettings: WorkspaceSettingsValues;
@@ -18,6 +19,7 @@ export function Landing({
                           onSelectPlan,
                           onCreateSuiteForPlan,
                           onBrowseSeleniumScripts,
+                          onOpenDbUpdater,
                           onHelpClick,
                           onSettingsClick,
                           workspaceSettings,
@@ -65,6 +67,7 @@ export function Landing({
         title={projectName}
         onBrowseSeleniumScripts={onBrowseSeleniumScripts}
         canBrowseSeleniumScripts={Boolean(workspaceSettings.seleniumRepoPath.trim())}
+        onOpenDbUpdater={onOpenDbUpdater}
         onHelpClick={onHelpClick}
         onSettingsClick={onSettingsClick}
       >

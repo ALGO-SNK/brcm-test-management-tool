@@ -6,6 +6,7 @@ import { NOT_SELECTED_LABEL } from '../../utils/selectLabels';
 interface SearchableSelectOption {
   value: string;
   label: string;
+  group?: string;
 }
 
 interface SearchableSelectProps {
@@ -43,6 +44,19 @@ export function SearchableSelect({
   );
 
   const selectedOption = options.find((opt) => opt.value === value);
+  const groupedOptions = useMemo(() => {
+    const groups: Array<{ label: string | null; options: SearchableSelectOption[] }> = [];
+    filteredOptions.forEach((option) => {
+      const groupLabel = option.group ?? null;
+      let group = groups.find((item) => item.label === groupLabel);
+      if (!group) {
+        group = { label: groupLabel, options: [] };
+        groups.push(group);
+      }
+      group.options.push(option);
+    });
+    return groups;
+  }, [filteredOptions]);
 
   // Close on outside click; focus input when opening
   useEffect(() => {
@@ -186,19 +200,28 @@ export function SearchableSelect({
         >
           {filteredOptions.length > 0 ? (
             <ul className="searchable-select__options">
-              {filteredOptions.map((option) => (
-                <li key={option.value} role="option" aria-selected={option.value === value}>
-                  <button
-                    type="button"
-                    className={`searchable-select__option${option.value === value ? ' is-selected' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSelect(option.value);
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                </li>
+              {groupedOptions.map((group) => (
+                <React.Fragment key={group.label ?? 'ungrouped'}>
+                  {group.label && (
+                    <li className="searchable-select__group-label" role="presentation">
+                      {group.label}
+                    </li>
+                  )}
+                  {group.options.map((option) => (
+                    <li key={option.value} role="option" aria-selected={option.value === value}>
+                      <button
+                        type="button"
+                        className={`searchable-select__option${option.value === value ? ' is-selected' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelect(option.value);
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    </li>
+                  ))}
+                </React.Fragment>
               ))}
             </ul>
           ) : (

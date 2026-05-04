@@ -6,6 +6,7 @@ interface MainLayoutProps {
   title?: string;
   onBrowseSeleniumScripts?: () => void;
   canBrowseSeleniumScripts?: boolean;
+  onOpenDbUpdater?: () => void;
   onHelpClick?: () => void;
   onSettingsClick?: () => void;
 }
@@ -15,6 +16,7 @@ export function MainLayout({
   title,
   onBrowseSeleniumScripts,
   canBrowseSeleniumScripts,
+  onOpenDbUpdater,
   onHelpClick,
   onSettingsClick,
 }: MainLayoutProps) {
@@ -24,6 +26,7 @@ export function MainLayout({
         title={title}
         onBrowseSeleniumScripts={onBrowseSeleniumScripts}
         canBrowseSeleniumScripts={canBrowseSeleniumScripts}
+        onOpenDbUpdater={onOpenDbUpdater}
         onHelpClick={onHelpClick}
         onSettingsClick={onSettingsClick}
       />

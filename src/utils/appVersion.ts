@@ -3,22 +3,6 @@
  * Provides access to the current app version from Electron/package.json
  */
 
-declare global {
-  interface Window {
-    desktop?: {
-      versions?: {
-        version: string;
-        electron: string;
-        node: string;
-        chrome: string;
-      };
-      setUnsavedChanges(source: string, isDirty: boolean): void;
-      onWindowCloseRequested(callback: () => void): () => void;
-      respondToWindowClose(shouldClose: boolean): void;
-    };
-  }
-}
-
 export function getAppVersion(): string {
   try {
     return window.desktop?.versions?.version ?? 'Unknown';

@@ -18,6 +18,7 @@ interface TestCaseListProps {
   onBackToCases: () => void;
   onBackToPlan: () => void;
   onBrowseSeleniumScripts?: () => void;
+  onOpenDbUpdater?: () => void;
   onHelpClick: () => void;
   onSettingsClick: () => void;
   workspaceSettings: WorkspaceSettingsValues;
@@ -38,6 +39,7 @@ export function TestCaseList({
   onBackToCases,
   onBackToPlan,
   onBrowseSeleniumScripts,
+  onOpenDbUpdater,
   onHelpClick,
   onSettingsClick,
   workspaceSettings,
@@ -161,6 +163,7 @@ export function TestCaseList({
         title={plan.name}
         onBrowseSeleniumScripts={onBrowseSeleniumScripts}
         canBrowseSeleniumScripts={Boolean(workspaceSettings.seleniumRepoPath.trim())}
+        onOpenDbUpdater={onOpenDbUpdater}
         onHelpClick={onHelpClick}
         onSettingsClick={onSettingsClick}
       />

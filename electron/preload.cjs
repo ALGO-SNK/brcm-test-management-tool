@@ -39,6 +39,35 @@ contextBridge.exposeInMainWorld('desktop', {
   listDirectory(targetPath) {
     return ipcRenderer.invoke('desktop:list-directory', targetPath);
   },
+  findTestMethod(rootPath, methodName) {
+    return ipcRenderer.invoke('desktop:find-test-method', rootPath, methodName);
+  },
+  getGitBranch(targetPath) {
+    return ipcRenderer.invoke('desktop:get-git-branch', targetPath);
+  },
+  switchGitBranch(targetPath, targetBranch) {
+    return ipcRenderer.invoke('desktop:switch-git-branch', targetPath, targetBranch);
+  },
+  runDbUpdater(settings) {
+    return ipcRenderer.invoke('desktop:run-db-updater', settings);
+  },
+  getDbUpdaterOverview(settings) {
+    return ipcRenderer.invoke('desktop:get-db-updater-overview', settings);
+  },
+  onDbUpdaterProgress(callback) {
+    if (typeof callback !== 'function') {
+      return () => {};
+    }
+
+    const listener = (_event, payload) => {
+      callback(payload);
+    };
+
+    ipcRenderer.on('desktop:db-updater-progress', listener);
+    return () => {
+      ipcRenderer.removeListener('desktop:db-updater-progress', listener);
+    };
+  },
   readTextFile(targetPath) {
     return ipcRenderer.invoke('desktop:read-text-file', targetPath);
   },
