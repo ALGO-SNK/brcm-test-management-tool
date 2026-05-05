@@ -75,6 +75,28 @@ declare global {
     results: DesktopDbUpdaterTargetResult[];
   }
 
+  interface DesktopDbUpdaterTestCaseSyncPayload {
+    planId: number;
+    suiteId: number;
+    suiteName: string;
+    testCaseId: number;
+  }
+
+  interface DesktopDbUpdaterTestCaseSyncResult {
+    status: 'complete' | 'skipped';
+    reason?: string;
+    testCaseId: number;
+    planId: number;
+    suiteId: number;
+    target?: string;
+    label?: string;
+    dbName?: string;
+    dbPath?: string;
+    action?: 'created' | 'updated';
+    hasAutomation?: boolean;
+    row?: DesktopDbUpdaterRow;
+  }
+
   interface DesktopDbUpdaterRow {
     id: number;
     title: string;
@@ -144,6 +166,22 @@ declare global {
         enabled: boolean;
       }>;
     }, options?: { targetIds?: string[] }) => Promise<DesktopDbUpdaterResult>;
+    syncDbUpdaterTestCase?: (settings: {
+      organization: string;
+      projectName: string;
+      patToken: string;
+      apiVersion: string;
+      dbDirectory?: string;
+      mainDbName?: string;
+      worldPayDbName?: string;
+      dbMappings?: Array<{
+        id: string;
+        label: string;
+        planId: number;
+        dbName: string;
+        enabled: boolean;
+      }>;
+    }, payload: DesktopDbUpdaterTestCaseSyncPayload) => Promise<DesktopDbUpdaterTestCaseSyncResult>;
     getDbUpdaterOverview?: (settings: {
       organization: string;
       projectName: string;

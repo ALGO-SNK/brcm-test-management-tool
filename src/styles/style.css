@@ -6933,6 +6933,128 @@ input[type="radio"] {
     margin-top: 0;
 }
 
+.test-save-progress {
+    width: min(520px, calc(100vw - 32px));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-xl);
+    overflow: hidden;
+}
+
+.test-save-progress__head {
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+    border-bottom: 1px solid var(--color-border-soft);
+    display: flex;
+}
+
+.test-save-progress__head h2 {
+    margin: 0;
+    font-size: var(--text-lg);
+}
+
+.test-save-progress__head p {
+    color: var(--color-text-muted);
+    margin: 4px 0 0;
+    font-size: var(--text-sm);
+}
+
+.test-save-progress__body {
+    padding: 14px 16px;
+}
+
+.test-save-progress__case {
+    border: 1px solid var(--color-border-soft);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-subtle);
+    gap: 6px;
+    padding: 8px 10px;
+    display: grid;
+}
+
+.test-save-progress__case span {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: 800;
+}
+
+.test-save-progress__case strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-sm);
+}
+
+.test-save-progress__steps {
+    margin-top: 12px;
+    display: grid;
+}
+
+.test-save-progress__step {
+    grid-template-columns: 10px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    min-height: 28px;
+    color: var(--color-text-muted);
+    display: grid;
+}
+
+.test-save-progress__step span {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--color-border-strong);
+}
+
+.test-save-progress__step p {
+    margin: 0;
+    font-size: var(--text-sm);
+}
+
+.test-save-progress__step--running span {
+    background: var(--color-primary);
+    box-shadow: 0 0 0 4px var(--color-primary-soft);
+}
+
+.test-save-progress__step--success,
+.test-save-progress__step--skipped {
+    color: var(--color-text);
+}
+
+.test-save-progress__step--success span {
+    background: var(--color-success);
+}
+
+.test-save-progress__step--skipped span {
+    background: var(--color-warning);
+}
+
+.test-save-progress__step--error {
+    color: var(--color-danger);
+}
+
+.test-save-progress__step--error span {
+    background: var(--color-danger);
+}
+
+.test-save-progress__actions {
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 16px 14px;
+    display: flex;
+}
+
+.test-save-progress__footer {
+    border-top: 1px solid var(--color-border-soft);
+    color: var(--color-text-muted);
+    padding: 10px 16px;
+    font-size: var(--text-sm);
+}
+
 @media (width <=980px) {
     .settings-db-mapping {
         grid-template-columns: 1fr 1fr 48px 36px;

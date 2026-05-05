@@ -716,7 +716,7 @@ function getDbUpdaterWorkItemId(item) {
   return Number.isFinite(id) ? id : null;
 }
 
-function mapDbUpdaterCase(item, suite, browserName) {
+function mapDbUpdaterCase(item, suite, browserName, options = {}) {
   const workItem = item?.workItem ?? item ?? {};
   const testId = getDbUpdaterWorkItemId(item);
   if (!Number.isFinite(testId)) {
@@ -733,7 +733,7 @@ function mapDbUpdaterCase(item, suite, browserName) {
   const automatedTestName = normalizeDbText(fields['Microsoft.VSTS.TCM.AutomatedTestName']);
   const stepsXml = normalizeDbText(fields['Microsoft.VSTS.TCM.Steps']);
   const isAutomationMethod = automationStatus.toLowerCase() === 'automated';
-  if (!isAutomationMethod || !stepsXml.trim()) {
+  if ((!isAutomationMethod || !stepsXml.trim()) && !options.includeNonAutomated) {
     return null;
   }
 
@@ -751,6 +751,27 @@ function mapDbUpdaterCase(item, suite, browserName) {
     batchName: suite.name,
     testSuitId: String(suite.id),
   };
+}
+
+async function fetchDbUpdaterRowForCase(settings, target, suite, testCaseId) {
+  const workItemsById = await fetchDbUpdaterWorkItemsByIds(settings, [testCaseId]);
+  const workItem = workItemsById.get(testCaseId);
+  if (!workItem) {
+    throw new Error(`Test case ${testCaseId} was saved in Azure, but its details could not be loaded for local DB sync.`);
+  }
+
+  const row = mapDbUpdaterCase(
+    { id: testCaseId, workItem },
+    suite,
+    target.browserName || DB_UPDATER_CONFIG.browserName,
+    { includeNonAutomated: true },
+  );
+
+  if (!row) {
+    throw new Error(`Test case ${testCaseId} could not be converted into a local DB row.`);
+  }
+
+  return row;
 }
 
 async function fetchDbUpdaterSuites(settings, planId) {
@@ -1171,6 +1192,109 @@ async function writeDbUpdaterDatabase(dbPath, rows, sender, runId, target) {
   } finally {
     await db.close();
   }
+}
+
+async function upsertDbUpdaterRow(dbPath, row) {
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  const db = await open({
+    filename: dbPath,
+    driver: sqlite3.Database,
+  });
+
+  try {
+    await db.exec('PRAGMA journal_mode = WAL;');
+    await ensureDbUpdaterTable(db);
+    const existing = await db.get('SELECT "Id" FROM TestCaseDao WHERE "Id" = ?;', row.id);
+    await db.run(
+      `
+        INSERT INTO TestCaseDao (
+          Id,
+          Title,
+          IsAutomationMethod,
+          AutomatedTestName,
+          BrowserName,
+          InitialStepsJson,
+          TestStepsJson,
+          BatchName,
+          TestSuitId
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(Id) DO UPDATE SET
+          Title = excluded.Title,
+          IsAutomationMethod = excluded.IsAutomationMethod,
+          AutomatedTestName = excluded.AutomatedTestName,
+          BrowserName = excluded.BrowserName,
+          InitialStepsJson = excluded.InitialStepsJson,
+          TestStepsJson = excluded.TestStepsJson,
+          BatchName = excluded.BatchName,
+          TestSuitId = excluded.TestSuitId;
+      `,
+      row.id,
+      row.title,
+      row.isAutomationMethod ? 1 : 0,
+      row.automatedTestName,
+      row.browserName,
+      row.initialStepsJson,
+      row.testStepsJson,
+      row.batchName,
+      row.testSuitId,
+    );
+
+    return {
+      action: existing ? 'updated' : 'created',
+      row,
+      hasAutomation: Boolean(row.isAutomationMethod && row.automatedTestName.trim()),
+    };
+  } finally {
+    await db.close();
+  }
+}
+
+async function syncDbUpdaterTestCase(settingsInput, payload) {
+  const settings = assertDbUpdaterSettings(settingsInput);
+  const planId = Number(payload?.planId);
+  const suiteId = Number(payload?.suiteId);
+  const testCaseId = Number(payload?.testCaseId);
+  const suiteName = normalizeDbText(payload?.suiteName) || `Suite ${suiteId}`;
+
+  if (!Number.isFinite(planId) || planId <= 0) {
+    throw new Error('Plan id is required for local DB sync.');
+  }
+  if (!Number.isFinite(suiteId) || suiteId <= 0) {
+    throw new Error('Suite id is required for local DB sync.');
+  }
+  if (!Number.isFinite(testCaseId) || testCaseId <= 0) {
+    throw new Error('Test case id is required for local DB sync.');
+  }
+
+  const dbConfig = getDbUpdaterRuntimeConfig(settingsInput);
+  const target = dbConfig.targets.find((item) => item.enabled && Number(item.planId) === planId);
+  if (!target) {
+    return {
+      status: 'skipped',
+      reason: `No enabled DB mapping exists for plan ${planId}.`,
+      testCaseId,
+      planId,
+      suiteId,
+    };
+  }
+
+  const dbPath = getDbUpdaterTargetPath(target);
+  const row = await fetchDbUpdaterRowForCase(settings, target, { id: suiteId, name: suiteName }, testCaseId);
+  const result = await upsertDbUpdaterRow(dbPath, row);
+
+  return {
+    status: 'complete',
+    testCaseId,
+    planId,
+    suiteId,
+    target: target.key,
+    label: target.label,
+    dbName: target.dbName,
+    dbPath,
+    action: result.action,
+    hasAutomation: result.hasAutomation,
+    row: result.row,
+  };
 }
 
 async function fetchDbUpdaterRowsForTarget(settings, target, sender, runId) {
@@ -1960,6 +2084,10 @@ ipcMain.handle('desktop:switch-git-branch', (_event, targetPath, targetBranch) =
 
 ipcMain.handle('desktop:run-db-updater', (event, settings, options) => {
   return runDbUpdater(settings, event.sender, options);
+});
+
+ipcMain.handle('desktop:sync-db-updater-test-case', (_event, settings, payload) => {
+  return syncDbUpdaterTestCase(settings, payload);
 });
 
 ipcMain.handle('desktop:get-db-updater-overview', (_event, settings) => {

@@ -51,6 +51,9 @@ contextBridge.exposeInMainWorld('desktop', {
   runDbUpdater(settings, options) {
     return ipcRenderer.invoke('desktop:run-db-updater', settings, options);
   },
+  syncDbUpdaterTestCase(settings, payload) {
+    return ipcRenderer.invoke('desktop:sync-db-updater-test-case', settings, payload);
+  },
   getDbUpdaterOverview(settings) {
     return ipcRenderer.invoke('desktop:get-db-updater-overview', settings);
   },
