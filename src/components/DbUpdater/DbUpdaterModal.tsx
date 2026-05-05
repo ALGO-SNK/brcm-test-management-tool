@@ -244,6 +244,9 @@ function formatDbUpdaterLogTime(timestamp: string) {
   if (Number.isNaN(date.getTime())) {
     return timestamp;
   }
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
   let hours = date.getHours();
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
@@ -252,7 +255,7 @@ function formatDbUpdaterLogTime(timestamp: string) {
   if (hours === 0) {
     hours = 12;
   }
-  return `${String(hours).padStart(2, '0')}:${minutes}:${seconds} ${meridiem}`;
+  return `${day}-${month}-${year} ${String(hours).padStart(2, '0')}:${minutes}:${seconds} ${meridiem}`;
 }
 
 function getLogEventTitle(event: DesktopDbUpdaterProgress): string {
@@ -281,9 +284,14 @@ function getLogEventTitle(event: DesktopDbUpdaterProgress): string {
   }
 }
 
-function getLogEventMeta(event: DesktopDbUpdaterProgress, mappings: WorkspaceDbMapping[]): string {
+function getLogEventMeta(
+  event: DesktopDbUpdaterProgress,
+  mappings: WorkspaceDbMapping[],
+  overview: DesktopDbUpdaterOverview | null,
+): string {
   const pieces: string[] = [];
-  const targetName = mappings.find((mapping) => mapping.id === event.target)?.label;
+  const targetName = overview?.targets[event.target]?.planName
+    || mappings.find((mapping) => mapping.id === event.target)?.label;
   if (targetName) {
     pieces.push(targetName);
   }
@@ -799,7 +807,7 @@ export function DbUpdaterModal({ workspaceSettings, onClose }: DbUpdaterModalPro
                     </div>
                   ) : (
                     events.map((event, index) => {
-                      const meta = getLogEventMeta(event, dbMappings);
+                      const meta = getLogEventMeta(event, dbMappings, overview);
                       return (
                         <div className={`db-updater__log-row db-updater__log-row--${event.level}`} key={`${event.runId}-${event.timestamp}-${index}`}>
                           <span className="db-updater__log-marker" aria-hidden="true" />

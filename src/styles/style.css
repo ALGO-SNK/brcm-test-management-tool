@@ -6834,8 +6834,9 @@ input[type="radio"] {
 .settings-db-mappings__head {
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
     display: flex;
+    padding: 12px 16px 10px;
 }
 
 .settings-db-mappings__head > div {
@@ -6843,49 +6844,101 @@ input[type="radio"] {
 }
 
 .settings-db-mappings {
-    gap: 10px;
+    gap: 0;
+    padding: 8px 16px 0;
     display: grid;
 }
 
 .settings-db-mapping {
-    border: 1px solid var(--color-border-soft);
-    border-radius: var(--radius-lg);
-    background: var(--color-surface-subtle);
-    align-items: end;
-    gap: 12px;
-    padding: 12px;
-    display: grid;
-    grid-template-columns: 92px minmax(220px, 1.4fr) minmax(180px, 1fr) auto;
-}
-
-.settings-db-mapping__enabled {
-    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border-soft);
+    background: transparent;
     align-items: center;
-    gap: 8px;
-    min-height: 36px;
-    font-size: var(--text-xs);
-    font-weight: 800;
-    display: inline-flex;
+    gap: 12px;
+    padding: 6px 0;
+    display: grid;
+    grid-template-columns: minmax(260px, 1.25fr) minmax(240px, 1fr) 48px 36px;
 }
 
-.settings-db-mapping__enabled input {
-    width: 16px;
-    height: 16px;
+.settings-db-mapping:last-child {
+    border-bottom: 0;
+}
+
+.settings-db-mapping .settings-field {
+    min-width: 0;
+    gap: 5px;
+}
+
+.settings-db-mapping .settings-input {
+    width: 100%;
+}
+
+.settings-db-mapping__switch {
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    margin-top: 14px;
+    display: inline-flex;
+    cursor: pointer;
+}
+
+.settings-db-mapping__switch input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.settings-db-mapping__switch span {
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface-raised);
+    width: 34px;
+    height: 20px;
+    position: relative;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.settings-db-mapping__switch span::after {
+    content: "";
+    border-radius: 999px;
+    background: var(--color-text-subtle);
+    width: 14px;
+    height: 14px;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.settings-db-mapping__switch input:checked + span {
+    border-color: var(--color-primary-border);
+    background: var(--color-primary-soft);
+}
+
+.settings-db-mapping__switch input:checked + span::after {
+    background: var(--color-primary);
+    transform: translateX(14px);
 }
 
 .settings-db-mapping__remove {
     width: 36px;
     min-width: 36px;
+    height: 36px;
+    margin-top: 14px;
     padding-inline: 0;
     justify-content: center;
 }
 
+.settings-db-mappings + .settings-actions {
+    padding-top: 6px;
+    margin-top: 0;
+}
+
 @media (width <=980px) {
     .settings-db-mapping {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr 1fr 48px 36px;
     }
 
-    .settings-db-mapping__enabled,
+    .settings-db-mapping__switch,
     .settings-db-mapping__remove {
         align-self: center;
     }
@@ -7643,7 +7696,7 @@ input[type="radio"] {
     max-height: min(42vh, 420px);
     overflow: auto;
     color: var(--color-text);
-    padding: 12px;
+    padding: 6px 8px;
     scrollbar-color: var(--color-border-strong) var(--color-surface-subtle);
 }
 
@@ -7664,40 +7717,38 @@ input[type="radio"] {
 }
 
 .db-updater__log-row {
-    border: 1px solid var(--color-border-soft);
-    border-radius: var(--radius-lg);
-    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border-soft);
+    background: transparent;
     grid-template-columns: 10px minmax(0, 1fr);
     align-items: start;
-    gap: 12px;
+    gap: 10px;
     color: var(--color-text);
-    padding: 10px 12px;
-    margin-bottom: 8px;
+    padding: 5px 6px;
+    margin-bottom: 0;
     display: grid;
 }
 
 .db-updater__log-row:hover {
-    border-color: var(--color-border);
-    background: var(--color-surface-raised);
+    background: var(--color-surface);
 }
 
 .db-updater__log-row:last-child {
-    margin-bottom: 0;
+    border-bottom: 0;
 }
 
 .db-updater__log-marker {
     border-radius: 999px;
     background: var(--color-primary);
-    width: 9px;
-    height: 9px;
-    margin-top: 5px;
-    box-shadow: 0 0 0 4px var(--color-primary-soft);
+    width: 7px;
+    height: 7px;
+    margin-top: 7px;
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
 }
 
 .db-updater__log-main {
     min-width: 0;
     display: grid;
-    gap: 4px;
+    gap: 2px;
 }
 
 .db-updater__log-row-head {
@@ -7710,13 +7761,13 @@ input[type="radio"] {
 
 .db-updater__log-row-head strong {
     color: var(--color-text-heading);
-    font-size: var(--text-sm);
+    font-size: 12px;
 }
 
 .db-updater__log-row-head span {
     color: var(--color-text-subtle);
     font-family: var(--font-mono), monospace;
-    font-size: 11px;
+    font-size: 10px;
     white-space: nowrap;
 }
 
@@ -7726,15 +7777,15 @@ input[type="radio"] {
     color: var(--color-text-muted);
     background: var(--color-surface-raised);
     text-align: center;
-    padding: 1px 6px;
-    font-size: 10px;
+    padding: 0 5px;
+    font-size: 9px;
     font-weight: 900;
     text-transform: uppercase;
 }
 
 .db-updater__log-meta {
     color: var(--color-text-muted);
-    font-size: var(--text-xs);
+    font-size: 11px;
     font-weight: 750;
 }
 
@@ -7742,17 +7793,17 @@ input[type="radio"] {
     color: var(--color-text);
     overflow-wrap: anywhere;
     margin: 0;
-    font-size: var(--text-sm);
-    line-height: 1.45;
+    font-size: 12px;
+    line-height: 1.35;
 }
 
 .db-updater__log-row--error {
-    border-color: var(--color-danger-border);
+    border-bottom-color: var(--color-danger-border);
 }
 
 .db-updater__log-row--error .db-updater__log-marker {
     background: var(--color-danger);
-    box-shadow: 0 0 0 4px var(--color-danger-soft);
+    box-shadow: 0 0 0 3px var(--color-danger-soft);
 }
 
 .db-updater__log-row--error .db-updater__log-level {
@@ -7763,7 +7814,7 @@ input[type="radio"] {
 
 .db-updater__log-row--success .db-updater__log-marker {
     background: var(--color-success);
-    box-shadow: 0 0 0 4px var(--color-success-soft);
+    box-shadow: 0 0 0 3px var(--color-success-soft);
 }
 
 .db-updater__log-row--success .db-updater__log-level {

@@ -817,15 +817,6 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                             : dbFileOptions;
                           return (
                             <div className="settings-db-mapping" key={mapping.id}>
-                              <label className="settings-db-mapping__enabled">
-                                <input
-                                  type="checkbox"
-                                  checked={mapping.enabled}
-                                  onChange={(event) => updateDbMapping(mapping.id, 'enabled', event.target.checked)}
-                                />
-                                <span>Enabled</span>
-                              </label>
-
                               <label className="settings-field settings-field--mapping-plan" htmlFor={`dbMappingPlan-${mapping.id}`}>
                                 <span className="settings-field__label">Plan</span>
                                 <select
@@ -869,6 +860,15 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                                     </option>
                                   ))}
                                 </select>
+                              </label>
+
+                              <label className="settings-db-mapping__switch" title={mapping.enabled ? 'Enabled' : 'Disabled'}>
+                                <input
+                                  type="checkbox"
+                                  checked={mapping.enabled}
+                                  onChange={(event) => updateDbMapping(mapping.id, 'enabled', event.target.checked)}
+                                />
+                                <span aria-hidden="true" />
                               </label>
 
                               <button
