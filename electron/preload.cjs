@@ -48,8 +48,8 @@ contextBridge.exposeInMainWorld('desktop', {
   switchGitBranch(targetPath, targetBranch) {
     return ipcRenderer.invoke('desktop:switch-git-branch', targetPath, targetBranch);
   },
-  runDbUpdater(settings) {
-    return ipcRenderer.invoke('desktop:run-db-updater', settings);
+  runDbUpdater(settings, options) {
+    return ipcRenderer.invoke('desktop:run-db-updater', settings, options);
   },
   getDbUpdaterOverview(settings) {
     return ipcRenderer.invoke('desktop:get-db-updater-overview', settings);

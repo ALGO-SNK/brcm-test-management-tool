@@ -12,18 +12,22 @@ const SPLASH_MIN_MS = 2000;
 const DB_UPDATER_CONFIG = {
   rootDirectory: 'C:\\Automation Tests\\Database',
   browserName: 'Chrome',
-  main: {
-    key: 'main',
-    label: 'Main plan',
-    planId: 78806,
-    dbName: 'BromcomTestCases.db',
-  },
-  worldPay: {
-    key: 'worldPay',
-    label: 'WorldPay plan',
-    planId: 139145,
-    dbName: 'BromcomWorldPayTestCases.db',
-  },
+  defaultTargets: [
+    {
+      key: 'main',
+      label: 'Main plan',
+      planId: 78806,
+      dbName: 'BromcomTestCases.db',
+      enabled: true,
+    },
+    {
+      key: 'worldPay',
+      label: 'WorldPay plan',
+      planId: 139145,
+      dbName: 'BromcomWorldPayTestCases.db',
+      enabled: true,
+    },
+  ],
 };
 const DB_UPDATER_WORK_ITEM_FIELDS = [
   'System.Title',
@@ -345,26 +349,67 @@ function normalizeDbUpdaterFileName(value, fallback) {
   return path.basename(trimmed);
 }
 
+function normalizeDbUpdaterTargetKey(value, fallback) {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+  return normalized || fallback;
+}
+
+function getDbUpdaterConfiguredTargets(settings, rootDirectory) {
+  const legacyTargets = DB_UPDATER_CONFIG.defaultTargets.map((target) => ({
+    ...target,
+    dbName: target.key === 'main'
+      ? normalizeDbUpdaterFileName(settings?.mainDbName, target.dbName)
+      : target.key === 'worldPay'
+        ? normalizeDbUpdaterFileName(settings?.worldPayDbName, target.dbName)
+        : normalizeDbUpdaterFileName(target.dbName, target.dbName),
+  }));
+  const sourceTargets = Array.isArray(settings?.dbMappings) && settings.dbMappings.length
+    ? settings.dbMappings
+    : legacyTargets;
+  const usedKeys = new Set();
+  const targets = sourceTargets.map((mapping, index) => {
+    const fallbackTarget = legacyTargets[index] || {};
+    const label = String(mapping?.label || fallbackTarget.label || `DB mapping ${index + 1}`).trim();
+    const baseKey = normalizeDbUpdaterTargetKey(mapping?.id || mapping?.key || label, `mapping-${index + 1}`);
+    let key = baseKey;
+    let suffix = 2;
+    while (usedKeys.has(key)) {
+      key = `${baseKey}-${suffix}`;
+      suffix += 1;
+    }
+    usedKeys.add(key);
+
+    const dbName = normalizeDbUpdaterFileName(mapping?.dbName, fallbackTarget.dbName || `Mapping${index + 1}.db`);
+    return {
+      key,
+      label,
+      planId: Number(mapping?.planId || fallbackTarget.planId || 0),
+      dbName,
+      enabled: mapping?.enabled !== false,
+      browserName: DB_UPDATER_CONFIG.browserName,
+      dbPath: path.join(rootDirectory, dbName),
+    };
+  }).filter((target) => target.planId > 0 && target.dbName);
+
+  return targets.length ? targets : legacyTargets.map((target) => ({
+    ...target,
+    browserName: DB_UPDATER_CONFIG.browserName,
+    dbPath: path.join(rootDirectory, target.dbName),
+  }));
+}
+
 function getDbUpdaterRuntimeConfig(settings) {
   const rootDirectory = normalizeDbUpdaterDirectory(settings);
-  const mainDbName = normalizeDbUpdaterFileName(settings?.mainDbName, DB_UPDATER_CONFIG.main.dbName);
-  const worldPayDbName = normalizeDbUpdaterFileName(settings?.worldPayDbName, DB_UPDATER_CONFIG.worldPay.dbName);
+  const targets = getDbUpdaterConfiguredTargets(settings, rootDirectory);
 
   return {
     rootDirectory,
     browserName: DB_UPDATER_CONFIG.browserName,
-    main: {
-      ...DB_UPDATER_CONFIG.main,
-      browserName: DB_UPDATER_CONFIG.browserName,
-      dbName: mainDbName,
-      dbPath: path.join(rootDirectory, mainDbName),
-    },
-    worldPay: {
-      ...DB_UPDATER_CONFIG.worldPay,
-      browserName: DB_UPDATER_CONFIG.browserName,
-      dbName: worldPayDbName,
-      dbPath: path.join(rootDirectory, worldPayDbName),
-    },
+    targets,
   };
 }
 
@@ -961,14 +1006,15 @@ async function readDbUpdaterTarget(target) {
 
 async function getDbUpdaterOverview(settingsInput) {
   const dbConfig = getDbUpdaterRuntimeConfig(settingsInput);
-  const targets = [dbConfig.main, dbConfig.worldPay];
-  const [mainTarget, worldPayTarget] = await Promise.all(targets.map(readDbUpdaterTarget));
+  const targets = dbConfig.targets;
+  const readTargets = await Promise.all(targets.map(readDbUpdaterTarget));
   const overview = {
     rootDirectory: dbConfig.rootDirectory,
-    targets: {
-      main: mainTarget,
-      worldPay: worldPayTarget,
-    },
+    targetOrder: targets.map((target) => target.key),
+    targets: readTargets.reduce((nextTargets, target) => {
+      nextTargets[target.target] = target;
+      return nextTargets;
+    }, {}),
   };
 
   let settings = null;
@@ -1204,13 +1250,30 @@ async function fetchDbUpdaterRowsForTarget(settings, target, sender, runId) {
   return rows;
 }
 
-async function runDbUpdater(settingsInput, sender) {
+function getDbUpdaterRunTargets(dbConfig, options) {
+  const enabledTargets = dbConfig.targets.filter((target) => target.enabled);
+  const requestedIds = Array.isArray(options?.targetIds)
+    ? options.targetIds.map((id) => String(id)).filter(Boolean)
+    : [];
+  if (!requestedIds.length) {
+    return enabledTargets;
+  }
+
+  const requested = new Set(requestedIds);
+  return enabledTargets.filter((target) => requested.has(target.key));
+}
+
+async function runDbUpdater(settingsInput, sender, options = {}) {
   const settings = assertDbUpdaterSettings(settingsInput);
   const runtimeSettings = settings;
   const dbConfig = getDbUpdaterRuntimeConfig(settingsInput);
   const runId = `db-update-${Date.now()}`;
   const startedAt = Date.now();
-  const targets = [dbConfig.main, dbConfig.worldPay];
+  const targets = getDbUpdaterRunTargets(dbConfig, options);
+
+  if (!targets.length) {
+    throw new Error('No enabled DB mappings were selected for refresh.');
+  }
 
   sendDbUpdaterProgress(sender, runId, {
     level: 'info',
@@ -1249,122 +1312,74 @@ async function runDbUpdater(settingsInput, sender) {
     message: 'Using PAT : Workspace Settings',
   });
 
-  const results = targets.map((target) => ({
-    target: target.key,
-    label: target.label,
-    dbPath: getDbUpdaterTargetPath(target),
-    inserted: 0,
-    status: 'failed',
-  }));
+  const results = [];
 
-  try {
-    await resetDbUpdaterDatabase(getDbUpdaterTargetPath(dbConfig.main), sender, runId, dbConfig.main);
-    await resetDbUpdaterDatabase(getDbUpdaterTargetPath(dbConfig.worldPay), sender, runId, dbConfig.worldPay);
+  for (const target of targets) {
+    const dbPath = getDbUpdaterTargetPath(target);
+    try {
+      await resetDbUpdaterDatabase(dbPath, sender, runId, target);
 
-    sendDbUpdaterProgress(sender, runId, {
-      level: 'info',
-      phase: 'fetch',
-      status: 'running',
-      message: 'Fetching test cases from Azure DevOps...',
-    });
-    const mainRows = await fetchDbUpdaterRowsForTarget(runtimeSettings, dbConfig.main, sender, runId);
-    sendDbUpdaterProgress(sender, runId, {
-      target: dbConfig.main.key,
-      level: 'info',
-      phase: 'fetch',
-      status: 'running',
-      fetched: mainRows.length,
-      message: `Fetched ${mainRows.length} test cases from the main test plan.`,
-    });
+      sendDbUpdaterProgress(sender, runId, {
+        target: target.key,
+        level: 'info',
+        phase: 'fetch',
+        status: 'running',
+        message: `${target.label}: fetching test cases from Azure DevOps...`,
+      });
+      const rows = await fetchDbUpdaterRowsForTarget(runtimeSettings, target, sender, runId);
+      sendDbUpdaterProgress(sender, runId, {
+        target: target.key,
+        level: 'info',
+        phase: 'fetch',
+        status: 'running',
+        fetched: rows.length,
+        message: `Fetched ${rows.length} test cases from ${target.label}.`,
+      });
 
-    sendDbUpdaterProgress(sender, runId, {
-      level: 'info',
-      phase: 'fetch',
-      status: 'running',
-      message: 'Fetching Worldpay test cases from Azure DevOps...',
-    });
-    const worldPayRows = await fetchDbUpdaterRowsForTarget(runtimeSettings, dbConfig.worldPay, sender, runId);
-    sendDbUpdaterProgress(sender, runId, {
-      target: dbConfig.worldPay.key,
-      level: 'info',
-      phase: 'fetch',
-      status: 'running',
-      fetched: worldPayRows.length,
-      message: `Fetched ${worldPayRows.length} test cases from the Worldpay test plan.`,
-    });
-
-    sendDbUpdaterProgress(sender, runId, {
-      target: dbConfig.main.key,
-      level: 'info',
-      phase: 'database',
-      status: 'running',
-      message: 'Updating Test Cases into Database',
-    });
-    await writeDbUpdaterDatabase(getDbUpdaterTargetPath(dbConfig.main), mainRows, sender, runId, dbConfig.main);
-    results[0] = {
-      target: dbConfig.main.key,
-      label: dbConfig.main.label,
-      dbPath: getDbUpdaterTargetPath(dbConfig.main),
-      inserted: mainRows.length,
-      status: 'complete',
-    };
-    sendDbUpdaterProgress(sender, runId, {
-      target: dbConfig.main.key,
-      level: 'success',
-      phase: 'database',
-      status: 'running',
-      inserted: mainRows.length,
-      dbPath: getDbUpdaterTargetPath(dbConfig.main),
-      message: 'Updated Test Cases into Database',
-    });
-
-    sendDbUpdaterProgress(sender, runId, {
-      target: dbConfig.worldPay.key,
-      level: 'info',
-      phase: 'database',
-      status: 'running',
-      message: 'Updating WorldPay Test Cases into Database',
-    });
-    await writeDbUpdaterDatabase(getDbUpdaterTargetPath(dbConfig.worldPay), worldPayRows, sender, runId, dbConfig.worldPay);
-    results[1] = {
-      target: dbConfig.worldPay.key,
-      label: dbConfig.worldPay.label,
-      dbPath: getDbUpdaterTargetPath(dbConfig.worldPay),
-      inserted: worldPayRows.length,
-      status: 'complete',
-    };
-    sendDbUpdaterProgress(sender, runId, {
-      target: dbConfig.worldPay.key,
-      level: 'success',
-      phase: 'database',
-      status: 'running',
-      inserted: worldPayRows.length,
-      dbPath: getDbUpdaterTargetPath(dbConfig.worldPay),
-      message: 'Updated WorldPay Test Cases into Database',
-    });
-
-    await vacuumDbUpdaterDatabase(getDbUpdaterTargetPath(dbConfig.main), sender, runId, dbConfig.main);
-    await vacuumDbUpdaterDatabase(getDbUpdaterTargetPath(dbConfig.worldPay), sender, runId, dbConfig.worldPay);
-
-    results[0].status = 'complete';
-    results[1].status = 'complete';
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Local DB update failed.';
-    results.forEach((result, index) => {
-      if (result.status !== 'complete') {
-        results[index] = {
-          ...result,
-          status: 'failed',
-          error: message,
-        };
-      }
-    });
-    sendDbUpdaterProgress(sender, runId, {
-      level: 'error',
-      phase: 'failed',
-      status: 'failed',
-      message,
-    });
+      sendDbUpdaterProgress(sender, runId, {
+        target: target.key,
+        level: 'info',
+        phase: 'database',
+        status: 'running',
+        message: `${target.label}: updating test cases into database`,
+      });
+      await writeDbUpdaterDatabase(dbPath, rows, sender, runId, target);
+      await vacuumDbUpdaterDatabase(dbPath, sender, runId, target);
+      results.push({
+        target: target.key,
+        label: target.label,
+        dbPath,
+        inserted: rows.length,
+        status: 'complete',
+      });
+      sendDbUpdaterProgress(sender, runId, {
+        target: target.key,
+        level: 'success',
+        phase: 'database',
+        status: 'complete',
+        inserted: rows.length,
+        dbPath,
+        message: `${target.label}: updated ${rows.length} test cases into database`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${target.label}: Local DB update failed.`;
+      results.push({
+        target: target.key,
+        label: target.label,
+        dbPath,
+        inserted: 0,
+        status: 'failed',
+        error: message,
+      });
+      sendDbUpdaterProgress(sender, runId, {
+        target: target.key,
+        level: 'error',
+        phase: 'failed',
+        status: 'failed',
+        dbPath,
+        message,
+      });
+    }
   }
 
   const failed = results.filter((result) => result.status === 'failed');
@@ -1943,8 +1958,8 @@ ipcMain.handle('desktop:switch-git-branch', (_event, targetPath, targetBranch) =
   return switchGitBranch(targetPath, targetBranch);
 });
 
-ipcMain.handle('desktop:run-db-updater', (event, settings) => {
-  return runDbUpdater(settings, event.sender);
+ipcMain.handle('desktop:run-db-updater', (event, settings, options) => {
+  return runDbUpdater(settings, event.sender, options);
 });
 
 ipcMain.handle('desktop:get-db-updater-overview', (_event, settings) => {

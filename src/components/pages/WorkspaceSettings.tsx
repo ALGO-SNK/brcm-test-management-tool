@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { IconSave, IconX } from '../Common/Icons';
+import { IconDelete, IconPlus, IconSave, IconX } from '../Common/Icons';
 import { useThemeContext } from '../../context/useThemeContext';
 import { useNotification } from '../../context/useNotification';
 import { getAppVersions } from '../../utils/appVersion';
@@ -10,6 +10,8 @@ import {
   type ThemeMode,
 } from '../../context/themeContext.shared';
 import { NOT_SELECTED_LABEL } from '../../utils/selectLabels';
+import { fetchPlans, getCachedPlans } from '../../services/adoApi';
+import type { ADOTestPlan } from '../../types';
 
 export interface WorkspaceSettingsValues {
   organization: string;
@@ -20,6 +22,15 @@ export interface WorkspaceSettingsValues {
   dbDirectory: string;
   mainDbName: string;
   worldPayDbName: string;
+  dbMappings: WorkspaceDbMapping[];
+}
+
+export interface WorkspaceDbMapping {
+  id: string;
+  label: string;
+  planId: number;
+  dbName: string;
+  enabled: boolean;
 }
 
 interface WorkspaceSettingsProps {
@@ -28,25 +39,100 @@ interface WorkspaceSettingsProps {
   onBack: () => void;
 }
 
-type SettingsSection = 'appearance' | 'workspace' | 'about';
+type SettingsSection = 'appearance' | 'workspace' | 'db-mappings' | 'about';
 type ValidationState = 'idle' | 'success' | 'error';
 
 const API_VERSION_OPTIONS = ['7.2', '7.1', '7.0', '6.0'];
+export const DEFAULT_DB_MAPPINGS: WorkspaceDbMapping[] = [
+  {
+    id: 'main',
+    label: 'Main Plan',
+    planId: 78806,
+    dbName: 'BromcomTestCases.db',
+    enabled: true,
+  },
+  {
+    id: 'worldPay',
+    label: 'WorldPay Plan',
+    planId: 139145,
+    dbName: 'BromcomWorldPayTestCases.db',
+    enabled: true,
+  },
+];
+
+function normalizeMappingId(value: string, fallback: string): string {
+  const normalized = value
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+  return normalized || fallback;
+}
+
+export function normalizeWorkspaceDbMappings(
+  values: Partial<WorkspaceSettingsValues> & { dbMappings?: Partial<WorkspaceDbMapping>[] },
+): WorkspaceDbMapping[] {
+  const source = Array.isArray(values.dbMappings) && values.dbMappings.length
+    ? values.dbMappings
+    : DEFAULT_DB_MAPPINGS.map((mapping) => ({
+        ...mapping,
+        dbName: mapping.id === 'main'
+          ? values.mainDbName || mapping.dbName
+          : mapping.id === 'worldPay'
+            ? values.worldPayDbName || mapping.dbName
+            : mapping.dbName,
+      }));
+
+  const usedIds = new Set<string>();
+  const mappings = source.map((mapping, index) => {
+    const label = String(mapping.label || '').trim() || `DB mapping ${index + 1}`;
+    const baseId = normalizeMappingId(String(mapping.id || label), `mapping-${index + 1}`);
+    let id = baseId;
+    let suffix = 2;
+    while (usedIds.has(id)) {
+      id = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(id);
+
+    return {
+      id,
+      label,
+      planId: Number(mapping.planId) || 0,
+      dbName: String(mapping.dbName || '').trim(),
+      enabled: mapping.enabled !== false,
+    };
+  });
+
+  return mappings.length ? mappings : DEFAULT_DB_MAPPINGS;
+}
 
 function isAppFontMode(value: string): value is AppFontMode {
   return APP_FONT_OPTIONS.some((item) => item.value === value);
 }
 
 export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsProps) {
-  const [form, setForm] = useState<WorkspaceSettingsValues>(values);
+  const [form, setForm] = useState<WorkspaceSettingsValues>({
+    ...values,
+    dbMappings: normalizeWorkspaceDbMappings(values),
+  });
   const [section, setSection] = useState<SettingsSection>('appearance');
   const [validationState, setValidationState] = useState<ValidationState>('idle');
   const [validationMessage, setValidationMessage] = useState('Fill organization, project, and PAT before validating the connection.');
+  const [planOptions, setPlanOptions] = useState<ADOTestPlan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [plansMessage, setPlansMessage] = useState('Plans load from the current Azure workspace.');
+  const [dbFileOptions, setDbFileOptions] = useState<string[]>([]);
+  const [dbFilesLoading, setDbFilesLoading] = useState(false);
+  const [dbFilesMessage, setDbFilesMessage] = useState('DB files load from the selected local DB folder.');
   const { mode, font, setTheme, setFont } = useThemeContext();
   const { addNotification } = useNotification();
 
   useEffect(() => {
-    setForm(values);
+    setForm({
+      ...values,
+      dbMappings: normalizeWorkspaceDbMappings(values),
+    });
   }, [values]);
 
   const isConnectionConfigured = Boolean(
@@ -62,6 +148,90 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
     setValidationMessage('Fill organization, project, and PAT before validating the connection.');
   }, [isConnectionConfigured, form.organization, form.projectName, form.patToken]);
 
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+
+    const cached = getCachedPlans(form);
+    if (cached) {
+      setPlanOptions(cached.data);
+      setPlansMessage(cached.fresh ? 'Using current cached plans.' : 'Using cached plans. Live refresh will update this list.');
+    } else {
+      setPlanOptions([]);
+      setPlansMessage(isConnectionConfigured ? 'Loading plans from Azure DevOps.' : 'Configure Azure settings to load plan choices.');
+    }
+
+    if (!isConnectionConfigured || section !== 'db-mappings') {
+      setPlansLoading(false);
+      return () => {
+        active = false;
+        controller.abort();
+      };
+    }
+
+    setPlansLoading(true);
+    fetchPlans(form, controller.signal)
+      .then((plans) => {
+        if (!active) return;
+        setPlanOptions(plans);
+        setPlansMessage(plans.length ? 'Plans loaded from Azure DevOps.' : 'No Azure plans found for this workspace.');
+      })
+      .catch((error) => {
+        if (!active || error instanceof Error && error.name === 'AbortError') return;
+        setPlansMessage(cached ? 'Showing cached plans. Live plan refresh failed.' : 'Could not load plans from Azure DevOps.');
+      })
+      .finally(() => {
+        if (active) {
+          setPlansLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [form.organization, form.projectName, form.patToken, form.apiVersion, isConnectionConfigured, section]);
+
+  useEffect(() => {
+    let active = true;
+    const dbDirectory = form.dbDirectory.trim();
+    if (!dbDirectory || !window.desktop?.listDirectory) {
+      setDbFileOptions([]);
+      setDbFilesLoading(false);
+      setDbFilesMessage(dbDirectory ? 'Desktop DB folder listing is unavailable.' : 'Select a local DB folder to load DB file choices.');
+      return () => {
+        active = false;
+      };
+    }
+
+    setDbFilesLoading(true);
+    setDbFilesMessage('Loading DB files from the selected folder.');
+    window.desktop.listDirectory(dbDirectory)
+      .then((entries) => {
+        if (!active) return;
+        const dbFiles = entries
+          .filter((entry) => entry.type === 'file' && entry.name.toLowerCase().endsWith('.db'))
+          .map((entry) => entry.name)
+          .sort((left, right) => left.localeCompare(right));
+        setDbFileOptions(dbFiles);
+        setDbFilesMessage(dbFiles.length ? 'DB files loaded from the selected folder.' : 'No .db files found. You can enter a new DB file name.');
+      })
+      .catch(() => {
+        if (!active) return;
+        setDbFileOptions([]);
+        setDbFilesMessage('Could not read DB files from the selected folder.');
+      })
+      .finally(() => {
+        if (active) {
+          setDbFilesLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [form.dbDirectory]);
+
   const selectedTheme = useMemo(
     () => THEME_MODE_OPTIONS.find((item) => item.value === mode) ?? THEME_MODE_OPTIONS[0],
     [mode],
@@ -71,11 +241,19 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
     [font],
   );
   const selectedFontValue = APP_FONT_OPTIONS.some((item) => item.value === font) ? font : '';
-  const sectionLabel = section === 'appearance' ? 'Appearance' : section === 'workspace' ? 'Workspace' : 'About';
+  const sectionLabel = section === 'appearance'
+    ? 'Appearance'
+    : section === 'workspace'
+      ? 'Workspace'
+      : section === 'db-mappings'
+        ? 'DB Mappings'
+        : 'About';
   const sectionSubtitle = section === 'appearance'
     ? 'Theme modes, accent palettes, and typography controls.'
     : section === 'workspace'
     ? 'Manage Azure connection settings and the Selenium repository location.'
+    : section === 'db-mappings'
+    ? 'Map Azure test plans to local SQLite DB files for targeted refreshes.'
     : 'About Bromcom Test Builder and system information.';
 
   const updateField = (field: keyof WorkspaceSettingsValues, value: string) => {
@@ -95,9 +273,59 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
     addNotification('success', 'Connection settings look valid.');
   };
 
+  const validateDbMappings = (mappings: WorkspaceDbMapping[]): string | null => {
+    const enabledMappings = mappings.filter((mapping) => mapping.enabled);
+    if (!enabledMappings.length) {
+      return 'At least one enabled DB mapping is required.';
+    }
+
+    for (const mapping of mappings) {
+      if (!mapping.label.trim()) {
+        return 'Each DB mapping needs a label.';
+      }
+    }
+
+    const dbNames = new Set<string>();
+    for (const mapping of enabledMappings) {
+      if (!Number.isFinite(mapping.planId) || mapping.planId <= 0) {
+        return `${mapping.label || 'DB mapping'} needs a numeric Azure plan ID.`;
+      }
+      if (!mapping.dbName.trim()) {
+        return `${mapping.label} needs a DB file name.`;
+      }
+      if (/[\\/]/.test(mapping.dbName)) {
+        return `${mapping.label} DB file must be a file name, not a path.`;
+      }
+      if (!mapping.dbName.toLowerCase().endsWith('.db')) {
+        return `${mapping.label} DB file must end with .db.`;
+      }
+      const dbNameKey = mapping.dbName.trim().toLowerCase();
+      if (dbNames.has(dbNameKey)) {
+        return `Duplicate DB file name: ${mapping.dbName}.`;
+      }
+      dbNames.add(dbNameKey);
+    }
+
+    return null;
+  };
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSave(form);
+    const dbMappings = normalizeWorkspaceDbMappings(form);
+    const validationError = validateDbMappings(dbMappings);
+    if (validationError) {
+      addNotification('error', validationError);
+      return;
+    }
+
+    const mainMapping = dbMappings.find((mapping) => mapping.id === 'main');
+    const worldPayMapping = dbMappings.find((mapping) => mapping.id === 'worldPay');
+    onSave({
+      ...form,
+      mainDbName: mainMapping?.dbName ?? form.mainDbName,
+      worldPayDbName: worldPayMapping?.dbName ?? form.worldPayDbName,
+      dbMappings,
+    });
     addNotification('success', 'Settings saved.');
   };
 
@@ -155,6 +383,66 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
       const message = error instanceof Error ? error.message : 'Failed to select Local DB storage folder.';
       addNotification('error', message);
     }
+  };
+
+  const updateDbMapping = <Key extends keyof WorkspaceDbMapping>(
+    mappingId: string,
+    field: Key,
+    value: WorkspaceDbMapping[Key],
+  ) => {
+    setForm((prev) => ({
+      ...prev,
+      dbMappings: prev.dbMappings.map((mapping) => (
+        mapping.id === mappingId ? { ...mapping, [field]: value } : mapping
+      )),
+    }));
+  };
+
+  const updateDbMappingPlan = (mappingId: string, planIdValue: string) => {
+    const planId = Number(planIdValue);
+    const plan = planOptions.find((item) => item.id === planId);
+    setForm((prev) => ({
+      ...prev,
+      dbMappings: prev.dbMappings.map((mapping) => (
+        mapping.id === mappingId
+          ? {
+              ...mapping,
+              planId,
+              label: plan?.name || mapping.label,
+            }
+          : mapping
+      )),
+    }));
+  };
+
+  const addDbMapping = () => {
+    setForm((prev) => {
+      const nextIndex = prev.dbMappings.length + 1;
+      const id = normalizeMappingId(`custom-${Date.now()}`, `mapping-${nextIndex}`);
+      const firstUnusedDbFile = dbFileOptions.find((dbFile) => !prev.dbMappings.some((mapping) => mapping.dbName === dbFile));
+      return {
+        ...prev,
+        dbMappings: [
+          ...prev.dbMappings,
+          {
+            id,
+            label: `Custom Plan ${nextIndex}`,
+            planId: 0,
+            dbName: firstUnusedDbFile ?? '',
+            enabled: true,
+          },
+        ],
+      };
+    });
+  };
+
+  const removeDbMapping = (mappingId: string) => {
+    setForm((prev) => ({
+      ...prev,
+      dbMappings: prev.dbMappings.length <= 1
+        ? prev.dbMappings
+        : prev.dbMappings.filter((mapping) => mapping.id !== mappingId),
+    }));
   };
 
   const statusLabel = isConnectionConfigured ? 'Connected' : 'Incomplete';
@@ -216,6 +504,14 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
               >
                 <span className="settings-nav-item__title">Workspace</span>
                 <span className="settings-nav-item__sub">Connection and API defaults</span>
+              </button>
+              <button
+                type="button"
+                className={sectionItemClassName('db-mappings')}
+                onClick={() => setSection('db-mappings')}
+              >
+                <span className="settings-nav-item__title">DB Mappings</span>
+                <span className="settings-nav-item__sub">Plans and local DB files</span>
               </button>
               <p className="settings-nav-label" style={{ marginTop: '20px' }}>Other</p>
               <button
@@ -448,12 +744,32 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                       </div>
                     </div>
 
+                  </form>
+                </section>
+              )}
+
+              {section === 'db-mappings' && (
+                <section className="settings-pane">
+                  <div className="settings-chip-row">
+                    <div className="settings-summary-chip">
+                      <span>Enabled Mappings</span>
+                      <strong>{form.dbMappings.filter((mapping) => mapping.enabled).length}</strong>
+                    </div>
+                    <div className="settings-summary-chip">
+                      <span>DB Folder</span>
+                      <strong>{form.dbDirectory.trim() || 'Not set'}</strong>
+                    </div>
+                  </div>
+
+                  <form className="settings-form" onSubmit={handleSubmit}>
                     <div className="settings-panel">
                       <div className="settings-panel__head">
-                        <h3 className="settings-panel__title">Local DB Updater Settings</h3>
-                        <p className="settings-panel__sub">
-                          Set the local SQLite folder and file names used by Local DB Refresh and plan data preview.
-                        </p>
+                        <div>
+                          <h3 className="settings-panel__title">Local DB Folder</h3>
+                          <p className="settings-panel__sub">
+                            All mapped SQLite files are created and refreshed inside this folder.
+                          </p>
+                        </div>
                       </div>
 
                       <div className="settings-field-grid">
@@ -476,34 +792,103 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                             </button>
                           </div>
                         </label>
+                      </div>
+                    </div>
 
-                        <label className="settings-field" htmlFor="mainDbName">
-                          <span className="settings-field__label">Main plan DB file</span>
-                          <input
-                            id="mainDbName"
-                            className="settings-input"
-                            value={form.mainDbName}
-                            onChange={(event) => updateField('mainDbName', event.target.value)}
-                            placeholder="BromcomTestCases.db"
-                          />
-                        </label>
+                    <div className="settings-panel">
+                      <div className="settings-panel__head settings-db-mappings__head">
+                        <div>
+                          <h3 className="settings-panel__title">Plan to DB Mappings</h3>
+                          <p className="settings-panel__sub">
+                            Each enabled row refreshes one Azure test plan into one local SQLite DB file. {plansLoading ? 'Loading plans...' : plansMessage} {dbFilesLoading ? 'Loading DB files...' : dbFilesMessage}
+                          </p>
+                        </div>
+                        <button type="button" className="btn btn--secondary btn--sm" onClick={addDbMapping}>
+                          <IconPlus size={15} />
+                          Add mapping
+                        </button>
+                      </div>
 
-                        <label className="settings-field" htmlFor="worldPayDbName">
-                          <span className="settings-field__label">WorldPay plan DB file</span>
-                          <input
-                            id="worldPayDbName"
-                            className="settings-input"
-                            value={form.worldPayDbName}
-                            onChange={(event) => updateField('worldPayDbName', event.target.value)}
-                            placeholder="BromcomWorldPayTestCases.db"
-                          />
-                        </label>
+                      <div className="settings-db-mappings">
+                        {form.dbMappings.map((mapping) => {
+                          const selectedPlanExists = planOptions.some((plan) => plan.id === mapping.planId);
+                          const dbFileChoices = mapping.dbName && !dbFileOptions.includes(mapping.dbName)
+                            ? [mapping.dbName, ...dbFileOptions]
+                            : dbFileOptions;
+                          return (
+                            <div className="settings-db-mapping" key={mapping.id}>
+                              <label className="settings-db-mapping__enabled">
+                                <input
+                                  type="checkbox"
+                                  checked={mapping.enabled}
+                                  onChange={(event) => updateDbMapping(mapping.id, 'enabled', event.target.checked)}
+                                />
+                                <span>Enabled</span>
+                              </label>
+
+                              <label className="settings-field settings-field--mapping-plan" htmlFor={`dbMappingPlan-${mapping.id}`}>
+                                <span className="settings-field__label">Plan</span>
+                                <select
+                                  id={`dbMappingPlan-${mapping.id}`}
+                                  className="settings-input"
+                                  value={mapping.planId || ''}
+                                  onChange={(event) => updateDbMappingPlan(mapping.id, event.target.value)}
+                                  disabled={!planOptions.length && !mapping.planId}
+                                >
+                                  {!mapping.planId && <option value="">Select a plan</option>}
+                                  {mapping.planId > 0 && !selectedPlanExists && (
+                                    <option value={mapping.planId}>
+                                      {mapping.label} ({mapping.planId})
+                                    </option>
+                                  )}
+                                  {planOptions.map((plan) => (
+                                    <option key={plan.id} value={plan.id}>
+                                      {plan.name} ({plan.id})
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <label className="settings-field" htmlFor={`dbMappingDb-${mapping.id}`}>
+                                <span className="settings-field__label">DB file</span>
+                                <select
+                                  id={`dbMappingDb-${mapping.id}`}
+                                  className="settings-input"
+                                  value={mapping.dbName}
+                                  onChange={(event) => updateDbMapping(mapping.id, 'dbName', event.target.value)}
+                                  disabled={dbFilesLoading || dbFileChoices.length === 0}
+                                >
+                                  {!mapping.dbName && (
+                                    <option value="">
+                                      {dbFilesLoading ? 'Loading DB files' : 'Select a DB file'}
+                                    </option>
+                                  )}
+                                  {dbFileChoices.map((dbFile) => (
+                                    <option key={dbFile} value={dbFile}>
+                                      {dbFile}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <button
+                                type="button"
+                                className="btn btn--secondary btn--sm settings-db-mapping__remove"
+                                onClick={() => removeDbMapping(mapping.id)}
+                                disabled={form.dbMappings.length <= 1}
+                                title="Remove mapping"
+                              >
+                                <IconDelete size={15} />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
 
                       <div className="settings-actions">
                         <button type="submit" className="btn btn--primary btn--sm">
                           <IconSave size={16} />
-                          Save settings
+                          Save mappings
                         </button>
                       </div>
                     </div>

@@ -8,7 +8,12 @@ import { Toast } from './components/Common/Toast';
 import { Landing } from './components/pages/Landing';
 import { TestCaseList } from './components/pages/TestCaseList';
 import { HelpGuide } from './components/pages/HelpGuide';
-import { WorkspaceSettings, type WorkspaceSettingsValues } from './components/pages/WorkspaceSettings';
+import {
+  DEFAULT_DB_MAPPINGS,
+  WorkspaceSettings,
+  normalizeWorkspaceDbMappings,
+  type WorkspaceSettingsValues,
+} from './components/pages/WorkspaceSettings';
 import { SeleniumRepoBrowserModal } from './components/TestCases/SeleniumRepoBrowserModal';
 import { DbUpdaterModal } from './components/DbUpdater/DbUpdaterModal';
 import type { ADOTestPlan, ADOTestSuite, ADOTestCase } from './types';
@@ -29,15 +34,20 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
     dbDirectory: 'C:\\Automation Tests\\Database',
     mainDbName: 'BromcomTestCases.db',
     worldPayDbName: 'BromcomWorldPayTestCases.db',
+    dbMappings: DEFAULT_DB_MAPPINGS,
   };
   try {
     const raw = localStorage.getItem(WORKSPACE_SETTINGS_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<WorkspaceSettingsValues> & { organizationUrl?: string };
-    return {
+    const nextSettings = {
       ...fallback,
       ...parsed,
       organization: parsed.organization ?? parsed.organizationUrl ?? fallback.organization,
+    };
+    return {
+      ...nextSettings,
+      dbMappings: normalizeWorkspaceDbMappings(nextSettings),
     };
   } catch {
     return fallback;

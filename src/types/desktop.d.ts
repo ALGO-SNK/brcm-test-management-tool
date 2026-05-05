@@ -38,7 +38,7 @@ declare global {
     scannedFiles: number;
   }
 
-  type DesktopDbUpdaterTarget = 'all' | 'main' | 'worldPay';
+  type DesktopDbUpdaterTarget = string;
   type DesktopDbUpdaterLevel = 'info' | 'success' | 'error';
   type DesktopDbUpdaterStatus = 'running' | 'complete' | 'failed' | 'partial';
 
@@ -60,7 +60,7 @@ declare global {
   }
 
   interface DesktopDbUpdaterTargetResult {
-    target: 'main' | 'worldPay';
+    target: string;
     label: string;
     dbPath: string;
     inserted: number;
@@ -90,7 +90,7 @@ declare global {
   }
 
   interface DesktopDbUpdaterOverviewTarget {
-    target: 'main' | 'worldPay';
+    target: string;
     label: string;
     planId: number;
     planName: string | null;
@@ -106,10 +106,8 @@ declare global {
 
   interface DesktopDbUpdaterOverview {
     rootDirectory: string;
-    targets: {
-      main: DesktopDbUpdaterOverviewTarget;
-      worldPay: DesktopDbUpdaterOverviewTarget;
-    };
+    targetOrder: string[];
+    targets: Record<string, DesktopDbUpdaterOverviewTarget>;
   }
 
   interface DesktopApi {
@@ -138,7 +136,14 @@ declare global {
       dbDirectory?: string;
       mainDbName?: string;
       worldPayDbName?: string;
-    }) => Promise<DesktopDbUpdaterResult>;
+      dbMappings?: Array<{
+        id: string;
+        label: string;
+        planId: number;
+        dbName: string;
+        enabled: boolean;
+      }>;
+    }, options?: { targetIds?: string[] }) => Promise<DesktopDbUpdaterResult>;
     getDbUpdaterOverview?: (settings: {
       organization: string;
       projectName: string;
@@ -147,6 +152,13 @@ declare global {
       dbDirectory?: string;
       mainDbName?: string;
       worldPayDbName?: string;
+      dbMappings?: Array<{
+        id: string;
+        label: string;
+        planId: number;
+        dbName: string;
+        enabled: boolean;
+      }>;
     }) => Promise<DesktopDbUpdaterOverview>;
     onDbUpdaterProgress?: (callback: (progress: DesktopDbUpdaterProgress) => void) => (() => void);
     readTextFile?: (targetPath: string) => Promise<string>;
