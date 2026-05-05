@@ -1,0 +1,2645 @@
+<h1 id="action-parameter-matrix">Action Parameter Matrix</h1>
+<h2 id="scope">Scope</h2>
+<p>This guide is based on a debug-style scan of the action execution
+path across the project, not only the enum list.</p>
+<p>Files reviewed for this guide include:</p>
+<ul>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Pages\Common\CommonPage.cs">CommonPage.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\CommonUtility.cs">CommonUtility.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\WebElementUtility.cs">WebElementUtility.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\DataStore.cs">DataStore.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Controls\Table.cs">Table.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Controls\ListControl.cs">ListControl.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Controls\SelectControl.cs">SelectControl.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Controls\DatePicker.cs">DatePicker.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Controls\RadioControl.cs">RadioControl.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Controls\AgGridControl.cs">AgGridControl.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Controls\CommonControls.cs">CommonControls.cs</a></li>
+<li>helper files under
+<code>BromCom.Tests\Utilities\PageObjectModelHelper</code></li>
+</ul>
+<h2 id="execution-path">Execution Path</h2>
+<p>The runtime flow is:</p>
+<ol type="1">
+<li><code>CommonPage.CommonTestCase(...)</code> iterates the parsed test
+steps.</li>
+<li><code>CommonPage</code> branches special actions like
+<code>SELECT</code>, <code>SWITCH_TAB</code>, <code>SWITCH_FRAME</code>,
+<code>FETCH_SHARED_STEPS</code>.</li>
+<li>Most actions resolve an element through
+<code>CommonUtility.GetElement(...)</code>.</li>
+<li><code>CommonUtility</code> delegates element lookup to
+<code>WebElementUtility</code>.</li>
+<li><code>CommonUtility.ActionPerform(...)</code> executes the
+action.</li>
+<li>Some actions delegate further into <code>Table</code>,
+<code>ListControl</code>, <code>SelectControl</code>,
+<code>DatePicker</code>, or a page-model helper.</li>
+</ol>
+<p>Practical consequence:</p>
+<ul>
+<li>a correct step is not just <code>ActionType</code></li>
+<li>it is <code>ActionType</code> plus the exact parameter shape
+expected by the implementation branch</li>
+</ul>
+<h2 id="steptemplate-field-map">StepTemplate Field Map</h2>
+<p>The step model comes from <a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\Bromcom.Contract\Models\StepTemplate.cs">StepTemplate.cs</a>,
+and the runtime fields are populated in <a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\Bromcom.Contract\Services\AzureDevOpsService.cs">AzureDevOpsService.cs</a>
+from the Azure DevOps step XML.</p>
+<h3 id="fields-parsed-from-azure-devops-and-used-at-runtime">Fields
+parsed from Azure DevOps and used at runtime</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Source in Azure step XML</th>
+<th>Runtime use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>TestID</code></td>
+<td>work item id</td>
+<td>links the step back to the test case</td>
+</tr>
+<tr class="even">
+<td><code>StepNumber</code></td>
+<td>generated during parse</td>
+<td>used in exception output</td>
+</tr>
+<tr class="odd">
+<td><code>ActionType</code></td>
+<td><code>Action=</code></td>
+<td>mapped to enum <code>Action</code></td>
+</tr>
+<tr class="even">
+<td><code>Element</code></td>
+<td><code>Element=</code></td>
+<td>locator or path text</td>
+</tr>
+<tr class="odd">
+<td><code>ElementCategory</code></td>
+<td><code>ElementCategory=</code></td>
+<td>tells <code>WebElementUtility</code> how to resolve
+<code>Element</code></td>
+</tr>
+<tr class="even">
+<td><code>ElementReplaceTextDataKey</code></td>
+<td><code>ElementPathReplaceKey=</code></td>
+<td>drives dynamic locator replacement</td>
+</tr>
+<tr class="odd">
+<td><code>IsElementPathDynamic</code></td>
+<td><code>IsElementPathDynamic=</code></td>
+<td>enables dynamic locator replacement</td>
+</tr>
+<tr class="even">
+<td><code>Value</code></td>
+<td><code>Value=</code></td>
+<td>overloaded action input</td>
+</tr>
+<tr class="odd">
+<td><code>Description</code></td>
+<td><code>Description=</code></td>
+<td>available to action logic; not the main error string</td>
+</tr>
+<tr class="even">
+<td><code>ExpectedValue</code></td>
+<td><code>ExpectedVl=</code></td>
+<td>overloaded expected/result field</td>
+</tr>
+<tr class="odd">
+<td><code>Key</code></td>
+<td><code>DataKey=</code></td>
+<td><code>DataStore</code> input/output key</td>
+</tr>
+<tr class="even">
+<td><code>Headers</code></td>
+<td><code>Headers=</code></td>
+<td>overloaded config/mode field</td>
+</tr>
+<tr class="odd">
+<td><code>IsConcatenated</code></td>
+<td><code>IsConcatenated=</code></td>
+<td>toggles concatenated compare logic in some actions</td>
+</tr>
+<tr class="even">
+<td><code>StepDescription</code></td>
+<td>full plain-text step body</td>
+<td>used in exception reporting</td>
+</tr>
+</tbody>
+</table>
+<h3
+id="fields-present-on-steptemplate-but-not-clearly-used-in-this-path">Fields
+present on <code>StepTemplate</code> but not clearly used in this
+path</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Current observation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>Type</code></td>
+<td>present on the model, but not populated in
+<code>AzureDevOpsService.ParseTestSteps(...)</code> and not part of the
+main action dispatch path reviewed here</td>
+</tr>
+</tbody>
+</table>
+<h3 id="test-case-level-fields-related-to-step-execution">Test-case
+level fields related to step execution</h3>
+<p>These are not step fields, but they change how steps run:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Source</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>InitialSteps</code></td>
+<td><code>Custom.InitialStep</code> on Azure DevOps test case</td>
+<td>run before the main step list</td>
+</tr>
+<tr class="even">
+<td><code>BrowserName</code></td>
+<td>assigned during parse</td>
+<td>controls which browser(s) execute the step set</td>
+</tr>
+</tbody>
+</table>
+<h2 id="parameter-rules">Parameter Rules</h2>
+<h3 id="element"><code>Element</code></h3>
+<p>Usually the main UI locator.</p>
+<p>But not always required. Some actions are data-only or
+browser-only:</p>
+<ul>
+<li><code>DELAY</code></li>
+<li><code>CHECK_URL</code></li>
+<li><code>SAVE_HARDCODE_DATA</code></li>
+<li><code>FETCH_SHARED_STEPS</code></li>
+<li>alert actions</li>
+</ul>
+<h3 id="elementcategory"><code>ElementCategory</code></h3>
+<p>This controls how <code>Element</code> is interpreted in
+<code>WebElementUtility</code>.</p>
+<p>Supported categories:</p>
+<ul>
+<li><code>XPATH</code></li>
+<li><code>ID</code></li>
+<li><code>TAGNAME</code></li>
+<li><code>CSSSELECTOR</code></li>
+<li><code>LINKTEXT</code></li>
+<li><code>NAME</code></li>
+<li><code>URL</code></li>
+<li><code>JSPATH</code></li>
+<li><code>VERIFY</code></li>
+<li><code>VERIFYERROR</code></li>
+</ul>
+<p>Important behaviors:</p>
+<ul>
+<li><code>URL</code> navigates using <code>step.Value</code></li>
+<li><code>JSPATH</code> executes JavaScript and returns the element</li>
+<li><code>VERIFY</code> waits for an XPath element to exist</li>
+<li><code>VERIFYERROR</code> expects an XPath element and compares its
+text to <code>step.Value</code></li>
+</ul>
+<h2 id="element-authoring-matrix">Element Authoring Matrix</h2>
+<p>This section is the direct answer to “what do I put in
+<code>Element</code>, <code>ElementCategory</code>, and the related
+fields?”</p>
+<p>The source of truth for this behavior is:</p>
+<ul>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework/Bromcom.Contract/Models/StepTemplate.cs">StepTemplate.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework/BromCom.Tests/Utilities/Constants.cs">Constants.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework/BromCom.Tests/Utilities/WebElementUtility.cs">WebElementUtility.cs</a></li>
+</ul>
+<h3 id="element-related-fields">Element-related fields</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Purpose</th>
+<th>When it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>Element</code></td>
+<td>locator text or navigation target</td>
+<td>for most UI actions</td>
+</tr>
+<tr class="even">
+<td><code>ElementCategory</code></td>
+<td>tells the framework how to interpret <code>Element</code></td>
+<td>whenever <code>Element</code> is used</td>
+</tr>
+<tr class="odd">
+<td><code>ElementReplaceTextDataKey</code></td>
+<td>supplies replacement data for dynamic locators</td>
+<td>when <code>IsElementPathDynamic = true</code></td>
+</tr>
+<tr class="even">
+<td><code>IsElementPathDynamic</code></td>
+<td>marks <code>Element</code> as a template instead of a final
+locator</td>
+<td>when locator text changes at runtime</td>
+</tr>
+<tr class="odd">
+<td><code>Value</code></td>
+<td>sometimes used with the element category, especially
+<code>URL</code> and <code>VERIFYERROR</code></td>
+<td>category-specific</td>
+</tr>
+</tbody>
+</table>
+<h3 id="elementcategory-matrix">ElementCategory matrix</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>ElementCategory</th>
+<th>What <code>Element</code> must contain</th>
+<th>Related fields</th>
+<th>Runtime behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>XPATH</code></td>
+<td>an XPath locator</td>
+<td>optional dynamic locator fields</td>
+<td>resolved with <code>By.XPath(Element)</code></td>
+</tr>
+<tr class="even">
+<td><code>ID</code></td>
+<td>an element id</td>
+<td>optional dynamic locator fields</td>
+<td>resolved with <code>By.Id(Element)</code></td>
+</tr>
+<tr class="odd">
+<td><code>TAGNAME</code></td>
+<td>a tag name</td>
+<td>optional dynamic locator fields</td>
+<td>resolved with <code>By.TagName(Element)</code></td>
+</tr>
+<tr class="even">
+<td><code>CSSSELECTOR</code></td>
+<td>a CSS selector</td>
+<td>optional dynamic locator fields</td>
+<td>resolved with <code>By.CssSelector(Element)</code></td>
+</tr>
+<tr class="odd">
+<td><code>LINKTEXT</code></td>
+<td>a link text value</td>
+<td>optional dynamic locator fields</td>
+<td>resolved with <code>By.LinkText(Element)</code></td>
+</tr>
+<tr class="even">
+<td><code>NAME</code></td>
+<td>a name attribute</td>
+<td>optional dynamic locator fields</td>
+<td>resolved with <code>By.Name(Element)</code></td>
+</tr>
+<tr class="odd">
+<td><code>URL</code></td>
+<td>not really a locator; <code>Element</code> is ignored for
+lookup</td>
+<td><code>Value</code> is required</td>
+<td>browser navigates to <code>Value</code> or URL constant key</td>
+</tr>
+<tr class="even">
+<td><code>JSPATH</code></td>
+<td>a JavaScript expression that returns an element</td>
+<td>optional dynamic locator fields</td>
+<td>executed through JavaScript</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY</code></td>
+<td>an XPath locator</td>
+<td>no normal element return</td>
+<td>waits for the XPath element to exist using longer verify
+timeout</td>
+</tr>
+<tr class="even">
+<td><code>VERIFYERROR</code></td>
+<td>an XPath locator</td>
+<td><code>Value</code> is required</td>
+<td>checks displayed element text against <code>Value</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-to-put-in-element">What to put in <code>Element</code></h3>
+<p>Use these rules:</p>
+<ul>
+<li>for <code>XPATH</code>, put the full XPath string</li>
+<li>for <code>ID</code>, put the raw id only</li>
+<li>for <code>CSSSELECTOR</code>, put the raw CSS selector only</li>
+<li>for <code>LINKTEXT</code>, put the exact link text</li>
+<li>for <code>NAME</code>, put the raw <code>name</code> value</li>
+<li>for <code>TAGNAME</code>, put the raw tag name</li>
+<li>for <code>JSPATH</code>, put a JavaScript expression such as
+<code>document.querySelector(...)</code></li>
+<li>for <code>URL</code>, do not think of <code>Element</code> as a
+locator; the navigation input is <code>Value</code></li>
+</ul>
+<h3 id="dynamic-element-variations">Dynamic element variations</h3>
+<p>Dynamic element handling is implemented in <a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework/BromCom.Tests/Utilities/WebElementUtility.cs">WebElementUtility.cs</a>.</p>
+<p>There are two supported patterns.</p>
+<h4 id="variation-1-single-replacement-key-with">Variation 1: Single
+replacement key with <code>$$</code></h4>
+<p>Use:</p>
+<ul>
+<li><code>IsElementPathDynamic = true</code></li>
+<li><code>ElementReplaceTextDataKey = SomeSavedKey</code></li>
+<li><code>Element = //div[text()='$$']</code></li>
+</ul>
+<p>Runtime behavior:</p>
+<ul>
+<li>the framework reads <code>SomeSavedKey</code> from
+<code>DataStore</code></li>
+<li>it replaces <code>$$</code> with that value</li>
+<li>then it resolves the final locator</li>
+</ul>
+<h4
+id="variation-2-multiple-replacement-keys-with-datakey1-datakey2">Variation
+2: Multiple replacement keys with <code>Datakey1</code>,
+<code>Datakey2</code></h4>
+<p>Use:</p>
+<ul>
+<li><code>IsElementPathDynamic = true</code></li>
+<li><code>ElementReplaceTextDataKey = KeyA,KeyB</code></li>
+<li><code>Element = //tr[td[text()='Datakey1']]/td[text()='Datakey2']</code></li>
+</ul>
+<p>Runtime behavior:</p>
+<ul>
+<li>the framework reads both keys from <code>DataStore</code></li>
+<li><code>Datakey1</code> is replaced with the first key value</li>
+<li><code>Datakey2</code> is replaced with the second key value</li>
+</ul>
+<h3
+id="elementcategory-specific-parameter-requirements">ElementCategory-specific
+parameter requirements</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>ElementCategory</th>
+<th>Required fields</th>
+<th>Optional fields</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>XPATH</code></td>
+<td><code>ElementCategory</code>, <code>Element</code></td>
+<td>dynamic fields</td>
+<td>most common category in this repo</td>
+</tr>
+<tr class="even">
+<td><code>ID</code></td>
+<td><code>ElementCategory</code>, <code>Element</code></td>
+<td>dynamic fields</td>
+<td>use raw id, not <code>#id</code></td>
+</tr>
+<tr class="odd">
+<td><code>CSSSELECTOR</code></td>
+<td><code>ElementCategory</code>, <code>Element</code></td>
+<td>dynamic fields</td>
+<td>use valid CSS selector text</td>
+</tr>
+<tr class="even">
+<td><code>LINKTEXT</code></td>
+<td><code>ElementCategory</code>, <code>Element</code></td>
+<td>dynamic fields</td>
+<td>exact text match matters</td>
+</tr>
+<tr class="odd">
+<td><code>NAME</code></td>
+<td><code>ElementCategory</code>, <code>Element</code></td>
+<td>dynamic fields</td>
+<td>uses <code>name</code> attribute</td>
+</tr>
+<tr class="even">
+<td><code>TAGNAME</code></td>
+<td><code>ElementCategory</code>, <code>Element</code></td>
+<td>dynamic fields</td>
+<td>rarely needed for precise interactions</td>
+</tr>
+<tr class="odd">
+<td><code>URL</code></td>
+<td><code>ElementCategory</code>, <code>Value</code></td>
+<td><code>Element</code> usually irrelevant</td>
+<td><code>Value</code> can be a literal URL or a URL constant key
+prefixed with <code>#</code></td>
+</tr>
+<tr class="even">
+<td><code>JSPATH</code></td>
+<td><code>ElementCategory</code>, <code>Element</code></td>
+<td>dynamic fields</td>
+<td><code>Element</code> must be valid JS returning an element</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY</code></td>
+<td><code>ElementCategory</code>, <code>Element</code></td>
+<td>unused extra fields</td>
+<td>mainly used as a wait/checkpoint pattern</td>
+</tr>
+<tr class="even">
+<td><code>VERIFYERROR</code></td>
+<td><code>ElementCategory</code>, <code>Element</code>,
+<code>Value</code></td>
+<td>unused extra fields</td>
+<td>current implementation is very specific and should be copied from
+existing usage</td>
+</tr>
+</tbody>
+</table>
+<h3 id="element-plus-elementcategory-authoring-combinations">Element
+plus ElementCategory authoring combinations</h3>
+<p>This is the minimum field set a QA should think about when authoring
+a step.</p>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+<col style="width: 11%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Variation</th>
+<th>Element</th>
+<th>ElementCategory</th>
+<th>ElementReplaceTextDataKey</th>
+<th>IsElementPathDynamic</th>
+<th>Value</th>
+<th>Key</th>
+<th>Headers</th>
+<th>What it means</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Static UI locator</td>
+<td>required</td>
+<td>required</td>
+<td>empty</td>
+<td><code>false</code> or empty</td>
+<td>action-specific</td>
+<td>action-specific</td>
+<td>action-specific</td>
+<td>Normal element lookup, then action execution</td>
+</tr>
+<tr class="even">
+<td>Dynamic UI locator using one saved key</td>
+<td>required with <code>$$</code> token</td>
+<td>required</td>
+<td>required single saved key</td>
+<td><code>true</code></td>
+<td>action-specific</td>
+<td>action-specific</td>
+<td>action-specific</td>
+<td>Replace <code>$$</code> with one <code>DataStore</code> value before
+lookup</td>
+</tr>
+<tr class="odd">
+<td>Dynamic UI locator using many saved keys</td>
+<td>required with <code>Datakey1</code>, <code>Datakey2</code>
+tokens</td>
+<td>required</td>
+<td>required comma-separated keys</td>
+<td><code>true</code></td>
+<td>action-specific</td>
+<td>action-specific</td>
+<td>action-specific</td>
+<td>Replace multiple placeholders from <code>DataStore</code> before
+lookup</td>
+</tr>
+<tr class="even">
+<td>URL navigation</td>
+<td>optional or ignored</td>
+<td>required as <code>URL</code></td>
+<td>empty</td>
+<td><code>false</code> or empty</td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td><code>Value</code> is treated as the URL input, not
+<code>Element</code></td>
+</tr>
+<tr class="odd">
+<td>Verify wait checkpoint</td>
+<td>required XPath</td>
+<td>required as <code>VERIFY</code></td>
+<td>optional</td>
+<td>optional</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Waits for the XPath to exist and does not return a normal
+element</td>
+</tr>
+<tr class="even">
+<td>Verify error text</td>
+<td>required XPath</td>
+<td>required as <code>VERIFYERROR</code></td>
+<td>optional</td>
+<td>optional</td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>Waits for the XPath and compares visible text to
+<code>Value</code></td>
+</tr>
+<tr class="odd">
+<td>Browser-only action</td>
+<td>usually empty</td>
+<td>usually empty</td>
+<td>empty</td>
+<td>empty</td>
+<td>action-specific</td>
+<td>action-specific</td>
+<td>action-specific</td>
+<td>No element lookup should occur</td>
+</tr>
+</tbody>
+</table>
+<h3 id="element-authoring-decision-tree">Element authoring decision
+tree</h3>
+<p>Use this order:</p>
+<ol type="1">
+<li>Decide whether the action needs element lookup at all.</li>
+<li>If it does, choose the locator category that matches the actual
+locator text.</li>
+<li>If the locator text changes at runtime, switch from static authoring
+to dynamic authoring.</li>
+<li>Only then fill <code>Value</code>, <code>Key</code>, and
+<code>Headers</code> based on the action branch, not the locator
+branch.</li>
+</ol>
+<p>The important separation is:</p>
+<ul>
+<li><code>Element</code> and <code>ElementCategory</code> decide how the
+framework finds something</li>
+<li><code>Value</code>, <code>Key</code>, and <code>Headers</code>
+usually decide what the action does with that thing</li>
+</ul>
+<h3 id="element-examples-by-category">Element examples by category</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>ElementCategory</th>
+<th>Example <code>Element</code></th>
+<th>Example companion fields</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>XPATH</code></td>
+<td><code>//button[normalize-space()='Save']</code></td>
+<td><code>IsElementPathDynamic=false</code></td>
+<td>Click or verify the Save button</td>
+</tr>
+<tr class="even">
+<td><code>ID</code></td>
+<td><code>btnSave</code></td>
+<td>none</td>
+<td>Resolve by DOM id</td>
+</tr>
+<tr class="odd">
+<td><code>CSSSELECTOR</code></td>
+<td><code>button.save.primary</code></td>
+<td>none</td>
+<td>Resolve by CSS selector</td>
+</tr>
+<tr class="even">
+<td><code>LINKTEXT</code></td>
+<td><code>Attendance</code></td>
+<td>none</td>
+<td>Resolve anchor by exact visible text</td>
+</tr>
+<tr class="odd">
+<td><code>NAME</code></td>
+<td><code>StudentSurname</code></td>
+<td>none</td>
+<td>Resolve by <code>name</code> attribute</td>
+</tr>
+<tr class="even">
+<td><code>TAGNAME</code></td>
+<td><code>select</code></td>
+<td>none</td>
+<td>Resolve by tag name</td>
+</tr>
+<tr class="odd">
+<td><code>JSPATH</code></td>
+<td><code>document.querySelector(\"input[type='file']\")</code></td>
+<td>none</td>
+<td>Resolve via JavaScript</td>
+</tr>
+<tr class="even">
+<td><code>URL</code></td>
+<td>empty</td>
+<td><code>Value=#FinanceURL</code> or
+<code>Value=https://...</code></td>
+<td>Navigate to a URL</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY</code></td>
+<td><code>//div[@role='dialog']</code></td>
+<td>none</td>
+<td>Wait for the XPath to exist</td>
+</tr>
+<tr class="even">
+<td><code>VERIFYERROR</code></td>
+<td><code>//span[@class='error']</code></td>
+<td><code>Value=This field is required</code></td>
+<td>Verify visible error text</td>
+</tr>
+</tbody>
+</table>
+<h3 id="associated-parameters-that-change-element-behavior">Associated
+parameters that change element behavior</h3>
+<p>These fields are directly tied to the locator path, not just to the
+action:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Applies to</th>
+<th>Real effect</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ElementReplaceTextDataKey</code></td>
+<td>dynamic element variations only</td>
+<td>picks which saved data replaces locator placeholders</td>
+</tr>
+<tr class="even">
+<td><code>IsElementPathDynamic</code></td>
+<td>dynamic element variations only</td>
+<td>tells <code>WebElementUtility</code> not to use <code>Element</code>
+as-is</td>
+</tr>
+<tr class="odd">
+<td><code>Value</code></td>
+<td><code>URL</code>, <code>VERIFYERROR</code>, plus the action
+itself</td>
+<td>can be part of locator behavior for some categories</td>
+</tr>
+<tr class="even">
+<td><code>Key</code></td>
+<td>any action that reads from <code>DataStore</code></td>
+<td>does not change lookup, but often changes what gets typed/selected
+after lookup</td>
+</tr>
+<tr class="odd">
+<td><code>Headers</code></td>
+<td>helper or structured actions</td>
+<td>does not change lookup, but can change how the located element is
+interpreted later</td>
+</tr>
+</tbody>
+</table>
+<h3 id="invalid-combinations-to-avoid">Invalid combinations to
+avoid</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Combination</th>
+<th>Why it fails</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>Element</code> has XPath syntax but
+<code>ElementCategory=CSSSELECTOR</code></td>
+<td>wrong Selenium lookup method is used</td>
+</tr>
+<tr class="even">
+<td><code>ElementCategory=ID</code> with <code>Element=#myId</code></td>
+<td><code>By.Id</code> expects raw id only</td>
+</tr>
+<tr class="odd">
+<td>empty <code>ElementCategory</code> on an action that still performs
+element lookup</td>
+<td><code>WebElementUtility</code> falls into the invalid-category
+branch</td>
+</tr>
+<tr class="even">
+<td><code>IsElementPathDynamic=true</code> with empty
+<code>ElementReplaceTextDataKey</code></td>
+<td>dynamic replacement has no source key</td>
+</tr>
+<tr class="odd">
+<td>dynamic locator without <code>$$</code> or <code>Datakey1</code>
+tokens</td>
+<td>replacement flag is set but the locator template has nothing to
+replace</td>
+</tr>
+<tr class="even">
+<td><code>ElementCategory=URL</code> with the real URL stored in
+<code>Element</code> but empty <code>Value</code></td>
+<td>navigation branch reads <code>Value</code>, not
+<code>Element</code></td>
+</tr>
+<tr class="odd">
+<td><code>ElementCategory=VERIFYERROR</code> without
+<code>Value</code></td>
+<td>the compare target is missing</td>
+</tr>
+</tbody>
+</table>
+<h3 id="when-element-can-be-omitted">When <code>Element</code> can be
+omitted</h3>
+<p>You usually do not need <code>Element</code> for:</p>
+<ul>
+<li>browser-only actions like <code>OPEN_NEW_TAB</code>,
+<code>CLOSE_TAB</code>, <code>REFRESH_PAGE</code></li>
+<li>data-only actions like <code>SAVE_HARDCODE_DATA</code></li>
+<li>comparison actions that operate entirely on
+<code>DataStore</code></li>
+<li>alert-only actions like <code>VISIBLE_ALERT</code></li>
+<li><code>CHECK_URL</code></li>
+<li><code>TRIGGER_SQL_QUERY</code></li>
+</ul>
+<h3 id="element-authoring-mistakes-to-avoid">Element authoring mistakes
+to avoid</h3>
+<ul>
+<li>using <code>XPATH</code> but providing CSS selector syntax</li>
+<li>using <code>ID</code> and including <code>#</code></li>
+<li>setting <code>IsElementPathDynamic = true</code> without providing
+<code>ElementReplaceTextDataKey</code></li>
+<li>using <code>$$</code> in <code>Element</code> without saving the
+replacement key first</li>
+<li>treating <code>URL</code> as a normal locator category</li>
+<li>assuming <code>VERIFY</code> returns an element for later logic; it
+is mostly a wait/checkpoint path</li>
+</ul>
+<h3 id="recommended-element-patterns">Recommended element patterns</h3>
+<p>Prefer:</p>
+<ul>
+<li>stable ids</li>
+<li>stable names</li>
+<li>short XPath with user-visible anchors</li>
+<li>saved-value dynamic locators only when necessary</li>
+</ul>
+<p>Avoid:</p>
+<ul>
+<li>long position-based XPath if a stable attribute exists</li>
+<li>brittle text nodes that change with formatting</li>
+<li>dynamic locator templates when a fixed locator is enough</li>
+</ul>
+<h3
+id="elementreplacetextdatakey"><code>ElementReplaceTextDataKey</code></h3>
+<p>This only matters when <code>IsElementPathDynamic</code> is
+<code>true</code>.</p>
+<p>Observed behavior in <a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\WebElementUtility.cs">WebElementUtility.cs</a>:</p>
+<ul>
+<li>if <code>ElementReplaceTextDataKey</code> contains one key, the
+framework replaces <code>$$</code> inside <code>Element</code> with the
+stored value</li>
+<li>if <code>ElementReplaceTextDataKey</code> contains multiple
+comma-separated keys, the framework uses
+<code>CommonControls.AddDatakeyValueToString(...)</code> and replaces
+<code>Datakey1</code>, <code>Datakey2</code>, and so on</li>
+</ul>
+<p>This is a missing-but-important authoring rule for dynamic
+locators.</p>
+<h3 id="iselementpathdynamic"><code>IsElementPathDynamic</code></h3>
+<p>When <code>true</code>, <code>Element</code> is not treated as a
+final locator string. It is treated as a template that must be resolved
+through <code>ElementReplaceTextDataKey</code>.</p>
+<h3 id="description"><code>Description</code></h3>
+<p><code>Description</code> is parsed from Azure DevOps and available on
+the step model. It is not one of the main dispatch keys, but some
+specialized logic may still depend on it. Do not assume it is
+disposable.</p>
+<h3 id="stepdescription"><code>StepDescription</code></h3>
+<p><code>StepDescription</code> is built from the full step text and is
+used in failure reporting via <a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\ExceptionHandler.cs">ExceptionHandler.cs</a>.
+This is the human-readable diagnostic string a QA will see on
+failure.</p>
+<h3 id="value"><code>Value</code></h3>
+<p><code>Value</code> is the most overloaded field after
+<code>Headers</code>.</p>
+<p>Common meanings:</p>
+<ul>
+<li>typed text</li>
+<li>a dropdown display text</li>
+<li>a row count</li>
+<li>a day offset</li>
+<li>a boolean-like control string</li>
+<li>a dictionary-style config payload</li>
+<li>a comma-separated multi-argument payload</li>
+</ul>
+<h3 id="expectedvalue"><code>ExpectedValue</code></h3>
+<p>Common meanings:</p>
+<ul>
+<li>exact expected text</li>
+<li><code>true</code> or <code>false</code></li>
+<li>comparison mode</li>
+<li>output format string</li>
+<li>saved key list for XML helpers</li>
+</ul>
+<h3 id="key"><code>Key</code></h3>
+<p><code>Key</code> is used with <code>DataStore</code>, which is
+browser-specific.</p>
+<p><code>Key</code> can mean:</p>
+<ul>
+<li>read input from stored data</li>
+<li>write output to stored data</li>
+<li>compare current UI against stored data</li>
+</ul>
+<h3 id="headers"><code>Headers</code></h3>
+<p><code>Headers</code> is a generic extra-parameter field. It is not
+just a table header.</p>
+<p>It can mean:</p>
+<ul>
+<li>split mode</li>
+<li>date format</li>
+<li>arithmetic mode</li>
+<li>partial match switch</li>
+<li>xpath</li>
+<li>table column name</li>
+<li>helper-specific mini configuration</li>
+</ul>
+<h3 id="isconcatenated"><code>IsConcatenated</code></h3>
+<p>This is a real runtime flag, not just metadata.</p>
+<p>Observed use:</p>
+<ul>
+<li>concatenated compare flows like <code>CONTAINS</code></li>
+<li>tooltip/table comparison flows</li>
+</ul>
+<p>If a step relies on combining values from multiple headers into one
+compare string, <code>IsConcatenated</code> can be required.</p>
+<h2 id="dictionary-style-value">Dictionary-Style <code>Value</code></h2>
+<p>Many advanced actions use <code>Value</code> in this form:</p>
+<pre class="text"><code>rownumber:1,columnnumber:3</code></pre>
+<p>or:</p>
+<pre class="text"><code>take:5,skip:0</code></pre>
+<p>Parsed by:</p>
+<ul>
+<li><code>CommonUtility.GetValuesDictionary(...)</code></li>
+</ul>
+<p>Observed rules:</p>
+<ul>
+<li>keys are lowercased</li>
+<li>most values are lowercased</li>
+<li>values for keys containing <code>xpath</code>,
+<code>possibletext</code>, or <code>headercount</code> preserve
+case</li>
+</ul>
+<p>Safe keys seen in code:</p>
+<ul>
+<li><code>rownumber</code></li>
+<li><code>columnnumber</code></li>
+<li><code>skip</code></li>
+<li><code>take</code></li>
+<li><code>style</code></li>
+<li><code>attribute</code></li>
+<li><code>iconnumber</code></li>
+<li><code>tableheaderxpath</code></li>
+<li><code>headertablexpath</code></li>
+<li><code>headercount</code></li>
+<li><code>possibletext</code></li>
+<li><code>tag</code></li>
+<li><code>divnumber</code></li>
+</ul>
+<h2 id="azure-devops-template-tokens">Azure DevOps Template Tokens</h2>
+<p>These tokens are what <a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\Bromcom.Contract\Services\AzureDevOpsService.cs">AzureDevOpsService.cs</a>
+is actually looking for when it parses the step XML:</p>
+<ul>
+<li><code>Action=</code></li>
+<li><code>Element=</code></li>
+<li><code>ElementCategory=</code></li>
+<li><code>ElementPathReplaceKey=</code></li>
+<li><code>Value=</code></li>
+<li><code>Description=</code></li>
+<li><code>ExpectedVl=</code></li>
+<li><code>DataKey=</code></li>
+<li><code>Headers=</code></li>
+<li><code>IsConcatenated=</code></li>
+<li><code>IsElementPathDynamic=</code></li>
+</ul>
+<p>This matters because a field missing in Azure DevOps does not exist
+later in the runtime model.</p>
+<h2 id="datastore-rules">DataStore Rules</h2>
+<p>The framework stores values per browser in
+<code>DataStore</code>.</p>
+<p>That means:</p>
+<ul>
+<li>a <code>Key</code> saved in Chrome is not shared with Firefox</li>
+<li><code>TYPE</code>, <code>SELECT</code>, <code>VERIFYDATA</code>, and
+many comparison actions can fail if the prerequisite save step ran in a
+different browser context</li>
+</ul>
+<h2 id="high-confidence-action-matrix">High-Confidence Action
+Matrix</h2>
+<p>These actions have stable, code-readable parameter behavior and are
+safe to document directly.</p>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>FETCH_SHARED_STEPS</code></td>
+<td>not used</td>
+<td>shared test case id</td>
+<td>not used</td>
+<td>not used</td>
+<td>not used</td>
+<td><code>Value</code> is parsed as test case id and the shared step set
+is executed recursively.</td>
+</tr>
+<tr class="even">
+<td><code>MAXIMIZE_WINDOW</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Handled directly in <code>CommonPage</code>; no element lookup.</td>
+</tr>
+<tr class="odd">
+<td><code>SWITCH_TAB</code></td>
+<td>optional</td>
+<td>tab index</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>If <code>Value</code> is empty, the framework switches to the next
+non-current tab.</td>
+</tr>
+<tr class="even">
+<td><code>OPEN_NEW_TAB</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Browser-only action in <code>CommonPage</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>CLOSE_TAB</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Browser-only action in <code>CommonPage</code>; JavaScript close is
+used as fallback.</td>
+</tr>
+<tr class="even">
+<td><code>CURRENT_TAB</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Switches to the first available handle.</td>
+</tr>
+<tr class="odd">
+<td><code>GO_BACK</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Browser navigation only.</td>
+</tr>
+<tr class="even">
+<td><code>REFRESH_PAGE</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Browser navigation only.</td>
+</tr>
+<tr class="odd">
+<td><code>SWITCH_FRAME</code></td>
+<td>optional</td>
+<td>frame index fallback</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>Element</code> if a frame element is resolvable;
+otherwise parses <code>Value</code> as frame index.</td>
+</tr>
+<tr class="even">
+<td><code>SWITCH_TO_PARENT_FRAME</code></td>
+<td>not used</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Browser frame navigation only.</td>
+</tr>
+<tr class="odd">
+<td><code>CLICK</code> / <code>CLICK_DELAY</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td><code>CLICK_DELAY</code> first applies an explicit wait on
+<code>Element</code>.</td>
+</tr>
+<tr class="even">
+<td><code>CLICK_IF_PRESENT</code></td>
+<td>optional</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Missing element is tolerated.</td>
+</tr>
+<tr class="odd">
+<td><code>MULTIPLE_CLICK</code> / <code>MULTIPLE_CLICK_DELAY</code></td>
+<td>required</td>
+<td>number of clicks</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Defaults to 1 if empty or invalid.</td>
+</tr>
+<tr class="even">
+<td><code>TYPE</code> / <code>TYPE_DELAY</code></td>
+<td>required</td>
+<td>literal text</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>unused</td>
+<td>If <code>Key</code> exists, stored data is typed instead of
+<code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TYPE_RANDOM_STRING</code></td>
+<td>required</td>
+<td>optional prefix text</td>
+<td>random type selector</td>
+<td>optional input key</td>
+<td>optional length</td>
+<td><code>ExpectedValue</code> controls alphabet/number/default random
+text.</td>
+</tr>
+<tr class="even">
+<td><code>TYPE_DATE</code></td>
+<td>required</td>
+<td>day offset from today</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Enters <code>DateTime.Now + Value</code> in
+<code>dd/MM/yyyy</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TYPE_INVISIBLE_ELEMENT</code></td>
+<td>required</td>
+<td>literal text</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses JavaScript to assign <code>value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>CLICK_INVISIBLE_ELEMENT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses JavaScript click.</td>
+</tr>
+<tr class="odd">
+<td><code>CLEAR_TEXT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Sends Ctrl+A then Delete.</td>
+</tr>
+<tr class="even">
+<td><code>PRESS_KEY</code></td>
+<td>optional</td>
+<td>key name or literal key text</td>
+<td>control key payload</td>
+<td>unused</td>
+<td>unused</td>
+<td><code>CTRL</code> uses <code>ExpectedValue</code> as the key chord
+suffix.</td>
+</tr>
+<tr class="odd">
+<td><code>MULTIPLE_TIMES_PRESS_KEY</code></td>
+<td>optional</td>
+<td>key to press</td>
+<td>unused</td>
+<td>optional count key</td>
+<td>count fallback</td>
+<td>Count is taken from <code>Key</code> or <code>Headers</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SELECT</code> / <code>SELECT_DELAY</code></td>
+<td>required</td>
+<td>visible option text</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>optional <code>PartialMatch</code></td>
+<td><code>SELECT</code> is executed in <code>CommonPage</code> as
+<code>SelectElement</code>, not generic <code>IWebElement</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SELECT_BY_INDEX</code></td>
+<td>required</td>
+<td>numeric index</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Defaults to 5 if empty.</td>
+</tr>
+<tr class="even">
+<td><code>SELECT_NEXT_INDEX</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Advances one index from current selection.</td>
+</tr>
+<tr class="odd">
+<td><code>SELECT_INCREMENTED_INDEX</code></td>
+<td>required</td>
+<td>increment</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Adds <code>Value</code> to current selected index.</td>
+</tr>
+<tr class="even">
+<td><code>SELECT_IS_SELECTED</code></td>
+<td>required</td>
+<td>fallback selected text</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Compares selected option text.</td>
+</tr>
+<tr class="odd">
+<td><code>SELECTED</code></td>
+<td>required</td>
+<td>fallback selected text</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Same data-source idea as <code>SELECT_IS_SELECTED</code>, but direct
+equality assertion.</td>
+</tr>
+<tr class="even">
+<td><code>NOTSELECTED</code></td>
+<td>required</td>
+<td>fallback selected text</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Asserts selected text is not the given value.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVEDATA</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves <code>Text</code>, then <code>value</code>, then
+<code>textContent</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_HARDCODE_DATA</code></td>
+<td>optional</td>
+<td>literal value</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves <code>Value</code> directly under <code>Key</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_ELEMENTS_ATTRIBUTE</code></td>
+<td>required</td>
+<td>attribute name</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves one attribute from the current element.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_CLASS_OF_ELEMENT</code></td>
+<td>required</td>
+<td>split position</td>
+<td>unused</td>
+<td>output key</td>
+<td>optional split mode</td>
+<td><code>Headers</code> may be <code>SplitByBreak</code>,
+<code>SplitByCarriageReturn</code>, or <code>SplitBySpace</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_SPECIFIC_TEXT</code></td>
+<td>required</td>
+<td>split position or positions</td>
+<td>may include <code>Negative Check</code></td>
+<td>output key</td>
+<td>split token(s)</td>
+<td>Supports chained split operations via comma-separated
+<code>Headers</code> and <code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_SPECIFIC_TEXT_OR_DEFAULT</code></td>
+<td>required</td>
+<td>split position</td>
+<td>secondary xpath</td>
+<td>output key</td>
+<td>split token</td>
+<td>Uses <code>ExpectedValue</code> as an alternate XPath to read from;
+falls back to <code>0</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_DATE_TIME</code></td>
+<td>optional</td>
+<td>unused</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves current <code>dd/MM/yyyy HH:mm</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_CURRENT_PERIOD</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves current period label built from current month + current year
+element.</td>
+</tr>
+<tr class="odd">
+<td><code>ADD_TIME</code></td>
+<td>required</td>
+<td>amount</td>
+<td>date format string</td>
+<td>unused</td>
+<td>time unit</td>
+<td><code>Headers</code> is <code>SECOND</code>, <code>MINUTE</code>, or
+<code>HOUR</code>.</td>
+</tr>
+<tr class="even">
+<td><code>ADD_DAYS</code></td>
+<td>optional</td>
+<td>day count</td>
+<td>unused</td>
+<td>output key</td>
+<td>optional base date</td>
+<td>If <code>Headers</code> is not <code>today</code>, it is parsed as
+the base date.</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFYDATA</code></td>
+<td>required</td>
+<td>fallback compare value</td>
+<td><code>true</code> or <code>false</code></td>
+<td>input key</td>
+<td>unused</td>
+<td>Usually compares current element text against stored value.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_DYNAMIC_STRING</code></td>
+<td>required</td>
+<td>template string</td>
+<td><code>true</code> or <code>false</code></td>
+<td>datakey list</td>
+<td>unused</td>
+<td>Replaces <code>Datakey1</code>, <code>Datakey2</code> etc through
+<code>CommonControls.AddDatakeyValueToString</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>ISPASSWORD</code></td>
+<td>required</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Checks whether the input <code>type</code> attribute is
+<code>password</code>.</td>
+</tr>
+<tr class="even">
+<td><code>EQUAL</code> / <code>EQUAL_DELAY</code></td>
+<td>required</td>
+<td>unused</td>
+<td>exact expected text</td>
+<td>unused</td>
+<td>unused</td>
+<td>Reads <code>value</code>, then <code>Text</code>, then
+<code>textContent</code>; trims whitespace/newlines.</td>
+</tr>
+<tr class="odd">
+<td><code>DOES_NOT_CONTAIN</code></td>
+<td>required</td>
+<td>unused</td>
+<td>forbidden text</td>
+<td>unused</td>
+<td>unused</td>
+<td>Direct negative text assertion.</td>
+</tr>
+<tr class="even">
+<td><code>ISVISIBLE</code> / <code>ISVISIBLE_DELAY</code></td>
+<td>usually required</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Missing element is tolerated when expected is
+<code>false</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>ISENABLED</code></td>
+<td>required</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Wrapped in try/catch like <code>ISVISIBLE</code>.</td>
+</tr>
+<tr class="even">
+<td><code>IS_ENABLED</code></td>
+<td>required</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Direct <code>element.Enabled</code> comparison.</td>
+</tr>
+<tr class="odd">
+<td><code>ISEMPTY</code></td>
+<td>required</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Checks the element <code>value</code> attribute.</td>
+</tr>
+<tr class="even">
+<td><code>CHECKED</code> / <code>UNCHECKED</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>element.Selected</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY_STYLE</code></td>
+<td>required</td>
+<td>style fragment</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Checks whether style contains <code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_STYLE_EQUAL</code></td>
+<td>required</td>
+<td>style fragment</td>
+<td>exact style</td>
+<td>unused</td>
+<td>unused</td>
+<td><code>Value</code> is not the final assertion here;
+<code>ExpectedValue</code> is.</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY_CLASS_EQUAL</code></td>
+<td>required</td>
+<td>class fragment or <code>"OR"</code> list</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td><code>Value</code> may contain <code>"OR"</code> to allow
+alternative class matches.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_ELEMENT_TYPE_ATTRIBUTE</code></td>
+<td>required</td>
+<td>unused</td>
+<td>exact type</td>
+<td>unused</td>
+<td>unused</td>
+<td>Compares <code>type</code> attribute.</td>
+</tr>
+<tr class="odd">
+<td><code>COMPARE_ELEMENT_VALUE_WITH_REGEX</code></td>
+<td>required</td>
+<td>mode selector</td>
+<td>regex</td>
+<td>unused</td>
+<td>unused</td>
+<td><code>Value</code> may be <code>select</code>,
+<code>childspan</code>, or default element text mode.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_SELECTED_RADIO_BUTTON</code></td>
+<td>required</td>
+<td>radio group name</td>
+<td>expected label text</td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>RadioControl</code> and group name from
+<code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>CHECK_URL</code></td>
+<td>not needed</td>
+<td>URL key or literal URL</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td><code>Value</code> is resolved through <code>URLConstants</code> if
+it is a key.</td>
+</tr>
+<tr class="even">
+<td><code>DELAY</code></td>
+<td>not needed</td>
+<td>seconds</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Static wait.</td>
+</tr>
+<tr class="odd">
+<td><code>UPLOAD_FILE</code></td>
+<td>required</td>
+<td>file path</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>unused</td>
+<td>If <code>Key</code> exists, the stored path is used instead of
+<code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>DOWNLOAD_FILE</code></td>
+<td>required</td>
+<td>timeout/index-like integer</td>
+<td>output path root</td>
+<td>optional output key</td>
+<td>optional explicit file name</td>
+<td>If <code>Headers</code> exists it is used as the filename text
+instead of reading from the element.</td>
+</tr>
+<tr class="odd">
+<td><code>TRIGGER_SQL_QUERY</code></td>
+<td>not needed</td>
+<td><code>port:database:sql</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Sends the query via <code>HttpService</code> using configured SQL
+credentials.</td>
+</tr>
+<tr class="even">
+<td><code>TOGGLE_CHECKBOX</code></td>
+<td>required</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Iterates all checkbox labels under the current element XPath.</td>
+</tr>
+<tr class="odd">
+<td><code>ZOOM_IN_OUT</code></td>
+<td>not needed</td>
+<td>CSS scale value</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Executes <code>document.body.style.scale = Value</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="list-action-matrix">List Action Matrix</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>SAVE_LIST_COUNT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves visible list length from <code>li</code> elements.</td>
+</tr>
+<tr class="even">
+<td><code>VALIDATE_LIST_COUNT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>input key</td>
+<td>unused</td>
+<td>Current visible count must differ from stored count.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_SPECIFIC_LIST_ITEMS</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>output key</td>
+<td>xpath filter</td>
+<td><code>Headers</code> is an XPath filter applied inside the
+list.</td>
+</tr>
+<tr class="even">
+<td><code>VALUE_EXIST_IN_LIST</code></td>
+<td>required</td>
+<td>optional <code>true/false</code></td>
+<td>expected list item text</td>
+<td>unused</td>
+<td>unused</td>
+<td>If <code>Value</code> exists it overrides the assertion mode.</td>
+</tr>
+<tr class="odd">
+<td><code>VALUE_EXIST_IN_ALL_ITEMS_OF_LIST</code></td>
+<td>required</td>
+<td>optional <code>true/false</code></td>
+<td>text fragment</td>
+<td>unused</td>
+<td>unused</td>
+<td>All items must contain <code>ExpectedValue</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SELECT_LIST_ITEM</code></td>
+<td>required</td>
+<td>count or <code>take:x,skip:y</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Clicks a subset of <code>li</code> items.</td>
+</tr>
+<tr class="odd">
+<td><code>SELECT_LIST_ITEM_BY_TEXT</code></td>
+<td>required</td>
+<td>text to match</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Uses text from <code>Key</code> if present.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_SELECTED_LIST_ITEM_COUNT</code></td>
+<td>required</td>
+<td>expected count</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Defaults to 5 if empty.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_DROPDOWN_LIST</code></td>
+<td>required</td>
+<td>optional skip count</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves dropdown options.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_DROPDOWN_LIST_COUNT</code></td>
+<td>required</td>
+<td>optional skip count</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves option count.</td>
+</tr>
+<tr class="odd">
+<td><code>VALIDATE_SAVE_DROPDOWN_LIST_COUNT</code></td>
+<td>required</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>input key</td>
+<td>unused</td>
+<td>Compares current dropdown count against stored count.</td>
+</tr>
+<tr class="even">
+<td><code>CHECK_LIST_ORDER</code></td>
+<td>required</td>
+<td>unused</td>
+<td><code>ascending</code> or <code>descending</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses visible list text via <code>GetListItemsViaContent</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="table-and-grid-matrix">Table and Grid Matrix</h2>
+<p>These actions are stable enough to author when you already have a
+similar working example.</p>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>SAVE_TABLE_ROW_COUNT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>output key</td>
+<td>optional <code>TableCanBeNull</code></td>
+<td>Missing/null tables are treated as zero when <code>Headers</code>
+contains <code>TableCanBeNull</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_SPECIFIC_ROW_COUNT</code></td>
+<td>required</td>
+<td>row value to count</td>
+<td>unused</td>
+<td>output key</td>
+<td><code>columnIndex,...</code></td>
+<td><code>Headers</code> first token is parsed as the target column
+index.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_SAVE_COLUMN_DATA</code></td>
+<td>required</td>
+<td>optional remove-list</td>
+<td>filter/column option</td>
+<td>output key</td>
+<td>column number</td>
+<td>Uses <code>Headers</code> as column index.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_GRID_COLUMN_DATA</code></td>
+<td>required</td>
+<td>xpath for ag-grid cells</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Reads ag-grid text by XPath.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_TABLE_DATA</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves row data as dictionary keyed by table header text.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_TABLE</code></td>
+<td>required</td>
+<td>optional mode string</td>
+<td>unused</td>
+<td>output key</td>
+<td>header table xpath</td>
+<td>If <code>Value</code> contains <code>tdInTableHeader</code>,
+delete-row parsing is used.</td>
+</tr>
+<tr class="odd">
+<td><code>MATCH_TABLE_COUNT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>count or <code>@xpath@</code></td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Expected count can come from <code>Key</code>, direct text, or
+another element.</td>
+</tr>
+<tr class="even">
+<td><code>MATCH_SELECTED_TABLE_ROW_COUNT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>count or <code>@xpath@</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Reads selected row count from table row classes.</td>
+</tr>
+<tr class="odd">
+<td><code>MATCH_UNSELECTED_TABLE_ROW_COUNT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>count or <code>@xpath@</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Same idea for unselected rows.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_ROW_SELECT</code></td>
+<td>required</td>
+<td>number of rows to select</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves selected rows as structured table data.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_CLICK_COLUMN_HEADER</code></td>
+<td>required</td>
+<td>column number</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td><code>Value</code> is 1-based.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_SELECT_CHECKBOX</code></td>
+<td>required</td>
+<td>config string</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Common inline format is
+<code>columnNumber:5,take:5,skip:0</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_VERIFY_CHECKBOX_CLASS</code></td>
+<td>required</td>
+<td>config string</td>
+<td>class fragment</td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>GetValuesDictionary(Value)</code>.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_CHECKBOXES_STATUS</code></td>
+<td>required</td>
+<td>config string</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td><code>Value</code> contains at least <code>columnnumber</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_CHECK_DROPDOWN_STATUS</code></td>
+<td>required</td>
+<td>config string</td>
+<td>selected text</td>
+<td>unused</td>
+<td>unused</td>
+<td>Targets select controls by table column.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_SAVE_COLUMN_CLASS</code></td>
+<td>required</td>
+<td><code>row,column</code> config</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves a table cell class.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_SAVE_COLUMN_DIV_STYLE</code></td>
+<td>required</td>
+<td>row/column config</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves a cell div style.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_COLUMN_DIV_STYLE</code></td>
+<td>required</td>
+<td>row/column config</td>
+<td><code>true</code> or <code>false</code></td>
+<td>input key</td>
+<td>unused</td>
+<td>Compares current style against stored style.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_SAVE_VISIBLE_ROWS_COUNT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves visible rows count.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_VISIBLE_ROWS_COUNT</code></td>
+<td>required</td>
+<td>count</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Compares current visible row count against <code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_VERIFY_VISIBLE_AG_ROWS_COUNT</code></td>
+<td>required</td>
+<td>count</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses ag-grid row count.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_HEADERS_ROWS_COUNT</code></td>
+<td>required</td>
+<td>expected row count</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Counts header rows.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_CHECK_HEADERS_TEXT</code></td>
+<td>required</td>
+<td>config string</td>
+<td>comma-separated expected headers</td>
+<td>unused</td>
+<td>unused</td>
+<td>Supports row number and <code>headerhasth</code> flags in
+<code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_HEADER_COMPARE_COUNT</code></td>
+<td>required</td>
+<td>config string</td>
+<td>expected count</td>
+<td>unused</td>
+<td>unused</td>
+<td>Compares header count.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_COLUMN_DIV_CLICK</code></td>
+<td>required</td>
+<td>row/column config</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Row/column can come from stored JSON coordinates or direct
+<code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_COLUMN_DIV_UPDATE_INNERHTML</code></td>
+<td>required</td>
+<td>row/column config</td>
+<td>unused</td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Supports <code>possibletext</code>, <code>sendkeys</code>, and
+direct <code>text</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_VERIFY_COLUMN_DIV_HAS_STYLE</code></td>
+<td>required</td>
+<td>row/column/style config</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Checks whether a target cell div style contains a fragment.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_COLUMN_DIV_HAS_TAG</code></td>
+<td>required</td>
+<td>row/column/tag config</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>tag</code> and optional <code>divnumber</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_VERIFY_COLUMN_HEADER_HAS_ICON</code></td>
+<td>required</td>
+<td>row/column config</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Header icon presence check.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_COLUMN_HEADER_HAS_ICON_WITH_CLASS_VALUE</code></td>
+<td>required</td>
+<td>row/column/icon config</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Also validates icon class.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_VERIFY_COLUMN_DATA_HAS_ICON</code></td>
+<td>required</td>
+<td>row/column config</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Checks for <code>i</code> elements in the cell.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_COLUMN_DATA_HAS_DIV_ICON</code></td>
+<td>required</td>
+<td>row/column config</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Checks for icons under the cell div.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_HOVER_COLUMN_DIV_ICON</code></td>
+<td>required</td>
+<td>row/column/icon config</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Supports <code>skip</code>, <code>take</code>, and
+<code>iconnumber</code>.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_ATTRIBUTE_COLUMN_DIV_ICON</code></td>
+<td>required</td>
+<td>row/column/attribute config</td>
+<td>expected attribute value</td>
+<td>unused</td>
+<td>unused</td>
+<td>Reads one icon attribute.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_HOVER_COLUMN_ICON</code></td>
+<td>required</td>
+<td>row/column/icon config</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Hovers header/data icon element.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_COLUMN_ICON_HAS_ATTRIBUTE_WITH_VALUE</code></td>
+<td>required</td>
+<td>row/column/attribute config</td>
+<td>expected attribute value</td>
+<td>unused</td>
+<td>unused</td>
+<td>Verifies one icon attribute directly.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_VERIFY_COLUMN_ANY_ICON_HAS_ATTRIBUTE_WITH_VALUE</code></td>
+<td>required</td>
+<td>row/column/attribute config</td>
+<td>expected attribute value</td>
+<td>unused</td>
+<td>unused</td>
+<td>Passes if any icon matches.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_VERIFY_SELECTED_ROW_COLUMN_HAS_ATTRIBUTE_WITH_VALUE</code></td>
+<td>required</td>
+<td>row/column/attribute config</td>
+<td>expected attribute value</td>
+<td>unused</td>
+<td>unused</td>
+<td>Works off selected rows.</td>
+</tr>
+<tr class="odd">
+<td><code>TABLE_CLICK_COLUMN_DIV_ICON</code></td>
+<td>required</td>
+<td>row/column/skip/take config</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Clicks all matching icon components.</td>
+</tr>
+<tr class="even">
+<td><code>TABLE_CLICK_COLUMN_ICON</code></td>
+<td>required</td>
+<td>row/column/icon config</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Clicks a specific <code>i</code> icon.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="compare-and-save-pattern-matrix">Compare and Save Pattern
+Matrix</h2>
+<p>These are common utility actions that are easy to miss because they
+do not map to a single UI gesture.</p>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>COMPARE_TWO_LISTS</code></td>
+<td>not needed</td>
+<td>optional value to exclude</td>
+<td><code>true</code> or <code>false</code></td>
+<td>two saved keys</td>
+<td>compare mode</td>
+<td><code>Headers</code> can be <code>Any</code>, <code>Equal</code>, or
+default overlap logic.</td>
+</tr>
+<tr class="even">
+<td><code>COMPARE_TWO_TEXT</code></td>
+<td>not needed</td>
+<td>fallback compare text</td>
+<td><code>true</code> or <code>false</code></td>
+<td>two saved keys</td>
+<td>unused</td>
+<td>Uses stored text from <code>Key</code> or direct
+<code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>DATA_EXIST_IN_LIST</code></td>
+<td>not needed</td>
+<td>optional explicit value</td>
+<td><code>true</code> or <code>false</code></td>
+<td>two saved keys</td>
+<td>unused</td>
+<td><code>Key</code> is split into list-key and fallback data-key.</td>
+</tr>
+<tr class="even">
+<td><code>ALL_DATA_EXIST_IN_LIST</code></td>
+<td>not needed</td>
+<td>explicit compare value</td>
+<td><code>true</code> or <code>false</code></td>
+<td>two saved keys</td>
+<td>unused</td>
+<td>Checks whether all items equal the target value.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_ELEMENT_TITLE</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>output key</td>
+<td>unused</td>
+<td>Saves the <code>title</code> attribute.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_ELEMENTS_COUNT</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>output key</td>
+<td>child xpath</td>
+<td>Counts children matching <code>Headers</code> XPath under the
+current element.</td>
+</tr>
+<tr class="odd">
+<td><code>SAVE_ELEMENTS_ATTRIBUTE</code></td>
+<td>required</td>
+<td>unused</td>
+<td>attribute name</td>
+<td>output key</td>
+<td>child xpath</td>
+<td>Saves one attribute from all child elements matched by
+<code>Headers</code>.</td>
+</tr>
+<tr class="even">
+<td><code>SAVE_SEPERATED_TEXT_IN_DICTIONARY</code></td>
+<td>required</td>
+<td>config payload</td>
+<td>unused</td>
+<td>key prefix</td>
+<td>unused</td>
+<td>Splits element text and writes sequential keys like
+<code>Key_1</code>, <code>Key_2</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="date-and-time-matrix">Date and Time Matrix</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>VALIDATE_DATE_TIME_FORMAT</code></td>
+<td>required</td>
+<td>format index</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Uses <code>DateTime.GetDateTimeFormats()[Value]</code>.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_ELEMENT_VALUE_EQUAL_CURRENT_DATE</code></td>
+<td>optional</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Uses current date in <code>dd/MM/yyyy</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY_DATE_EQUAL_TO_CURRENT_DD_MM_YY</code></td>
+<td>optional</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>optional input key</td>
+<td>unused</td>
+<td>Uses current date in <code>dd/MM/yy</code>.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_DATE</code></td>
+<td>required</td>
+<td>unused</td>
+<td><code>true</code> or <code>false</code></td>
+<td>input key</td>
+<td>date format text</td>
+<td><code>Headers</code> must contain <code>dd/MM/yyyy</code> or
+<code>dd/MM/yy</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>DATE_PICKER_SELECT_DATE</code></td>
+<td>required</td>
+<td>day offset</td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Delegates to
+<code>DatePicker.SelectDate(element, offset, browser)</code>.</td>
+</tr>
+<tr class="even">
+<td><code>DATE_PICKER_SELCT_CUSTOM_DATE</code></td>
+<td>required</td>
+<td><code>dd/MM/yyyy</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>unused</td>
+<td>Parses explicit day, month, year.</td>
+</tr>
+<tr class="odd">
+<td><code>COMPARE_TWO_DATE</code></td>
+<td>required</td>
+<td>explicit date</td>
+<td>unused</td>
+<td>unused</td>
+<td>comparison mode</td>
+<td>Currently documented mode seen in code:
+<code>Less_Than_Equal</code>.</td>
+</tr>
+<tr class="even">
+<td><code>IN_DATE_RANGE</code></td>
+<td>required</td>
+<td><code>from:to</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>column name</td>
+<td>Checks all dates in the named table column.</td>
+</tr>
+<tr class="odd">
+<td><code>PREFIX_CHECK</code></td>
+<td>required</td>
+<td>prefix text</td>
+<td><code>true</code> or <code>false</code></td>
+<td>unused</td>
+<td>unused</td>
+<td>Checks whether current text starts with <code>Value</code>.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_ACTUALS</code></td>
+<td>required</td>
+<td>control flag</td>
+<td>unused</td>
+<td>input key</td>
+<td>unused</td>
+<td>Specialized numeric sign comparison against stored value.</td>
+</tr>
+<tr class="odd">
+<td><code>VERIFY_CR_DR</code></td>
+<td>required</td>
+<td>unused</td>
+<td>unused</td>
+<td>input key</td>
+<td>unused</td>
+<td>Converts a stored signed value into <code>CR</code>/<code>DR</code>
+text and compares to the element.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="xml-and-file-matrix">XML and File Matrix</h2>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Element</th>
+<th>Value</th>
+<th>ExpectedValue</th>
+<th>Key</th>
+<th>Headers</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>SAVE_XML_DATA_TO_LIST</code></td>
+<td>optional</td>
+<td>file path or source key fallback</td>
+<td>optional attribute name</td>
+<td>output keys</td>
+<td>xml node name</td>
+<td><code>Key</code> contains multiple comma-separated keys.</td>
+</tr>
+<tr class="even">
+<td><code>VERIFY_XML_TAG</code></td>
+<td>optional</td>
+<td>file path</td>
+<td>result keys</td>
+<td>optional source key</td>
+<td>tag names</td>
+<td><code>Headers</code> contains parent tag and optional child
+tag.</td>
+</tr>
+<tr class="odd">
+<td><code>UPLOAD_FILE</code></td>
+<td>required</td>
+<td>file path</td>
+<td>unused</td>
+<td>optional path key</td>
+<td>unused</td>
+<td>Sends path directly to file input.</td>
+</tr>
+<tr class="even">
+<td><code>DOWNLOAD_FILE</code></td>
+<td>required</td>
+<td>integer timeout/index</td>
+<td>target folder</td>
+<td>optional output key</td>
+<td>optional filename override</td>
+<td>Uses file helper; may copy then delete the original file.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="commonpage-special-actions">CommonPage Special Actions</h2>
+<p>These are important because they bypass the normal
+<code>IWebElement</code> action path in <a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Pages\Common\CommonPage.cs">CommonPage.cs</a>.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Action</th>
+<th>Parameter rule</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>FETCH_SHARED_STEPS</code></td>
+<td><code>Value</code> must be a numeric test case id.</td>
+</tr>
+<tr class="even">
+<td><code>SELECT</code> / <code>SELECT_DELAY</code></td>
+<td>resolved as <code>SelectElement</code>, not
+<code>IWebElement</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SWITCH_TAB</code></td>
+<td><code>Value</code> is optional window index.</td>
+</tr>
+<tr class="even">
+<td><code>OPEN_NEW_TAB</code></td>
+<td>no parameters required.</td>
+</tr>
+<tr class="odd">
+<td><code>CLOSE_TAB</code></td>
+<td>no parameters required.</td>
+</tr>
+<tr class="even">
+<td><code>SWITCH_FRAME</code></td>
+<td>prefers <code>Element</code>, falls back to integer
+<code>Value</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>SWITCH_TO_PARENT_FRAME</code></td>
+<td>no parameters required.</td>
+</tr>
+<tr class="even">
+<td><code>CURRENT_TAB</code></td>
+<td>no parameters required.</td>
+</tr>
+<tr class="odd">
+<td><code>GO_BACK</code></td>
+<td>no parameters required.</td>
+</tr>
+<tr class="even">
+<td><code>REFRESH_PAGE</code></td>
+<td>no parameters required.</td>
+</tr>
+<tr class="odd">
+<td><code>MAXIMIZE_WINDOW</code></td>
+<td>no parameters required.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="delegated-business-actions">Delegated Business Actions</h2>
+<p>These actions are implemented in helper classes and are not safe to
+author from scratch unless you copy an existing working pattern.</p>
+<h3 id="communication-helper-actions">Communication Helper Actions</h3>
+<p>Defined in:</p>
+<ul>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\PageObjectModelHelper\CommunicationModelHelper.cs">CommunicationModelHelper.cs</a></li>
+</ul>
+<p>Observed contracts:</p>
+<ul>
+<li><code>ADD_EDIT_PHONE_EMAIL</code> <code>Key</code> acts like a mode
+switch: <code>email</code> or <code>phone</code> <code>Value</code> is
+the email address or phone number to enter</li>
+<li><code>OVERVIEW_EMAIL_SENT_VERIFY</code> <code>Value</code> is the
+message text <code>Headers</code> is a comma-separated list of table
+columns</li>
+<li><code>SCHEDULE_EMAIL_SUBJECT_BODY_CHECK</code> <code>Value</code> is
+<code>subject,body</code> <code>Headers</code> is the relevant table
+column pair</li>
+<li><code>MATCH_RECIPIENT_DATA_BY_STUDENT</code> <code>Key</code>
+references saved table data <code>Headers</code> selects the header
+mapping <code>Value</code> is the expected message type</li>
+</ul>
+<h3 id="group-helper-actions">Group Helper Actions</h3>
+<p>Defined in:</p>
+<ul>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\PageObjectModelHelper\GroupsModelHelper.cs">GroupsModelHelper.cs</a></li>
+</ul>
+<p>Observed contracts:</p>
+<ul>
+<li><code>ADD_SCHEDULE_DATA_IF_NOT_EXIST</code> <code>Headers</code> is
+used as an XPath probe to decide whether data already exists</li>
+<li><code>ADD_GROUP_DETAIL_DATA_IF_NOT_EXIST</code> <code>Value</code>
+controls count or <code>true</code> <code>ExpectedValue</code> may
+short-circuit by current column count <code>Headers</code> becomes a
+comma-separated mini script containing tokens such as <code>TYPE</code>,
+<code>STYPE</code>, <code>DATEPICK</code></li>
+<li><code>ADD_BAND_DATA</code>, <code>ADD_INTERVENTION_DATA</code>,
+<code>ADD_WITHDRAWAL_DATA</code> no stable user-authored parameter
+contract beyond the current page state</li>
+</ul>
+<h3 id="payment-helper-actions">Payment Helper Actions</h3>
+<p>Defined in:</p>
+<ul>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\PageObjectModelHelper\PaymentModelHelper.cs">PaymentModelHelper.cs</a></li>
+</ul>
+<p>Observed contracts:</p>
+<ul>
+<li><code>ADD_ORDER_IF_NOT_PRESENT</code> <code>Value</code> or
+<code>Key</code> supplies the student selector text</li>
+<li><code>ADD_OR_TRANSFER_BALANCE_TO_MAKE_POSITIVE</code>
+<code>Value</code> is the target balance</li>
+<li><code>RELOGIN_INTO_SAGEPAY_IF_LOGGEDOUT</code> current element/page
+state drives the behavior; do not author freehand</li>
+<li><code>TRANSFER_BALANCE_TO_SIBLING</code>,
+<code>REMOVE_TRANSACTION_TO_MAKE_BALANCE_NEGATIVE</code> driven mostly
+by saved data and fixed helper logic</li>
+</ul>
+<h3 id="student-and-staff-deleted-item-actions">Student and Staff
+Deleted-Item Actions</h3>
+<p>Defined in:</p>
+<ul>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\PageObjectModelHelper\StudentModelHelper.cs">StudentModelHelper.cs</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\PageObjectModelHelper\StaffModelHelper.cs">StaffModelHelper.cs</a></li>
+</ul>
+<p>Observed contracts:</p>
+<ul>
+<li><code>Key</code> usually points to previously saved table data</li>
+<li><code>Headers</code> usually names one or more table columns</li>
+<li><code>Value</code> often controls sort direction or expected
+matching values</li>
+</ul>
+<p>These are safe to reuse only by copying a nearby deleted-item
+workflow.</p>
+<h3 id="timetable-missing-register-helper-action">Timetable / Missing
+Register Helper Action</h3>
+<p>Defined in:</p>
+<ul>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\PageObjectModelHelper\TodaysMissingRegisterModelHelper.cs">TodaysMissingRegisterModelHelper.cs</a></li>
+</ul>
+<p>Observed contract:</p>
+<ul>
+<li><code>MATCH_PERIOD_DATA_WITH_CLASS</code> <code>Key</code> must be a
+comma-separated pair of saved keys: first key for weekday name, second
+key for timetable dictionary data</li>
+</ul>
+<h2 id="authoring-rules-from-the-scan">Authoring Rules From The
+Scan</h2>
+<ol type="1">
+<li>If an action is implemented directly in <code>CommonUtility</code>,
+it is usually safe to document and author with a controlled
+pattern.</li>
+<li>If an action immediately delegates to a helper file, do not invent a
+new parameter pattern. Copy a working existing test.</li>
+<li>If <code>Value</code> contains commas and colons, assume it is a
+dictionary-style config payload unless you verified otherwise.</li>
+<li>If <code>Key</code> is present, always check whether the action
+reads from <code>DataStore</code> instead of using
+<code>Value</code>.</li>
+<li>If <code>Headers</code> is present, do not assume it is a literal
+header label. It may be a mode string, split token, xpath, or mini
+DSL.</li>
+</ol>
+<h2 id="safe-qa-strategy">Safe QA Strategy</h2>
+<p>For a new step:</p>
+<ol type="1">
+<li>Find the exact action branch in <a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\BromCom.Tests\Utilities\CommonUtility.cs">CommonUtility.cs</a>.</li>
+<li>Check whether it delegates to <code>Table</code>,
+<code>ListControl</code>, <code>SelectControl</code>,
+<code>DatePicker</code>, or a page-model helper.</li>
+<li>Match the parameter shape from a real working test in the same
+module.</li>
+<li>Only generalize the step if the parameter contract is clearly stable
+in code.</li>
+</ol>
+<h2 id="related-docs">Related Docs</h2>
+<ul>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\QA%20WORKFLOW%20OUTPUT\ACTION_STEP_GUIDE.md">ACTION_STEP_GUIDE.md</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\QA%20WORKFLOW%20OUTPUT\ACTION_PARAMETER_APPENDIX.md">ACTION_PARAMETER_APPENDIX.md</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\QA%20WORKFLOW%20OUTPUT\ACTION_COVERAGE_AUDIT.md">ACTION_COVERAGE_AUDIT.md</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\QA%20WORKFLOW%20OUTPUT\TEST_CASE_WRITING_GUIDE.md">TEST_CASE_WRITING_GUIDE.md</a></li>
+<li><a
+href="C:\Users\snkjh\Desktop\Automated%20Testing%20Framework\QA%20WORKFLOW%20OUTPUT\QA_WORKFLOW.md">QA_WORKFLOW.md</a></li>
+</ul>
