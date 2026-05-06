@@ -1014,6 +1014,7 @@ export async function updateTestCase(
     stepsXml?: string;
     automatedTestName?: string | null;
     automatedTestStorage?: string | null;
+    automationStatus?: string | null;
   },
   preferredHref?: string,
 ): Promise<ADOTestCase> {
@@ -1075,6 +1076,13 @@ export async function updateTestCase(
       op: 'add',
       path: '/fields/Microsoft.VSTS.TCM.AutomatedTestStorage',
       value: typeof updateData.automatedTestStorage === 'string' ? updateData.automatedTestStorage : '',
+    });
+  }
+  if (Object.prototype.hasOwnProperty.call(updateData, 'automationStatus')) {
+    operations.push({
+      op: 'add',
+      path: '/fields/Microsoft.VSTS.TCM.AutomationStatus',
+      value: typeof updateData.automationStatus === 'string' ? updateData.automationStatus : '',
     });
   }
   // Always update steps XML if provided (most important field)

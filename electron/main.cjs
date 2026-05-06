@@ -732,7 +732,8 @@ function mapDbUpdaterCase(item, suite, browserName, options = {}) {
   const automationStatus = normalizeDbText(fields['Microsoft.VSTS.TCM.AutomationStatus']);
   const automatedTestName = normalizeDbText(fields['Microsoft.VSTS.TCM.AutomatedTestName']);
   const stepsXml = normalizeDbText(fields['Microsoft.VSTS.TCM.Steps']);
-  const isAutomationMethod = automationStatus.toLowerCase() === 'automated';
+  const isAutomationMethod = automationStatus.toLowerCase() === 'automated'
+    || automatedTestName.trim().length > 0;
   if ((!isAutomationMethod || !stepsXml.trim()) && !options.includeNonAutomated) {
     return null;
   }

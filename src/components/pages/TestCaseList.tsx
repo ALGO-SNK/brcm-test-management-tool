@@ -52,7 +52,6 @@ export function TestCaseList({
   const [createDraft, setCreateDraft] = useState<CreateTestCaseDraft | null>(null);
   const [createSourceCase, setCreateSourceCase] = useState<CloneSourceMeta | null>(null);
   const [caseTableRefreshToken, setCaseTableRefreshToken] = useState(0);
-  const [automationOpenRequestCaseId, setAutomationOpenRequestCaseId] = useState<number | null>(null);
   const dragging = useRef(false);
   const preserveCreateModeOnSuiteChangeRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -216,8 +215,6 @@ export function TestCaseList({
                     onBackToCases={handleBackToCasesWithRefresh}
                     onSettingsClick={onSettingsClick}
                     onClone={handleCloneCase}
-                    openAutomationManagerOnLoad={automationOpenRequestCaseId === selectedCase.id}
-                    onAutomationManagerOpenRequestConsumed={() => setAutomationOpenRequestCaseId(null)}
                     embedded
                   />
                 ) : (
@@ -235,15 +232,12 @@ export function TestCaseList({
                         return { ...prev, [suite.id]: count };
                       });
                     }}
-                    onTestCaseCreated={(newCase, options) => {
+                    onTestCaseCreated={(newCase) => {
                       // Update case count
                       setSuiteCaseCountBySuiteId((prev) => {
                         const current = prev[suite.id] ?? 0;
                         return { ...prev, [suite.id]: current + 1 };
                       });
-                      if (options?.openAutomationManager) {
-                        setAutomationOpenRequestCaseId(newCase.id);
-                      }
                       // Navigate to the newly created case's detail view
                       onSelectCase(newCase);
                     }}

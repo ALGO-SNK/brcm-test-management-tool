@@ -4,7 +4,6 @@ import type { ADOTestCase } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { EmptyTestCases } from './EmptyTestCases';
 import { CreateTestCaseForm } from './CreateTestCaseForm';
-import { TestSaveProgressModal, type TestSaveProgressLine, type TestSaveProgressStatus } from './TestSaveProgressModal';
 import { buildWorkItemAdoUrl, deleteTestCase, fetchTestCasesForSuite, getCachedTestCasesForSuite, createTestCase } from '../../services/adoApi';
 import { buildTestCaseData } from '../../utils/testCaseBuilder';
 import { useNotification } from '../../context/useNotification';
@@ -26,7 +25,7 @@ interface CaseTableProps {
   workspaceSettings: WorkspaceSettingsValues;
   onSelectCase: (testCase: ADOTestCase) => void;
   onCaseCountChange?: (count: number) => void;
-  onTestCaseCreated?: (newCase: ADOTestCase, options?: { openAutomationManager?: boolean }) => void;
+  onTestCaseCreated?: (newCase: ADOTestCase) => void;
   isCreateMode?: boolean;
   onCreateModeChange?: (isCreateMode: boolean) => void;
   initialCreateDraft?: CreateTestCaseDraft | null;
@@ -105,11 +104,6 @@ export function CaseTable({
   const [deleteTargetCase, setDeleteTargetCase] = useState<ADOTestCase | null>(null);
   const [blockedRemovalCase, setBlockedRemovalCase] = useState<ADOTestCase | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [saveProgressCase, setSaveProgressCase] = useState<ADOTestCase | null>(null);
-  const [saveProgressStatus, setSaveProgressStatus] = useState<TestSaveProgressStatus>('running');
-  const [saveProgressMessage, setSaveProgressMessage] = useState('');
-  const [saveProgressLines, setSaveProgressLines] = useState<TestSaveProgressLine[]>([]);
-  const [saveProgressRetry, setSaveProgressRetry] = useState<(() => Promise<void>) | null>(null);
   const { addNotification } = useNotification();
 
   // Use prop if provided, otherwise use local state
@@ -123,48 +117,6 @@ export function CaseTable({
     setIsCreateMode(true);
   };
 
-  const syncCreatedCaseToLocalDb = async (newCase: ADOTestCase) => {
-    setSaveProgressLines([
-      { id: 'api', label: `Created test case in Azure: TC ${newCase.id}`, status: 'success' },
-      { id: 'mapping', label: 'Finding local DB mapping', status: 'running' },
-    ]);
-
-    if (!window.desktop?.syncDbUpdaterTestCase) {
-      setSaveProgressStatus('skipped');
-      setSaveProgressMessage('Azure save succeeded. Local DB sync is unavailable until the app is restarted.');
-      setSaveProgressLines([
-        { id: 'api', label: `Created test case in Azure: TC ${newCase.id}`, status: 'success' },
-        { id: 'mapping', label: 'Local DB sync unavailable', status: 'skipped' },
-      ]);
-      return;
-    }
-
-    const result = await window.desktop.syncDbUpdaterTestCase(workspaceSettings, {
-      planId,
-      suiteId,
-      suiteName,
-      testCaseId: newCase.id,
-    });
-
-    if (result.status === 'skipped') {
-      setSaveProgressStatus('skipped');
-      setSaveProgressMessage(result.reason ?? 'Azure save succeeded. Local DB sync was skipped.');
-      setSaveProgressLines([
-        { id: 'api', label: `Created test case in Azure: TC ${newCase.id}`, status: 'success' },
-        { id: 'mapping', label: result.reason ?? 'No local DB mapping found', status: 'skipped' },
-      ]);
-      return;
-    }
-
-    setSaveProgressStatus('success');
-    setSaveProgressMessage(`Azure save succeeded and ${result.dbName ?? 'local DB'} was updated.`);
-    setSaveProgressLines([
-      { id: 'api', label: `Created test case in Azure: TC ${newCase.id}`, status: 'success' },
-      { id: 'mapping', label: `Mapped to ${result.dbName ?? 'local DB'}`, status: 'success' },
-      { id: 'fetch', label: 'Fetched latest test details', status: 'success' },
-      { id: 'db', label: `Local DB row ${result.action ?? 'updated'}`, status: 'success' },
-    ]);
-  };
 
   const workspaceReady = Boolean(
     workspaceSettings.organization.trim()
@@ -473,14 +425,6 @@ export function CaseTable({
           }}
           onSubmit={async (formData) => {
             try {
-              setSaveProgressCase(null);
-              setSaveProgressStatus('running');
-              setSaveProgressMessage('Creating test case in Azure DevOps...');
-              setSaveProgressLines([
-                { id: 'api', label: 'Creating test case in Azure', status: 'running' },
-              ]);
-              setSaveProgressRetry(null);
-
               const testCaseData = buildTestCaseData(formData, formData.steps);
               const newCase = await createTestCase(
                 workspaceSettings,
@@ -492,39 +436,10 @@ export function CaseTable({
                 }
               );
 
-              setSaveProgressCase(newCase);
-              const retrySync = async () => {
-                try {
-                  setSaveProgressStatus('running');
-                  setSaveProgressMessage('Retrying local DB sync...');
-                  await syncCreatedCaseToLocalDb(newCase);
-                } catch (syncError) {
-                  const syncMessage = syncError instanceof Error ? syncError.message : 'Local DB sync failed.';
-                  setSaveProgressStatus('error');
-                  setSaveProgressMessage(`Azure save succeeded, but local DB sync failed: ${syncMessage}`);
-                  setSaveProgressLines((current) => [
-                    ...current.filter((line) => line.id !== 'db-error'),
-                    { id: 'db-error', label: syncMessage, status: 'error' },
-                  ]);
-                }
-              };
-              setSaveProgressRetry(() => retrySync);
-
-              try {
-                await syncCreatedCaseToLocalDb(newCase);
-              } catch (syncError) {
-                const syncMessage = syncError instanceof Error ? syncError.message : 'Local DB sync failed.';
-                setSaveProgressStatus('error');
-                setSaveProgressMessage(`Azure save succeeded, but local DB sync failed: ${syncMessage}`);
-                setSaveProgressLines((current) => [
-                  ...current.filter((line) => line.id !== 'db-error'),
-                  { id: 'db-error', label: syncMessage, status: 'error' },
-                ]);
-              }
-
               addNotification('success', `Test case "${newCase.name}" created successfully.`);
               setError(null);
               setWarning(null);
+              onTestCaseCreated?.(newCase);
 
               // Refresh test cases list to show the newly created case
               try {
@@ -555,38 +470,10 @@ export function CaseTable({
 
               // Display validation error to user
               setError(errorMessage);
-              setSaveProgressStatus('error');
-              setSaveProgressMessage(errorMessage);
-              setSaveProgressLines([
-                { id: 'api', label: errorMessage, status: 'error' },
-              ]);
               console.error('Failed to create test case:', error);
             }
           }}
         />
-        {saveProgressMessage && (
-          <TestSaveProgressModal
-            mode="create"
-            lines={saveProgressLines}
-            status={saveProgressStatus}
-            message={saveProgressMessage}
-            testCase={saveProgressCase}
-            hasAutomation={false}
-            onRetry={saveProgressRetry ? () => { void saveProgressRetry(); } : undefined}
-            onClose={() => {
-              setSaveProgressMessage('');
-              if (saveProgressCase) {
-                onTestCaseCreated?.(saveProgressCase);
-              }
-            }}
-            onAddAutomation={() => {
-              setSaveProgressMessage('');
-              if (saveProgressCase) {
-                onTestCaseCreated?.(saveProgressCase, { openAutomationManager: true });
-              }
-            }}
-          />
-        )}
       </div>
     );
   }

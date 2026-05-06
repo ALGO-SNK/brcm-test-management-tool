@@ -6933,6 +6933,19 @@ input[type="radio"] {
     margin-top: 0;
 }
 
+.db-updater__row-search {
+    min-width: 180px;
+    max-width: 240px;
+    min-height: 26px;
+    padding: 4px 10px;
+}
+
+.db-updater__table-controls {
+    align-items: center;
+    gap: 8px;
+    display: flex;
+}
+
 .test-save-progress {
     width: min(520px, calc(100vw - 32px));
     border: 1px solid var(--color-border);

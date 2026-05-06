@@ -11,7 +11,6 @@ import type {ParsedStep} from '../TestCases/StepsEditor';
 import {StepsEditor, StepsSearchBar, useStepsSearch} from '../TestCases/StepsEditor';
 import {SharedStepPreviewModal} from '../TestCases/SharedStepPreviewModal';
 import {SeleniumRepoBrowserModal} from '../TestCases/SeleniumRepoBrowserModal';
-import { TestSaveProgressModal, type TestSaveProgressLine, type TestSaveProgressStatus } from '../TestCases/TestSaveProgressModal';
 import {TestCaseFormFields} from '../TestCases/TestCaseFormFields';
 import {ACTION_REGISTRY} from '../../utils/actionRegistry';
 import {useNotification} from '../../context/useNotification';
@@ -38,8 +37,6 @@ interface TestCaseDetailProps {
   onClone?: (draft: CreateTestCaseDraft, sourceMeta: CloneSourceMeta) => void;
   onHelpClick?: () => void;
   onSettingsClick: () => void;
-  openAutomationManagerOnLoad?: boolean;
-  onAutomationManagerOpenRequestConsumed?: () => void;
   embedded?: boolean;
 }
 
@@ -77,17 +74,6 @@ function mergeTestCaseData(primary: ADOTestCase, fallback?: ADOTestCase | null):
       ...(primary._links ?? {}),
     },
   };
-}
-
-function hasAutomationMetadata(testCase?: ADOTestCase | null): boolean {
-  const automatedTestName = normalizeFieldText(testCase?.fields?.['Microsoft.VSTS.TCM.AutomatedTestName']).trim();
-  const automatedTestStorage = normalizeFieldText(testCase?.fields?.['Microsoft.VSTS.TCM.AutomatedTestStorage']).trim();
-  const parsedAssociation = parseAutomatedTestFullName(automatedTestName);
-  return Boolean(
-    parsedAssociation?.methodName
-      && hasAutomationFieldValue(automatedTestName)
-      && hasAutomationFieldValue(automatedTestStorage),
-  );
 }
 
 function normalizeFieldText(value: unknown): string {
@@ -327,8 +313,6 @@ export function TestCaseDetail({
   onClone,
   onHelpClick,
   onSettingsClick,
-  openAutomationManagerOnLoad = false,
-  onAutomationManagerOpenRequestConsumed,
   embedded = false,
 }: TestCaseDetailProps) {
   const [testCase, setTestCase] = useState<ADOTestCase | null>(null);
@@ -358,11 +342,6 @@ export function TestCaseDetail({
   const editStepsSearch = useStepsSearch();
   const [sharedStepPreviewId, setSharedStepPreviewId] = useState<string | null>(null);
   const [isAutomationManagerOpen, setIsAutomationManagerOpen] = useState(false);
-  const [saveProgressCase, setSaveProgressCase] = useState<ADOTestCase | null>(null);
-  const [saveProgressStatus, setSaveProgressStatus] = useState<TestSaveProgressStatus>('running');
-  const [saveProgressMessage, setSaveProgressMessage] = useState('');
-  const [saveProgressLines, setSaveProgressLines] = useState<TestSaveProgressLine[]>([]);
-  const [saveProgressRetry, setSaveProgressRetry] = useState<(() => Promise<void>) | null>(null);
   const [automationRefreshToken, setAutomationRefreshToken] = useState(0);
   const [isAutomationActionBusy, setIsAutomationActionBusy] = useState(false);
   const reloadCaseControllerRef = useRef<AbortController | null>(null);
@@ -677,47 +656,23 @@ export function TestCaseDetail({
     return updatedCase;
   }, [addNotification, workspaceSettings]);
 
-  const syncUpdatedCaseToLocalDb = useCallback(async (updatedCase: ADOTestCase) => {
-    setSaveProgressLines([
-      { id: 'api', label: `Updated test case in Azure: TC ${updatedCase.id}`, status: 'success' },
-      { id: 'mapping', label: 'Finding local DB mapping', status: 'running' },
-    ]);
-
+  const syncSingleCaseToLocalDb = useCallback(async (caseToSync: ADOTestCase, options?: { requireAutomated?: boolean }) => {
     if (!window.desktop?.syncDbUpdaterTestCase) {
-      setSaveProgressStatus('skipped');
-      setSaveProgressMessage('Azure save succeeded. Local DB sync is unavailable until the app is restarted.');
-      setSaveProgressLines([
-        { id: 'api', label: `Updated test case in Azure: TC ${updatedCase.id}`, status: 'success' },
-        { id: 'mapping', label: 'Local DB sync unavailable', status: 'skipped' },
-      ]);
-      return;
+      throw new Error('Local DB sync is unavailable. Restart the app to load the latest desktop bridge.');
     }
-
     const result = await window.desktop.syncDbUpdaterTestCase(workspaceSettings, {
       planId: plan.id,
       suiteId: suite.id,
       suiteName: suite.name,
-      testCaseId: updatedCase.id,
+      testCaseId: caseToSync.id,
     });
-
     if (result.status === 'skipped') {
-      setSaveProgressStatus('skipped');
-      setSaveProgressMessage(result.reason ?? 'Azure save succeeded. Local DB sync was skipped.');
-      setSaveProgressLines([
-        { id: 'api', label: `Updated test case in Azure: TC ${updatedCase.id}`, status: 'success' },
-        { id: 'mapping', label: result.reason ?? 'No local DB mapping found', status: 'skipped' },
-      ]);
-      return;
+      throw new Error(result.reason ?? 'Local DB sync skipped for this plan mapping.');
     }
-
-    setSaveProgressStatus('success');
-    setSaveProgressMessage(`Azure save succeeded and ${result.dbName ?? 'local DB'} was updated.`);
-    setSaveProgressLines([
-      { id: 'api', label: `Updated test case in Azure: TC ${updatedCase.id}`, status: 'success' },
-      { id: 'mapping', label: `Mapped to ${result.dbName ?? 'local DB'}`, status: 'success' },
-      { id: 'fetch', label: 'Fetched latest test details', status: 'success' },
-      { id: 'db', label: `Local DB row ${result.action ?? 'updated'}`, status: 'success' },
-    ]);
+    if (options?.requireAutomated && !result.hasAutomation) {
+      throw new Error('DB row synced but automation status is still Manual.');
+    }
+    return result;
   }, [plan.id, suite.id, suite.name, workspaceSettings]);
 
   const handleSaveChanges = useCallback(async () => {
@@ -757,14 +712,6 @@ export function TestCaseDetail({
     setIsSaving(true);
     let reloadController: AbortController | null = null;
     try {
-      setSaveProgressCase(testCase);
-      setSaveProgressStatus('running');
-      setSaveProgressMessage('Updating test case in Azure DevOps...');
-      setSaveProgressLines([
-        { id: 'api', label: 'Updating test case in Azure', status: 'running' },
-      ]);
-      setSaveProgressRetry(null);
-
       const testCaseData = buildTestCaseData(editFormData, editSteps);
 
       console.log('[TestCaseDetail Save] Steps being saved:', {
@@ -802,37 +749,19 @@ export function TestCaseDetail({
       editBaselineRef.current = null;
       setShowUnsavedConfirm(false);
       setPendingExitAction(null);
-      setSaveProgressCase(updatedCase);
-
-      const retrySync = async () => {
+      const updatedAutomatedName = normalizeFieldText(updatedCase?.fields?.['Microsoft.VSTS.TCM.AutomatedTestName']).trim();
+      const updatedAutomatedStorage = normalizeFieldText(updatedCase?.fields?.['Microsoft.VSTS.TCM.AutomatedTestStorage']).trim();
+      const shouldSyncAfterSave = hasAutomationFieldValue(updatedAutomatedName)
+        && hasAutomationFieldValue(updatedAutomatedStorage);
+      if (shouldSyncAfterSave) {
         try {
-          setSaveProgressStatus('running');
-          setSaveProgressMessage('Retrying local DB sync...');
-          await syncUpdatedCaseToLocalDb(updatedCase);
+          await syncSingleCaseToLocalDb(updatedCase, { requireAutomated: true });
+          addNotification('success', 'Local DB synced for automated test update.');
         } catch (syncError) {
           const syncMessage = syncError instanceof Error ? syncError.message : 'Local DB sync failed.';
-          setSaveProgressStatus('error');
-          setSaveProgressMessage(`Azure save succeeded, but local DB sync failed: ${syncMessage}`);
-          setSaveProgressLines((current) => [
-            ...current.filter((line) => line.id !== 'db-error'),
-            { id: 'db-error', label: syncMessage, status: 'error' },
-          ]);
+          addNotification('error', `Local DB sync failed: ${syncMessage}`);
         }
-      };
-      setSaveProgressRetry(() => retrySync);
-
-      try {
-        await syncUpdatedCaseToLocalDb(updatedCase);
-      } catch (syncError) {
-        const syncMessage = syncError instanceof Error ? syncError.message : 'Local DB sync failed.';
-        setSaveProgressStatus('error');
-        setSaveProgressMessage(`Azure save succeeded, but local DB sync failed: ${syncMessage}`);
-        setSaveProgressLines((current) => [
-          ...current.filter((line) => line.id !== 'db-error'),
-          { id: 'db-error', label: syncMessage, status: 'error' },
-        ]);
       }
-
       addNotification('success', `Test case "${updatedCase.name}" updated successfully.`);
       if (reloadCaseControllerRef.current === reloadController) {
         reloadCaseControllerRef.current = null;
@@ -843,17 +772,12 @@ export function TestCaseDetail({
       }
       const message = error instanceof Error ? error.message : 'Failed to save changes';
       setEditValidationErrors([`Save failed: ${message}`]);
-      setSaveProgressStatus('error');
-      setSaveProgressMessage(message);
-      setSaveProgressLines([
-        { id: 'api', label: message, status: 'error' },
-      ]);
     } finally {
       if (!reloadController?.signal.aborted) {
         setIsSaving(false);
       }
     }
-  }, [addNotification, editFormData, editSteps, isSaving, syncUpdatedCaseToLocalDb, testCase, workspaceSettings]);
+  }, [addNotification, editFormData, editSteps, isSaving, syncSingleCaseToLocalDb, testCase, workspaceSettings]);
 
   const canClone = Boolean(onClone && testCase && isDetailLoaded && !loading && !isSaving && !isRefreshing && !isEditMode);
   const currentAutomatedTestName = normalizeFieldText(testCase?.fields?.['Microsoft.VSTS.TCM.AutomatedTestName']).trim();
@@ -908,19 +832,6 @@ export function TestCaseDetail({
     setIsAutomationManagerOpen(true);
   }, [addNotification, automationManagerDisabledReason, canOpenAutomationManager, seleniumRepoPath]);
 
-  useEffect(() => {
-    if (!openAutomationManagerOnLoad || !testCase || !canOpenAutomationManager) {
-      return;
-    }
-    handleOpenAutomationManager();
-    onAutomationManagerOpenRequestConsumed?.();
-  }, [
-    canOpenAutomationManager,
-    handleOpenAutomationManager,
-    onAutomationManagerOpenRequestConsumed,
-    openAutomationManagerOnLoad,
-    testCase,
-  ]);
 
   const handleWriteAutomationCode = useCallback(async (filePath: string) => {
     if (!testCase || !effectiveAutomationMethodName) {
@@ -963,17 +874,30 @@ export function TestCaseDetail({
         {
           automatedTestName: buildAutomatedTestFullName(className, methodName),
           automatedTestStorage: currentAutomatedTestStorage || 'BromCom.Tests.dll',
+          automationStatus: 'Automated',
         },
         testCase._links?.workItem?.href ?? testCase._links?.self?.href,
       );
-      await reloadCurrentTestCase(testCase, 'Automated test association added.');
+      const reloaded = await reloadCurrentTestCase(testCase, 'Automated test association added.');
+      try {
+        const syncResult = await syncSingleCaseToLocalDb(reloaded, { requireAutomated: true });
+        addNotification('success', `Local DB synced (${syncResult.dbName ?? 'mapped DB'}).`);
+      } catch (syncError) {
+        try {
+          const retryResult = await syncSingleCaseToLocalDb(reloaded, { requireAutomated: true });
+          addNotification('success', `Local DB synced on retry (${retryResult.dbName ?? 'mapped DB'}).`);
+        } catch (retryError) {
+          const retryMessage = retryError instanceof Error ? retryError.message : 'Local DB sync failed.';
+          addNotification('error', `Local DB sync failed after retry: ${retryMessage}`);
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add automated test association.';
       addNotification('error', message);
     } finally {
       setIsAutomationActionBusy(false);
     }
-  }, [addNotification, currentAutomatedTestStorage, reloadCurrentTestCase, testCase, workspaceSettings]);
+  }, [addNotification, currentAutomatedTestStorage, reloadCurrentTestCase, syncSingleCaseToLocalDb, testCase, workspaceSettings]);
 
   const handleRemoveAutomationAssociation = useCallback(async (_filePath: string, methodName: string) => {
     if (!testCase) {
@@ -1001,7 +925,7 @@ export function TestCaseDetail({
     } finally {
       setIsAutomationActionBusy(false);
     }
-  }, [addNotification, parsedAutomationAssociation?.methodName, reloadCurrentTestCase, testCase, workspaceSettings]);
+  }, [addNotification, parsedAutomationAssociation?.methodName, reloadCurrentTestCase, syncSingleCaseToLocalDb, testCase, workspaceSettings]);
 
   useEffect(() => {
     if (!isEditMode) return;
@@ -1439,23 +1363,6 @@ export function TestCaseDetail({
           onClose={() => {
             if (isAutomationActionBusy) return;
             setIsAutomationManagerOpen(false);
-          }}
-        />
-      )}
-
-      {saveProgressMessage && (
-        <TestSaveProgressModal
-          mode="update"
-          lines={saveProgressLines}
-          status={saveProgressStatus}
-          message={saveProgressMessage}
-          testCase={saveProgressCase}
-          hasAutomation={hasAutomationMetadata(saveProgressCase)}
-          onRetry={saveProgressRetry ? () => { void saveProgressRetry(); } : undefined}
-          onClose={() => setSaveProgressMessage('')}
-          onAddAutomation={() => {
-            setSaveProgressMessage('');
-            handleOpenAutomationManager();
           }}
         />
       )}

@@ -358,6 +358,7 @@ export function DbUpdaterModal({ workspaceSettings, onClose }: DbUpdaterModalPro
   const [events, setEvents] = useState<DesktopDbUpdaterProgress[]>(cachedState.events);
   const [idleMessage, setIdleMessage] = useState(cachedState.idleMessage);
   const [selectedRow, setSelectedRow] = useState<{ targetKey: TargetKey; row: DesktopDbUpdaterRow } | null>(null);
+  const [rowSearchByTarget, setRowSearchByTarget] = useState<Record<TargetKey, string>>({});
   const overviewLoadingRef = useRef(false);
   const overviewAutoLoadKeyRef = useRef<string | null>(null);
   const { addNotification } = useNotification();
@@ -549,11 +550,25 @@ export function DbUpdaterModal({ workspaceSettings, onClose }: DbUpdaterModalPro
     const targetKey = mapping.id;
     const target = overview?.targets[targetKey];
     const planTitle = getPlanTitle(target, mapping);
-    const pageCount = Math.max(1, Math.ceil((target?.rows.length ?? 0) / pageSize));
+    const rowSearch = (rowSearchByTarget[targetKey] ?? '').trim().toLowerCase();
+    const filteredRows = (target?.rows ?? []).filter((row) => {
+      if (!rowSearch) return true;
+      const haystack = [
+        String(row.id),
+        row.title,
+        row.automatedTestName,
+        row.batchName,
+        row.testSuitId,
+        row.browserName,
+        row.isAutomationMethod ? 'automated' : 'manual',
+      ].join(' ').toLowerCase();
+      return haystack.includes(rowSearch);
+    });
+    const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
     const currentPage = Math.min(pagesByTarget[targetKey] ?? 1, pageCount);
     const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, target?.rows.length ?? 0);
-    const visibleRows = target?.rows.slice(startIndex, endIndex) ?? [];
+    const endIndex = Math.min(startIndex + pageSize, filteredRows.length);
+    const visibleRows = filteredRows.slice(startIndex, endIndex);
     const updatePage = (nextPage: number) => {
       setPagesByTarget((current) => ({
         ...current,
@@ -604,7 +619,19 @@ export function DbUpdaterModal({ workspaceSettings, onClose }: DbUpdaterModalPro
                 Updating
               </span>
             )}
-            <label className="db-updater__page-size">
+            <div className="db-updater__table-controls">
+              <input
+                type="search"
+                className="settings-input db-updater__row-search"
+                placeholder="Search rows"
+                value={rowSearchByTarget[targetKey] ?? ''}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setRowSearchByTarget((current) => ({ ...current, [targetKey]: nextValue }));
+                  setPagesByTarget((current) => ({ ...current, [targetKey]: 1 }));
+                }}
+              />
+              <label className="db-updater__page-size">
               <span className="db-updater__page-size-label">Rows</span>
               <span className="db-updater__page-size-control">
                 <select
@@ -621,7 +648,8 @@ export function DbUpdaterModal({ workspaceSettings, onClose }: DbUpdaterModalPro
                 </select>
                 <IconChevronDown size={16} />
               </span>
-            </label>
+              </label>
+            </div>
           </div>
 
           {!overview && isOverviewLoading ? (
@@ -678,9 +706,9 @@ export function DbUpdaterModal({ workspaceSettings, onClose }: DbUpdaterModalPro
             </div>
           )}
 
-          {target?.rows.length ? (
+          {filteredRows.length ? (
             <div className="db-updater__pagination">
-              <span>Page {currentPage} of {pageCount} / {pageSize} rows per page</span>
+              <span>Page {currentPage} of {pageCount} / {pageSize} rows per page {rowSearch ? `· ${filteredRows.length} matched` : ''}</span>
               <div>
                 <button
                   type="button"
