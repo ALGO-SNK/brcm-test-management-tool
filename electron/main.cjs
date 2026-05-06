@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
@@ -48,6 +48,7 @@ const dirtySourcesByContentsId = new Map();
 const pendingCloseRequestContentsIds = new Set();
 const confirmedCloseContentsIds = new Set();
 let cachedGitExecutable = undefined;
+const activeTestRuns = new Map();
 
 function resolveAssetFile(fileNames) {
   const names = Array.isArray(fileNames) ? fileNames : [fileNames];
@@ -1298,6 +1299,59 @@ async function syncDbUpdaterTestCase(settingsInput, payload) {
   };
 }
 
+async function deleteDbUpdaterTestCase(settingsInput, payload) {
+  const planId = Number(payload?.planId);
+  const testCaseId = Number(payload?.testCaseId);
+  if (!Number.isFinite(planId) || planId <= 0) {
+    throw new Error('Plan id is required for local DB delete.');
+  }
+  if (!Number.isFinite(testCaseId) || testCaseId <= 0) {
+    throw new Error('Test case id is required for local DB delete.');
+  }
+
+  const dbConfig = getDbUpdaterRuntimeConfig(settingsInput);
+  const target = dbConfig.targets.find((item) => item.enabled && Number(item.planId) === planId);
+  if (!target) {
+    return {
+      status: 'skipped',
+      reason: `No enabled DB mapping exists for plan ${planId}.`,
+      planId,
+      testCaseId,
+    };
+  }
+
+  const dbPath = getDbUpdaterTargetPath(target);
+  if (!fs.existsSync(dbPath)) {
+    return {
+      status: 'skipped',
+      reason: `Local DB file not found at ${dbPath}.`,
+      planId,
+      testCaseId,
+      target: target.key,
+      dbPath,
+    };
+  }
+
+  const db = await open({
+    filename: dbPath,
+    driver: sqlite3.Database,
+  });
+  try {
+    await ensureDbUpdaterTable(db);
+    const result = await db.run('DELETE FROM TestCaseDao WHERE "Id" = ?;', testCaseId);
+    return {
+      status: 'complete',
+      planId,
+      testCaseId,
+      target: target.key,
+      dbPath,
+      deleted: Number(result?.changes ?? 0),
+    };
+  } finally {
+    await db.close();
+  }
+}
+
 async function fetchDbUpdaterRowsForTarget(settings, target, sender, runId) {
   sendDbUpdaterProgress(sender, runId, {
     target: target.key,
@@ -2022,6 +2076,158 @@ function switchGitBranch(targetPath, targetBranch) {
   return readGitBranch(normalizedPath);
 }
 
+function emitTestRunProgress(sender, payload) {
+  sender.send('desktop:test-run-progress', {
+    ...payload,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+function splitLines(buffer, chunk) {
+  const text = `${buffer}${chunk ?? ''}`;
+  const lines = text.split(/\r?\n/);
+  const rest = lines.pop() ?? '';
+  return { lines, rest };
+}
+
+function resolveRunFileFromInput(inputPath, workingDirectory, allowedExtensions, requiredLabel) {
+  const absolutePath = path.isAbsolute(inputPath) ? inputPath : path.join(workingDirectory, inputPath);
+  const resolved = path.resolve(absolutePath);
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`${requiredLabel} does not exist.`);
+  }
+
+  const stats = fs.statSync(resolved);
+  if (stats.isFile()) {
+    return resolved;
+  }
+
+  if (!stats.isDirectory()) {
+    throw new Error(`${requiredLabel} is not a file or folder.`);
+  }
+
+  const files = fs.readdirSync(resolved, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(resolved, entry.name))
+    .filter((filePath) => allowedExtensions.some((extension) => filePath.toLowerCase().endsWith(extension)))
+    .sort((left, right) => left.localeCompare(right));
+
+  if (files.length === 0) {
+    throw new Error(`${requiredLabel} folder does not contain a supported file.`);
+  }
+  return files[0];
+}
+
+function startDotnetTestRun(request, sender) {
+  const workingDirectory = normalizeDirectoryPath(request?.workingDirectory || '');
+  const projectPathInput = String(request?.projectPath || '').trim();
+  if (!projectPathInput) {
+    throw new Error('Project path is required.');
+  }
+  const projectPath = resolveRunFileFromInput(projectPathInput, workingDirectory, ['.csproj'], 'Project path');
+  const testFilter = String(request?.testFilter || '').trim();
+  if (!testFilter) {
+    throw new Error('Test filter is required.');
+  }
+
+  const runSettingsInput = String(request?.runSettingsPath || '').trim();
+  const runSettingsPath = runSettingsInput
+    ? resolveRunFileFromInput(runSettingsInput, workingDirectory, ['.runsettings'], 'Run settings path')
+    : '';
+  const logger = String(request?.logger || 'console;verbosity=detailed').trim() || 'console;verbosity=detailed';
+
+  const args = ['test', projectPath, '--filter', testFilter, '--logger', logger];
+  if (runSettingsPath) {
+    args.push('--settings', runSettingsPath);
+  }
+
+  const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const env = { ...process.env };
+  if (request?.passPatAsEnv && typeof request?.patToken === 'string' && request.patToken.trim()) {
+    env.ADO_PAT = request.patToken.trim();
+  }
+
+  emitTestRunProgress(sender, {
+    runId,
+    status: 'running',
+    level: 'info',
+    message: `Starting: dotnet ${args.map((item) => `"${item}"`).join(' ')}`,
+    stream: 'system',
+  });
+
+  const child = spawn('dotnet', args, {
+    cwd: workingDirectory,
+    env,
+    windowsHide: true,
+  });
+
+  activeTestRuns.set(runId, child);
+
+  let stdoutBuffer = '';
+  let stderrBuffer = '';
+
+  child.stdout.on('data', (chunk) => {
+    const parsed = splitLines(stdoutBuffer, chunk.toString('utf8'));
+    stdoutBuffer = parsed.rest;
+    for (const line of parsed.lines) {
+      if (!line.trim()) continue;
+      emitTestRunProgress(sender, { runId, status: 'running', level: 'info', message: line, stream: 'stdout' });
+    }
+  });
+
+  child.stderr.on('data', (chunk) => {
+    const parsed = splitLines(stderrBuffer, chunk.toString('utf8'));
+    stderrBuffer = parsed.rest;
+    for (const line of parsed.lines) {
+      if (!line.trim()) continue;
+      emitTestRunProgress(sender, { runId, status: 'running', level: 'error', message: line, stream: 'stderr' });
+    }
+  });
+
+  return new Promise((resolve, reject) => {
+    child.once('error', (error) => {
+      activeTestRuns.delete(runId);
+      emitTestRunProgress(sender, {
+        runId,
+        status: 'failed',
+        level: 'error',
+        message: error.message || 'Failed to start dotnet test.',
+        stream: 'system',
+      });
+      reject(error);
+    });
+
+    child.once('close', (code, signal) => {
+      activeTestRuns.delete(runId);
+      if (stdoutBuffer.trim()) {
+        emitTestRunProgress(sender, { runId, status: 'running', level: 'info', message: stdoutBuffer.trim(), stream: 'stdout' });
+      }
+      if (stderrBuffer.trim()) {
+        emitTestRunProgress(sender, { runId, status: 'running', level: 'error', message: stderrBuffer.trim(), stream: 'stderr' });
+      }
+      const status = signal ? 'cancelled' : code === 0 ? 'complete' : 'failed';
+      emitTestRunProgress(sender, {
+        runId,
+        status,
+        level: status === 'complete' ? 'info' : 'error',
+        message: status === 'complete' ? 'Test run completed.' : status === 'cancelled' ? 'Test run cancelled.' : `Test run failed (exit ${code ?? -1}).`,
+        stream: 'system',
+        exitCode: code,
+      });
+      resolve({ runId, status, exitCode: code });
+    });
+  });
+}
+
+function stopDotnetTestRun(runId) {
+  const child = activeTestRuns.get(String(runId || ''));
+  if (!child) {
+    return { ok: false };
+  }
+  child.kill('SIGTERM');
+  return { ok: true };
+}
+
 app.setAppUserModelId(APP_ID);
 
 app.whenReady().then(() => {
@@ -2091,6 +2297,10 @@ ipcMain.handle('desktop:sync-db-updater-test-case', (_event, settings, payload) 
   return syncDbUpdaterTestCase(settings, payload);
 });
 
+ipcMain.handle('desktop:delete-db-updater-test-case', (_event, settings, payload) => {
+  return deleteDbUpdaterTestCase(settings, payload);
+});
+
 ipcMain.handle('desktop:get-db-updater-overview', (_event, settings) => {
   return getDbUpdaterOverview(settings);
 });
@@ -2106,6 +2316,14 @@ ipcMain.handle('desktop:write-text-file', (_event, targetPath, content) => {
     throw new Error('File content must be text.');
   }
   fs.writeFileSync(normalizedPath, content, 'utf8');
+});
+
+ipcMain.handle('desktop:run-dotnet-test', (event, request) => {
+  return startDotnetTestRun(request, event.sender);
+});
+
+ipcMain.handle('desktop:stop-dotnet-test', (_event, runId) => {
+  return stopDotnetTestRun(runId);
 });
 
 ipcMain.on('app:set-unsaved-changes', (event, payload) => {

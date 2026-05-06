@@ -28,6 +28,7 @@ interface CreateTestCaseFormProps {
   workspaceSettings: WorkspaceSettingsValues;
   initialDraft?: CreateTestCaseDraft | null;
   sourceCaseMeta?: CloneSourceMeta | null;
+  onTitleChange?: (title: string) => void;
   onCancel: () => void;
   onSubmit: (formData: {
     title: string;
@@ -47,6 +48,7 @@ export function CreateTestCaseForm({
   workspaceSettings,
   initialDraft = null,
   sourceCaseMeta = null,
+  onTitleChange,
   onCancel,
   onSubmit,
 }: CreateTestCaseFormProps) {
@@ -63,6 +65,10 @@ export function CreateTestCaseForm({
   const [confirmDiscardRequested, setConfirmDiscardRequested] = useState(false);
   const [pendingDiscardAction, setPendingDiscardAction] = useState<'cancel' | 'window-close' | null>(null);
   const allowWindowCloseRef = useRef(false);
+
+  useEffect(() => {
+    onTitleChange?.(formData.title ?? '');
+  }, [formData.title, onTitleChange]);
 
   const isDirty = JSON.stringify(formData) !== JSON.stringify(initialFormData)
     || JSON.stringify(steps) !== JSON.stringify(initialSteps);
@@ -277,7 +283,12 @@ export function CreateTestCaseForm({
             {/* Shared Form Fields - Identical to Edit Mode */}
             <TestCaseFormFields
               formData={formData}
-              onChange={(updatedData) => setFormData(prev => ({ ...prev, ...updatedData }))}
+              onChange={(updatedData) => {
+                setFormData(prev => ({ ...prev, ...updatedData }));
+                if (Object.prototype.hasOwnProperty.call(updatedData, 'title')) {
+                  onTitleChange?.(updatedData.title ?? '');
+                }
+              }}
               isLoading={isLoading}
               showTitle={true}
               showValidationSummary={false}

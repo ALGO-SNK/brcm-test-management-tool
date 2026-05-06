@@ -272,6 +272,13 @@ function insertStepAfter(steps: StepEditorState[], stepIndex: number, stepToInse
   return sanitizeEditorSteps([...before, stepToInsert, ...after]);
 }
 
+function parseExactStepQuery(query: string): number | null {
+  const match = query.trim().match(/^(?:step\s*)?#?\s*(\d+)$/i);
+  if (!match) return null;
+  const stepNumber = Number(match[1]);
+  return Number.isInteger(stepNumber) && stepNumber >= 0 ? stepNumber : null;
+}
+
 // ── Individual step card ───────────────────────────────────────────────────
 interface StepItemProps {
   step: StepEditorState;
@@ -722,6 +729,12 @@ export function StepsEditor({
   const matchingStepIndices = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
+    const exactStepNumber = parseExactStepQuery(searchQuery);
+    if (exactStepNumber !== null) {
+      return steps
+        .map((step, index) => (step.index === exactStepNumber ? index : -1))
+        .filter((index) => index >= 0);
+    }
 
     return steps
       .map((step, index) => {

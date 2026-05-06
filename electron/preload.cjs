@@ -54,6 +54,9 @@ contextBridge.exposeInMainWorld('desktop', {
   syncDbUpdaterTestCase(settings, payload) {
     return ipcRenderer.invoke('desktop:sync-db-updater-test-case', settings, payload);
   },
+  deleteDbUpdaterTestCase(settings, payload) {
+    return ipcRenderer.invoke('desktop:delete-db-updater-test-case', settings, payload);
+  },
   getDbUpdaterOverview(settings) {
     return ipcRenderer.invoke('desktop:get-db-updater-overview', settings);
   },
@@ -76,5 +79,25 @@ contextBridge.exposeInMainWorld('desktop', {
   },
   writeTextFile(targetPath, content) {
     return ipcRenderer.invoke('desktop:write-text-file', targetPath, content);
+  },
+  runDotnetTest(request) {
+    return ipcRenderer.invoke('desktop:run-dotnet-test', request);
+  },
+  stopDotnetTest(runId) {
+    return ipcRenderer.invoke('desktop:stop-dotnet-test', runId);
+  },
+  onTestRunProgress(callback) {
+    if (typeof callback !== 'function') {
+      return () => {};
+    }
+
+    const listener = (_event, payload) => {
+      callback(payload);
+    };
+
+    ipcRenderer.on('desktop:test-run-progress', listener);
+    return () => {
+      ipcRenderer.removeListener('desktop:test-run-progress', listener);
+    };
   },
 });

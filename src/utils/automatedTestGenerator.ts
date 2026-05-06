@@ -1,19 +1,14 @@
-function toPascalToken(token: string): string {
-  if (!token) return '';
-  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
-}
+export function buildAutomatedMethodName(testTitle: string, _testId: number): string {
+  const normalizedTitle = testTitle
+    .replace(/^TC\s*\d+[_\-\s]*/i, '')
+    .trim();
 
-export function buildAutomatedMethodName(testTitle: string, testId: number): string {
-  const sanitized = testTitle
-    .replace(/[^A-Za-z0-9]+/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .map(toPascalToken)
-    .join('');
+  const sanitized = normalizedTitle
+    .replace(/[^A-Za-z0-9]+/g, '');
 
   const baseName = sanitized || 'AutomatedTest';
   const prefixed = /^[A-Za-z_]/.test(baseName) ? baseName : `Test${baseName}`;
-  return `TC${testId}_${prefixed}`;
+  return prefixed;
 }
 
 export function buildAutomatedMethodCode(methodName: string): string {

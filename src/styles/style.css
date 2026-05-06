@@ -5952,6 +5952,15 @@ input[type="radio"] {
     font-weight: 700;
 }
 
+.settings-summary-chip__value {
+    max-width: 260px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: bottom;
+}
+
 .settings-panel {
     border: 1px solid var(--color-border);
     background: var(--color-surface);
@@ -5980,6 +5989,48 @@ input[type="radio"] {
     font-size: var(--text-sm);
     margin-top: 6px;
     line-height: 1.6;
+}
+
+.settings-toggle-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-toggle {
+    width: 40px;
+    height: 22px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface-muted);
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    cursor: pointer;
+    transition: background-color .2s ease, border-color .2s ease;
+}
+
+.settings-toggle__thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--color-text-secondary);
+    transition: transform .2s ease, background-color .2s ease;
+}
+
+.settings-toggle.is-active {
+    background: color-mix(in srgb, var(--color-accent) 22%, var(--color-surface-muted));
+    border-color: color-mix(in srgb, var(--color-accent) 50%, var(--color-border));
+}
+
+.settings-toggle.is-active .settings-toggle__thumb {
+    transform: translateX(18px);
+    background: var(--color-accent);
+}
+
+.settings-field__hint {
+    color: var(--color-text-muted);
+    font-size: 12px;
 }
 
 .settings-mode-grid {
@@ -6791,6 +6842,16 @@ input[type="radio"] {
 
 .db-updater__data-head > div {
     min-width: 0;
+}
+
+.test-run__log-head {
+    gap: 8px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.test-run__log-head .btn {
+    flex: 0 0 auto;
 }
 
 .db-updater__refresh-pill {

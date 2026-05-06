@@ -35,6 +35,11 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
     mainDbName: 'BromcomTestCases.db',
     worldPayDbName: 'BromcomWorldPayTestCases.db',
     dbMappings: DEFAULT_DB_MAPPINGS,
+    testRunWorkingDirectory: '',
+    testRunProjectPath: 'BromCom.Tests\\BromCom.Tests.csproj',
+    testRunSettingsPath: 'BromCom.Tests\\Bromcom.runsettings',
+    testRunLogger: 'console;verbosity=detailed',
+    testRunUsePatAsEnv: true,
   };
   try {
     const raw = localStorage.getItem(WORKSPACE_SETTINGS_KEY);

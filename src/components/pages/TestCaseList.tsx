@@ -51,6 +51,8 @@ export function TestCaseList({
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [createDraft, setCreateDraft] = useState<CreateTestCaseDraft | null>(null);
   const [createSourceCase, setCreateSourceCase] = useState<CloneSourceMeta | null>(null);
+  const [liveDetailTitle, setLiveDetailTitle] = useState('');
+  const [liveCreateTitle, setLiveCreateTitle] = useState('');
   const [caseTableRefreshToken, setCaseTableRefreshToken] = useState(0);
   const dragging = useRef(false);
   const preserveCreateModeOnSuiteChangeRef = useRef(false);
@@ -100,6 +102,7 @@ export function TestCaseList({
     setIsCreateMode(false);
     setCreateDraft(null);
     setCreateSourceCase(null);
+    setLiveCreateTitle('');
   }, [suite?.id]);
 
   const handleAddTestCaseFromSuite = useCallback((targetSuite: ADOTestSuite, path: ADOTestSuite[]) => {
@@ -108,6 +111,7 @@ export function TestCaseList({
     setIsCreateMode(true);
     setCreateDraft(null);
     setCreateSourceCase(null);
+    setLiveCreateTitle('');
   }, [onSelectSuite]);
 
   const handleCreateModeChange = useCallback((nextIsCreateMode: boolean) => {
@@ -115,20 +119,33 @@ export function TestCaseList({
     if (!nextIsCreateMode) {
       setCreateDraft(null);
       setCreateSourceCase(null);
+      setLiveCreateTitle('');
     }
   }, []);
 
   const handleRequestBlankCreate = useCallback(() => {
     setCreateDraft(null);
     setCreateSourceCase(null);
+    setLiveCreateTitle('');
   }, []);
 
   const handleCloneCase = useCallback((draft: CreateTestCaseDraft, sourceMeta: CloneSourceMeta) => {
     setCreateDraft(draft);
     setCreateSourceCase(sourceMeta);
     setIsCreateMode(true);
+    setLiveCreateTitle(draft.formData.title ?? '');
     onBackToCases();
   }, [onBackToCases]);
+
+  useEffect(() => {
+    setLiveDetailTitle(selectedCase?.name ?? '');
+  }, [selectedCase?.id, selectedCase?.name]);
+
+  const pageHeadingTitle = selectedCase
+    ? (liveDetailTitle || selectedCase.name)
+    : isCreateMode
+      ? (liveCreateTitle || createDraft?.formData.title || 'New Test Case')
+      : suite?.name ?? '';
 
   const handleBackToCasesWithRefresh = useCallback(() => {
     setCaseTableRefreshToken((current) => current + 1);
@@ -195,14 +212,14 @@ export function TestCaseList({
               <PageDetailLayout
                 breadcrumbs={breadcrumbs}
                 heading={{
-                  title: selectedCase ? selectedCase.name : suite.name,
-                  id: selectedCase ? selectedCase.id : suite.id,
+                  title: pageHeadingTitle,
+                  id: selectedCase ? selectedCase.id : isCreateMode ? undefined : suite.id,
                   count: selectedCase ? (
                     selectedCase.fields?.['Microsoft.VSTS.TCM.Steps']
                       ? (selectedCase.fields['Microsoft.VSTS.TCM.Steps'] as string).match(/Action=/g)?.length ?? 0
                       : 0
-                  ) : currentSuiteCount ?? 0,
-                  countLabel: selectedCase ? 'Steps' : 'Test Count',
+                  ) : isCreateMode ? undefined : currentSuiteCount ?? 0,
+                  countLabel: selectedCase ? 'Steps' : isCreateMode ? undefined : 'Test Count',
                 }}
               >
                 {selectedCase ? (
@@ -215,6 +232,11 @@ export function TestCaseList({
                     onBackToCases={handleBackToCasesWithRefresh}
                     onSettingsClick={onSettingsClick}
                     onClone={handleCloneCase}
+                    onTitleChange={setLiveDetailTitle}
+                    onCaseUpdated={(updatedCase) => {
+                      setLiveDetailTitle(updatedCase.name);
+                      onSelectCase(updatedCase);
+                    }}
                     embedded
                   />
                 ) : (
@@ -243,6 +265,7 @@ export function TestCaseList({
                     }}
                     isCreateMode={isCreateMode}
                     onCreateModeChange={handleCreateModeChange}
+                    onCreateTitleChange={setLiveCreateTitle}
                     initialCreateDraft={createDraft}
                     createSourceCase={createSourceCase}
                     onRequestCreate={handleRequestBlankCreate}

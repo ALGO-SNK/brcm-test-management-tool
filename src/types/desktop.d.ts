@@ -97,6 +97,21 @@ declare global {
     row?: DesktopDbUpdaterRow;
   }
 
+  interface DesktopDbUpdaterTestCaseDeletePayload {
+    planId: number;
+    testCaseId: number;
+  }
+
+  interface DesktopDbUpdaterTestCaseDeleteResult {
+    status: 'complete' | 'skipped';
+    reason?: string;
+    planId: number;
+    testCaseId: number;
+    target?: string;
+    dbPath?: string;
+    deleted?: number;
+  }
+
   interface DesktopDbUpdaterRow {
     id: number;
     title: string;
@@ -130,6 +145,35 @@ declare global {
     rootDirectory: string;
     targetOrder: string[];
     targets: Record<string, DesktopDbUpdaterOverviewTarget>;
+  }
+
+  type DesktopTestRunLevel = 'info' | 'error';
+  type DesktopTestRunStatus = 'running' | 'complete' | 'failed' | 'cancelled';
+
+  interface DesktopTestRunProgress {
+    runId: string;
+    status: DesktopTestRunStatus;
+    level: DesktopTestRunLevel;
+    message: string;
+    timestamp: string;
+    stream?: 'stdout' | 'stderr' | 'system';
+    exitCode?: number | null;
+  }
+
+  interface DesktopTestRunRequest {
+    workingDirectory: string;
+    projectPath: string;
+    runSettingsPath?: string;
+    testFilter: string;
+    logger?: string;
+    patToken?: string;
+    passPatAsEnv?: boolean;
+  }
+
+  interface DesktopTestRunResult {
+    runId: string;
+    status: DesktopTestRunStatus;
+    exitCode: number | null;
   }
 
   interface DesktopApi {
@@ -182,6 +226,22 @@ declare global {
         enabled: boolean;
       }>;
     }, payload: DesktopDbUpdaterTestCaseSyncPayload) => Promise<DesktopDbUpdaterTestCaseSyncResult>;
+    deleteDbUpdaterTestCase?: (settings: {
+      organization: string;
+      projectName: string;
+      patToken: string;
+      apiVersion: string;
+      dbDirectory?: string;
+      mainDbName?: string;
+      worldPayDbName?: string;
+      dbMappings?: Array<{
+        id: string;
+        label: string;
+        planId: number;
+        dbName: string;
+        enabled: boolean;
+      }>;
+    }, payload: DesktopDbUpdaterTestCaseDeletePayload) => Promise<DesktopDbUpdaterTestCaseDeleteResult>;
     getDbUpdaterOverview?: (settings: {
       organization: string;
       projectName: string;
@@ -201,6 +261,9 @@ declare global {
     onDbUpdaterProgress?: (callback: (progress: DesktopDbUpdaterProgress) => void) => (() => void);
     readTextFile?: (targetPath: string) => Promise<string>;
     writeTextFile?: (targetPath: string, content: string) => Promise<void>;
+    runDotnetTest?: (request: DesktopTestRunRequest) => Promise<DesktopTestRunResult>;
+    stopDotnetTest?: (runId: string) => Promise<{ ok: boolean }>;
+    onTestRunProgress?: (callback: (progress: DesktopTestRunProgress) => void) => (() => void);
   }
 
   interface Window {

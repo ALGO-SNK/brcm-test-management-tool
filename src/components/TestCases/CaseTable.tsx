@@ -26,6 +26,7 @@ interface CaseTableProps {
   onSelectCase: (testCase: ADOTestCase) => void;
   onCaseCountChange?: (count: number) => void;
   onTestCaseCreated?: (newCase: ADOTestCase) => void;
+  onCreateTitleChange?: (title: string) => void;
   isCreateMode?: boolean;
   onCreateModeChange?: (isCreateMode: boolean) => void;
   initialCreateDraft?: CreateTestCaseDraft | null;
@@ -82,6 +83,7 @@ export function CaseTable({
   onSelectCase,
   onCaseCountChange,
   onTestCaseCreated,
+  onCreateTitleChange,
   isCreateMode: propIsCreateMode,
   onCreateModeChange,
   initialCreateDraft = null,
@@ -422,7 +424,9 @@ export function CaseTable({
           onCancel={() => {
             setIsCreateMode(false);
             setError(null);
+            onCreateTitleChange?.('');
           }}
+          onTitleChange={onCreateTitleChange}
           onSubmit={async (formData) => {
             try {
               const testCaseData = buildTestCaseData(formData, formData.steps);
@@ -436,10 +440,20 @@ export function CaseTable({
                 }
               );
 
-              addNotification('success', `Test case "${newCase.name}" created successfully.`);
+              const createdTitle = formData.title || newCase.name;
+              const createdCase = {
+                ...newCase,
+                name: createdTitle,
+                fields: {
+                  ...newCase.fields,
+                  'System.Title': createdTitle,
+                },
+              };
+
+              addNotification('success', `Test case "${createdCase.name}" created successfully.`);
               setError(null);
               setWarning(null);
-              onTestCaseCreated?.(newCase);
+              onTestCaseCreated?.(createdCase);
 
               // Refresh test cases list to show the newly created case
               try {
@@ -456,7 +470,7 @@ export function CaseTable({
               } catch (err) {
                 console.warn('Failed to refresh test cases after creation:', err);
                 // Still add the new case locally even if refresh fails
-                setCases([...cases, newCase]);
+                setCases([...cases, createdCase]);
               }
             } catch (error) {
               // Extract error message from API response

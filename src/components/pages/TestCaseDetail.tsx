@@ -35,6 +35,8 @@ interface TestCaseDetailProps {
   workspaceSettings: WorkspaceSettingsValues;
   onBackToCases: () => void;
   onClone?: (draft: CreateTestCaseDraft, sourceMeta: CloneSourceMeta) => void;
+  onTitleChange?: (title: string) => void;
+  onCaseUpdated?: (testCase: ADOTestCase) => void;
   onHelpClick?: () => void;
   onSettingsClick: () => void;
   embedded?: boolean;
@@ -49,6 +51,13 @@ interface StepViewModel {
 interface DetailRow {
   label: string;
   value: string;
+}
+
+interface TestRunLogEntry {
+  id: string;
+  level: 'info' | 'error';
+  message: string;
+  timestamp: string;
 }
 
 
@@ -87,6 +96,24 @@ function hasAutomationFieldValue(value: string): boolean {
   return normalized.length > 0 && normalized !== 'not set';
 }
 
+function guidFromBytes(bytes: Uint8Array): string {
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0'));
+  return `${hex[3]}${hex[2]}${hex[1]}${hex[0]}-${hex[5]}${hex[4]}-${hex[7]}${hex[6]}-${hex[8]}${hex[9]}-${hex[10]}${hex[11]}${hex[12]}${hex[13]}${hex[14]}${hex[15]}`;
+}
+
+async function createAutomationGuid(fullyQualifiedTestName: string): Promise<string> {
+  const input = fullyQualifiedTestName || '';
+  const utf16le = new Uint8Array(input.length * 2);
+  for (let i = 0; i < input.length; i += 1) {
+    const code = input.charCodeAt(i);
+    utf16le[i * 2] = code & 0xff;
+    utf16le[i * 2 + 1] = (code >> 8) & 0xff;
+  }
+  const digest = await crypto.subtle.digest('SHA-1', utf16le);
+  const hash = new Uint8Array(digest);
+  return guidFromBytes(hash.slice(0, 16));
+}
+
 function decodeHtmlEntities(input: string): string {
   return input
     .replace(/&lt;/g, '<')
@@ -95,6 +122,56 @@ function decodeHtmlEntities(input: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, '\'')
     .replace(/&nbsp;/g, ' ');
+}
+
+function formatLogDateTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+}
+
+function isImportantRunLogLine(message: string): boolean {
+  const text = message.trim();
+  if (!text) return false;
+  const importantPatterns = [
+    /^Starting:/i,
+    /Test run for /i,
+    /A total of \d+ test files matched/i,
+    /NUnit Adapter .*Test execution (started|complete)/i,
+    /^Passed /i,
+    /^Failed /i,
+    /^Error:/i,
+    /^Error Message:/i,
+    /Exception/i,
+    /Stack Trace:/i,
+    /^\s*at\s+/i,
+    /Test Run (Successful|Failed)/i,
+    /Total tests:/i,
+    /^\s*Passed:\s*\d+/i,
+    /^\s*Failed:\s*\d+/i,
+    /Total time:/i,
+    /Test summary:/i,
+    /Fetching PAT|Creating Connection|Getting WorkItem Client|Initializing Local Database Connection/i,
+    /Test Case Name:/i,
+  ];
+  return importantPatterns.some((pattern) => pattern.test(text));
+}
+
+function stripLegacyTcPrefix(methodName: string): string {
+  return methodName.replace(/^TC\d+[_\-\s]*/i, '').trim();
+}
+
+function parseExactStepQuery(query: string): number | null {
+  const match = query.trim().match(/^(?:step\s*)?#?\s*(\d+)$/i);
+  if (!match) return null;
+  const stepNumber = Number(match[1]);
+  return Number.isInteger(stepNumber) && stepNumber >= 0 ? stepNumber : null;
 }
 
 function parseStepLines(rawSteps: unknown): string[] {
@@ -311,6 +388,8 @@ export function TestCaseDetail({
   workspaceSettings,
   onBackToCases,
   onClone,
+  onTitleChange,
+  onCaseUpdated,
   onHelpClick,
   onSettingsClick,
   embedded = false,
@@ -344,7 +423,16 @@ export function TestCaseDetail({
   const [isAutomationManagerOpen, setIsAutomationManagerOpen] = useState(false);
   const [automationRefreshToken, setAutomationRefreshToken] = useState(0);
   const [isAutomationActionBusy, setIsAutomationActionBusy] = useState(false);
+  const [showRemoveAutomationConfirm, setShowRemoveAutomationConfirm] = useState(false);
+  const [pendingRemoveAssociation, setPendingRemoveAssociation] = useState<{ filePath: string; methodName: string } | null>(null);
+  const [isRunModalOpen, setIsRunModalOpen] = useState(false);
+  const [isRunBusy, setIsRunBusy] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'complete' | 'failed' | 'cancelled'>('idle');
+  const [runLogEntries, setRunLogEntries] = useState<TestRunLogEntry[]>([]);
+  const [showVerboseRunLogs, setShowVerboseRunLogs] = useState(false);
   const reloadCaseControllerRef = useRef<AbortController | null>(null);
+  const runLogViewportRef = useRef<HTMLDivElement | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const editBaselineRef = useRef<{
     formData: typeof editFormData;
@@ -370,7 +458,12 @@ export function TestCaseDetail({
     const controller = new AbortController();
 
     const selectedCase = caseData && caseData.id === caseId ? caseData : null;
-    setTestCase(selectedCase);
+    setTestCase((previous) => {
+      if (previous && previous.id === caseId) {
+        return previous;
+      }
+      return selectedCase;
+    });
     setIsDetailLoaded(false);
     setLoadWarning(null);
 
@@ -743,7 +836,21 @@ export function TestCaseDetail({
         stepsCount: (updatedCase.fields?.['Microsoft.VSTS.TCM.Steps'] as string)?.length || 0,
         hasSteps: !!updatedCase.fields?.['Microsoft.VSTS.TCM.Steps'],
       });
-      setTestCase(updatedCase);
+      const editedTitle = editFormData.title;
+      const updatedTitle = editedTitle || normalizeFieldText(updatedCase.fields?.['System.Title']);
+      const nextUpdatedCase = updatedTitle
+        ? {
+            ...updatedCase,
+            name: updatedTitle,
+            fields: {
+              ...updatedCase.fields,
+              'System.Title': updatedTitle,
+            },
+          }
+        : updatedCase;
+      setTestCase(nextUpdatedCase);
+      onTitleChange?.(nextUpdatedCase.name);
+      onCaseUpdated?.(nextUpdatedCase);
       setIsEditMode(false);
       setEditValidationErrors([]);
       editBaselineRef.current = null;
@@ -762,7 +869,7 @@ export function TestCaseDetail({
           addNotification('error', `Local DB sync failed: ${syncMessage}`);
         }
       }
-      addNotification('success', `Test case "${updatedCase.name}" updated successfully.`);
+      addNotification('success', `Test case "${nextUpdatedCase.name}" updated successfully.`);
       if (reloadCaseControllerRef.current === reloadController) {
         reloadCaseControllerRef.current = null;
       }
@@ -777,8 +884,11 @@ export function TestCaseDetail({
         setIsSaving(false);
       }
     }
-  }, [addNotification, editFormData, editSteps, isSaving, syncSingleCaseToLocalDb, testCase, workspaceSettings]);
+  }, [addNotification, editFormData, editSteps, isSaving, onCaseUpdated, onTitleChange, syncSingleCaseToLocalDb, testCase, workspaceSettings]);
 
+  const detailHeadingTitle = isEditMode
+    ? (editFormData.title || testCase?.name || '')
+    : (testCase?.name || '');
   const canClone = Boolean(onClone && testCase && isDetailLoaded && !loading && !isSaving && !isRefreshing && !isEditMode);
   const currentAutomatedTestName = normalizeFieldText(testCase?.fields?.['Microsoft.VSTS.TCM.AutomatedTestName']).trim();
   const currentAutomatedTestStorage = normalizeFieldText(testCase?.fields?.['Microsoft.VSTS.TCM.AutomatedTestStorage']).trim();
@@ -804,9 +914,28 @@ export function TestCaseDetail({
       && hasAutomationFieldValue(currentAutomatedTestName)
       && hasAutomationFieldValue(currentAutomatedTestStorage),
   );
-  const effectiveAutomationMethodName = hasExistingAutomationMetadata
-    ? parsedAutomationAssociation?.methodName ?? ''
-    : automationMethodName;
+  const associatedAutomationMethodName = parsedAutomationAssociation?.methodName ?? '';
+  const generatedAutomationMethodName = stripLegacyTcPrefix(automationMethodName);
+  const runMethodName = associatedAutomationMethodName || generatedAutomationMethodName;
+  const isAutomatedForRun = hasExistingAutomationMetadata;
+  const runDisabledReason = !isAutomatedForRun
+    ? 'Run is available only for automated tests.'
+    : !workspaceSettings.testRunWorkingDirectory?.trim() || !workspaceSettings.testRunProjectPath?.trim()
+      ? 'Configure test runner settings in Workspace Settings.'
+      : !runMethodName.trim()
+        ? 'Automation method name is missing.'
+        : '';
+  const canRunTest = Boolean(
+    isAutomatedForRun
+      && !isEditMode
+      && !loading
+      && !isSaving
+      && !isRefreshing
+      && workspaceSettings.testRunWorkingDirectory?.trim()
+      && workspaceSettings.testRunProjectPath?.trim()
+      && runMethodName.trim(),
+  );
+  const canReopenRunModal = runLogEntries.length > 0 || isRunBusy;
 
   const handleClone = useCallback(() => {
     if (!testCase || !onClone) return;
@@ -832,9 +961,105 @@ export function TestCaseDetail({
     setIsAutomationManagerOpen(true);
   }, [addNotification, automationManagerDisabledReason, canOpenAutomationManager, seleniumRepoPath]);
 
+  useEffect(() => {
+    if (!window.desktop?.onTestRunProgress) {
+      return undefined;
+    }
+    return window.desktop.onTestRunProgress((progress) => {
+      if (activeRunId && progress.runId !== activeRunId) return;
+      if (!activeRunId) {
+        setActiveRunId(progress.runId);
+      }
+      setRunStatus(progress.status);
+      setRunLogEntries((current) => [
+        ...current,
+        {
+          id: `${progress.runId}-${progress.timestamp}-${current.length}`,
+          level: progress.level,
+          message: progress.message,
+          timestamp: progress.timestamp,
+        },
+      ]);
+    });
+  }, [activeRunId]);
+
+  useEffect(() => {
+    if (!runLogViewportRef.current) return;
+    runLogViewportRef.current.scrollTop = runLogViewportRef.current.scrollHeight;
+  }, [runLogEntries]);
+
+  const handleRunCurrentTest = useCallback(async () => {
+    if (!window.desktop?.runDotnetTest) {
+      addNotification('error', 'Test runner is unavailable. Restart the app to load the latest desktop bridge.');
+      return;
+    }
+    const workingDirectory = workspaceSettings.testRunWorkingDirectory.trim();
+    const projectPath = workspaceSettings.testRunProjectPath.trim();
+    if (!workingDirectory || !projectPath) {
+      addNotification('error', 'Set working directory and project path in Settings > Workspace > Automation Workspace Settings.');
+      return;
+    }
+    if (!runMethodName.trim()) {
+      addNotification('error', 'Test method name is unavailable for this test case.');
+      return;
+    }
+
+    setIsRunModalOpen(true);
+    setIsRunBusy(true);
+    setActiveRunId(null);
+    setRunStatus('running');
+    setRunLogEntries([]);
+    setShowVerboseRunLogs(false);
+
+    try {
+      const result = await window.desktop.runDotnetTest({
+        workingDirectory,
+        projectPath,
+        runSettingsPath: workspaceSettings.testRunSettingsPath?.trim() || undefined,
+        testFilter: `Name=${runMethodName.trim()}`,
+        logger: workspaceSettings.testRunLogger?.trim() || 'console;verbosity=detailed',
+        patToken: workspaceSettings.patToken,
+        passPatAsEnv: workspaceSettings.testRunUsePatAsEnv !== false,
+      });
+      setActiveRunId(result.runId);
+      setRunStatus(result.status);
+      if (result.status === 'complete') {
+        addNotification('success', `Test run passed for ${runMethodName}.`);
+      } else if (result.status === 'cancelled') {
+        addNotification('warning', 'Test run cancelled.');
+      } else {
+        addNotification('error', `Test run failed for ${runMethodName}.`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to run test.';
+      setRunStatus('failed');
+      addNotification('error', message);
+    } finally {
+      setIsRunBusy(false);
+    }
+  }, [addNotification, runMethodName, workspaceSettings]);
+
+  const runWarningCount = useMemo(
+    () => runLogEntries.filter((entry) => /\bwarning\b/i.test(entry.message)).length,
+    [runLogEntries],
+  );
+  const runErrorLine = useMemo(
+    () => runLogEntries.find((entry) => /^Error:\s*/i.test(entry.message) || /Exception/i.test(entry.message))?.message ?? null,
+    [runLogEntries],
+  );
+  const visibleRunLogEntries = useMemo(
+    () => showVerboseRunLogs ? runLogEntries : runLogEntries.filter((entry) => entry.level === 'error' || isImportantRunLogLine(entry.message)),
+    [runLogEntries, showVerboseRunLogs],
+  );
+
+  const handleStopRun = useCallback(async () => {
+    if (!activeRunId || !window.desktop?.stopDotnetTest) return;
+    await window.desktop.stopDotnetTest(activeRunId);
+  }, [activeRunId]);
+
 
   const handleWriteAutomationCode = useCallback(async (filePath: string) => {
-    if (!testCase || !effectiveAutomationMethodName) {
+    if (!testCase || !generatedAutomationMethodName) {
       return;
     }
     if (!window.desktop?.readTextFile || !window.desktop?.writeTextFile) {
@@ -845,10 +1070,10 @@ export function TestCaseDetail({
     setIsAutomationActionBusy(true);
     try {
       const fileContent = await window.desktop.readTextFile(filePath);
-      ensureMethodDoesNotExist(fileContent, effectiveAutomationMethodName);
+      ensureMethodDoesNotExist(fileContent, generatedAutomationMethodName);
       const nextFileContent = insertAutomatedTestMethod(
         fileContent,
-        buildAutomatedMethodCode(effectiveAutomationMethodName),
+        buildAutomatedMethodCode(generatedAutomationMethodName),
       );
       await window.desktop.writeTextFile(filePath, nextFileContent);
       setAutomationRefreshToken((current) => current + 1);
@@ -859,7 +1084,7 @@ export function TestCaseDetail({
     } finally {
       setIsAutomationActionBusy(false);
     }
-  }, [addNotification, effectiveAutomationMethodName, testCase]);
+  }, [addNotification, generatedAutomationMethodName, testCase]);
 
   const handleAddAutomationAssociation = useCallback(async (filePath: string, methodName: string) => {
     if (!testCase) {
@@ -868,12 +1093,16 @@ export function TestCaseDetail({
     setIsAutomationActionBusy(true);
     try {
       const className = getClassNameFromFilePath(filePath);
+      const fullyQualifiedTestName = buildAutomatedTestFullName(className, methodName);
+      const automatedTestId = await createAutomationGuid(fullyQualifiedTestName);
       await updateTestCase(
         workspaceSettings,
         testCase.id,
         {
-          automatedTestName: buildAutomatedTestFullName(className, methodName),
+          automatedTestName: fullyQualifiedTestName,
           automatedTestStorage: currentAutomatedTestStorage || 'BromCom.Tests.dll',
+          automatedTestType: 'Unit Test',
+          automatedTestId,
           automationStatus: 'Automated',
         },
         testCase._links?.workItem?.href ?? testCase._links?.self?.href,
@@ -899,33 +1128,88 @@ export function TestCaseDetail({
     }
   }, [addNotification, currentAutomatedTestStorage, reloadCurrentTestCase, syncSingleCaseToLocalDb, testCase, workspaceSettings]);
 
-  const handleRemoveAutomationAssociation = useCallback(async (_filePath: string, methodName: string) => {
+  const requestRemoveAutomationAssociation = useCallback((filePath: string, methodName: string) => {
     if (!testCase) {
       return;
     }
-    if (parsedAutomationAssociation?.methodName !== methodName) {
+    if (associatedAutomationMethodName !== methodName) {
       addNotification('error', 'Only the currently associated automated test can be removed.');
       return;
     }
+    setPendingRemoveAssociation({ filePath, methodName });
+    setShowRemoveAutomationConfirm(true);
+  }, [addNotification, associatedAutomationMethodName, testCase]);
+
+  const cancelRemoveAutomationAssociation = useCallback(() => {
+    setShowRemoveAutomationConfirm(false);
+    setPendingRemoveAssociation(null);
+  }, []);
+
+  const handleRemoveAutomationAssociation = useCallback(async () => {
+    if (!testCase || !pendingRemoveAssociation) {
+      return;
+    }
     setIsAutomationActionBusy(true);
+    setShowRemoveAutomationConfirm(false);
     try {
-      await updateTestCase(
-        workspaceSettings,
-        testCase.id,
-        {
-          automatedTestName: null,
-          automatedTestStorage: null,
-        },
-        testCase._links?.workItem?.href ?? testCase._links?.self?.href,
-      );
-      await reloadCurrentTestCase(testCase, 'Automated test association removed.');
+      try {
+        await updateTestCase(
+          workspaceSettings,
+          testCase.id,
+          {
+            automatedTestName: null,
+            automatedTestStorage: null,
+            automatedTestType: null,
+            automatedTestId: null,
+            automationStatus: 'Not Automated',
+            removeAutomationAssociation: true,
+          },
+          testCase._links?.workItem?.href ?? testCase._links?.self?.href,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        if (!/Automation status/i.test(message)) {
+          throw error;
+        }
+        await updateTestCase(
+          workspaceSettings,
+          testCase.id,
+          {
+            automatedTestName: null,
+            automatedTestStorage: null,
+            automatedTestType: null,
+            automatedTestId: null,
+            removeAutomationAssociation: true,
+          },
+          testCase._links?.workItem?.href ?? testCase._links?.self?.href,
+        );
+      }
+      const reloaded = await reloadCurrentTestCase(testCase, 'Automated test association removed.');
+      try {
+        if (!window.desktop?.deleteDbUpdaterTestCase) {
+          throw new Error('Local DB delete is unavailable. Restart the app to load the latest desktop bridge.');
+        }
+        const deleteResult = await window.desktop.deleteDbUpdaterTestCase(workspaceSettings, {
+          planId: plan.id,
+          testCaseId: reloaded.id,
+        });
+        if (deleteResult.status === 'skipped') {
+          addNotification('warning', deleteResult.reason ?? 'Local DB delete was skipped.');
+        } else {
+          addNotification('success', `Removed test from local DB (${deleteResult.deleted ?? 0} row deleted).`);
+        }
+      } catch (deleteError) {
+        const deleteMessage = deleteError instanceof Error ? deleteError.message : 'Local DB delete failed.';
+        addNotification('error', deleteMessage);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to remove automated test association.';
       addNotification('error', message);
     } finally {
+      setPendingRemoveAssociation(null);
       setIsAutomationActionBusy(false);
     }
-  }, [addNotification, parsedAutomationAssociation?.methodName, reloadCurrentTestCase, syncSingleCaseToLocalDb, testCase, workspaceSettings]);
+  }, [addNotification, pendingRemoveAssociation, plan.id, reloadCurrentTestCase, testCase, workspaceSettings]);
 
   useEffect(() => {
     if (!isEditMode) return;
@@ -980,6 +1264,12 @@ export function TestCaseDetail({
   const matchingViewStepIndices = useMemo(() => {
     const query = stepSearchQuery.trim().toLowerCase();
     if (!query) return [];
+    const exactStepNumber = parseExactStepQuery(stepSearchQuery);
+    if (exactStepNumber !== null) {
+      return stepViewItems
+        .map((step, index) => (step.index === exactStepNumber ? index : -1))
+        .filter((index) => index >= 0);
+    }
 
     return stepViewItems
       .map((step, index) => {
@@ -1123,7 +1413,7 @@ export function TestCaseDetail({
                               );
                               setStepSearchScrollNonce((n) => n + 1);
                             }}
-                            title="Previous match (Shift+Enter)"
+                            title={matchingViewStepIndices.length === 0 ? 'No search matches found' : 'Previous match (Shift+Enter)'}
                             aria-label="Previous match"
                           >
                             ↑
@@ -1137,7 +1427,7 @@ export function TestCaseDetail({
                               setActiveStepSearchMatch((current) => (current + 1) % matchingViewStepIndices.length);
                               setStepSearchScrollNonce((n) => n + 1);
                             }}
-                            title="Next match (Enter)"
+                            title={matchingViewStepIndices.length === 0 ? 'No search matches found' : 'Next match (Enter)'}
                             aria-label="Next match"
                           >
                             ↓
@@ -1169,7 +1459,7 @@ export function TestCaseDetail({
                         className="btn btn--secondary btn--sm"
                         onClick={() => { void handleRefresh(); }}
                         aria-label="Refresh"
-                        title="Refresh from Azure DevOps"
+                        title={!workspaceReady ? 'Configure Organization, Project, and PAT in Settings first' : isRefreshing ? 'Refreshing...' : 'Refresh from Azure DevOps'}
                         disabled={isRefreshing || !workspaceReady}
                       >
                         <span
@@ -1185,7 +1475,7 @@ export function TestCaseDetail({
                         className="btn btn--secondary btn--sm case-detail__azure-action"
                         onClick={() => window.open(buildWorkItemAdoUrl(workspaceSettings, testCase.id), '_blank', 'noopener,noreferrer')}
                         aria-label="Open in Azure DevOps"
-                        title="Open in Azure DevOps"
+                        title={canOpenInAdo ? 'Open in Azure DevOps' : 'Configure Organization and Project in Settings first'}
                         disabled={!canOpenInAdo}
                       >
                         <img className="case-detail__azure-icon" src={azureLogo} alt="" width={16} height={16} aria-hidden="true" />
@@ -1206,7 +1496,7 @@ export function TestCaseDetail({
                         className="btn btn--secondary btn--sm"
                         onClick={handleClone}
                         aria-label="Clone test case"
-                        title="Create a new test case from this one"
+                        title={canClone ? 'Create a new test case from this one' : 'Clone is unavailable while loading, saving, refreshing, or editing'}
                         disabled={!canClone}
                       >
                         <IconCopy size={16} />
@@ -1214,9 +1504,29 @@ export function TestCaseDetail({
                       <button
                         type="button"
                         className="btn btn--secondary btn--sm"
+                        onClick={() => { void handleRunCurrentTest(); }}
+                        aria-label="Run automated test"
+                        title={canRunTest ? `Run ${runMethodName}` : runDisabledReason}
+                        disabled={!canRunTest || isRunBusy}
+                      >
+                        <span className="material-symbols" aria-hidden="true">play_arrow</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setIsRunModalOpen(true)}
+                        aria-label="View last run log"
+                        title={canReopenRunModal ? 'View last run log' : 'No run log available yet'}
+                        disabled={!canReopenRunModal}
+                      >
+                        <span className="material-symbols" aria-hidden="true">receipt_long</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
                         onClick={() => { void handleOpenAutomationManager(); }}
                         aria-label="Open automation manager"
-                        title={automationManagerDisabledReason}
+                        title={canOpenAutomationManager ? automationManagerDisabledReason : 'Automation manager is unavailable while loading, saving, refreshing, or editing'}
                         disabled={!canOpenAutomationManager}
                       >
                         <IconFolderCode size={16} />
@@ -1226,7 +1536,7 @@ export function TestCaseDetail({
                         className="btn btn--secondary btn--sm"
                         onClick={() => setIsAdditionalModalOpen(true)}
                         aria-label="More details"
-                        title="More details"
+                        title={additionalRows.length === 0 ? 'No additional details available' : 'More details'}
                         disabled={additionalRows.length === 0}
                       >
                         <span className="material-symbols" aria-hidden="true">info</span>
@@ -1243,7 +1553,7 @@ export function TestCaseDetail({
                     className="btn btn--secondary btn--sm"
                     onClick={() => { void handleRefresh(); }}
                     aria-label="Refresh"
-                    title="Refresh from Azure DevOps (discards unsaved changes)"
+                    title={!workspaceReady ? 'Configure Organization, Project, and PAT in Settings first' : isSaving ? 'Save in progress' : isRefreshing ? 'Refreshing...' : 'Refresh from Azure DevOps (discards unsaved changes)'}
                     disabled={isRefreshing || isSaving || !workspaceReady}
                   >
                     <span
@@ -1259,6 +1569,7 @@ export function TestCaseDetail({
                     className="btn btn--primary btn--sm"
                     disabled={isSaving}
                     onClick={() => { void handleSaveChanges(); }}
+                    title={isSaving ? 'Saving changes...' : 'Save changes'}
                   >
                     {isSaving ? 'Saving...' : 'Save'}
                   </button>
@@ -1319,7 +1630,12 @@ export function TestCaseDetail({
             <section className="case-detail-edit-section">
               <TestCaseFormFields
                 formData={editFormData}
-                onChange={(updatedData) => setEditFormData((prev) => ({ ...prev, ...updatedData }))}
+                onChange={(updatedData) => {
+                  setEditFormData((prev) => ({ ...prev, ...updatedData }));
+                  if (Object.prototype.hasOwnProperty.call(updatedData, 'title')) {
+                    onTitleChange?.(updatedData.title ?? '');
+                  }
+                }}
                 isLoading={isSaving}
                 showTitle
                 validationErrors={editValidationErrors}
@@ -1352,12 +1668,12 @@ export function TestCaseDetail({
         <SeleniumRepoBrowserModal
           repoPath={seleniumRepoPath}
           mode="manage-automation"
-          generatedMethodName={effectiveAutomationMethodName}
-          associatedMethodName={parsedAutomationAssociation?.methodName ?? null}
+          generatedMethodName={generatedAutomationMethodName}
+          associatedMethodName={associatedAutomationMethodName || null}
           associatedClassName={parsedAutomationAssociation?.className ?? null}
           onWriteCode={(filePath) => { void handleWriteAutomationCode(filePath); }}
           onAddAssociation={(filePath, methodName) => { void handleAddAutomationAssociation(filePath, methodName); }}
-          onRemoveAssociation={(filePath, methodName) => { void handleRemoveAutomationAssociation(filePath, methodName); }}
+          onRemoveAssociation={requestRemoveAutomationAssociation}
           actionBusy={isAutomationActionBusy}
           refreshToken={automationRefreshToken}
           onClose={() => {
@@ -1462,6 +1778,146 @@ export function TestCaseDetail({
         </div>
       )}
 
+      {showRemoveAutomationConfirm && (
+        <div className="steps-editor__confirm-overlay" role="dialog" aria-modal="true" aria-label="Remove automation association">
+          <button
+            type="button"
+            className="steps-editor__confirm-backdrop"
+            onClick={cancelRemoveAutomationAssociation}
+            aria-label="Close remove automation association confirmation"
+          />
+          <div className="steps-editor__confirm-card steps-editor__confirm-card--warning" role="document">
+            <div className="steps-editor__confirm-head">
+              <div>
+                <p className="steps-editor__confirm-kicker steps-editor__confirm-kicker--warning">Remove association</p>
+                <h3 className="steps-editor__confirm-title steps-editor__confirm-title--warning">
+                  Remove automation association?
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="steps-editor__confirm-close"
+                onClick={cancelRemoveAutomationAssociation}
+                aria-label="Close remove automation association confirmation"
+                title="Close"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <p className="steps-editor__confirm-copy">
+              This will remove the Azure association and delete this test from the mapped local DB.
+            </p>
+
+            <div className="steps-editor__confirm-actions">
+              <button type="button" className="btn btn--secondary btn--sm" onClick={cancelRemoveAutomationAssociation}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger btn--sm"
+                onClick={() => { void handleRemoveAutomationAssociation(); }}
+                disabled={isAutomationActionBusy}
+                title={isAutomationActionBusy ? 'Removing association...' : 'Remove automation association'}
+              >
+                Remove association
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isRunModalOpen && (
+        <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Run test progress">
+          <button type="button" className="settings-overlay__backdrop" onClick={isRunBusy ? undefined : () => setIsRunModalOpen(false)} />
+          <div className="settings-dock settings-dock--no-aside">
+            <section className="settings-workbench">
+              <header className="settings-workbench__header">
+                <div>
+                  <p className="settings-workbench__crumb">Test Runner</p>
+                  <h1 className="settings-workbench__title">Run Progress</h1>
+                  <p className="settings-workbench__subtitle">{runMethodName} · {runStatus}</p>
+                </div>
+                <button
+                  type="button"
+                  className="settings-workbench__close"
+                  onClick={() => setIsRunModalOpen(false)}
+                  disabled={isRunBusy}
+                  title={isRunBusy ? 'Stop run before closing' : 'Close'}
+                >
+                  <IconX size={18} />
+                </button>
+              </header>
+              <div className="settings-workbench__body">
+                <div className="settings-content">
+                  <section className="settings-panel db-updater__log-panel">
+                    <div className="settings-panel__head db-updater__log-head test-run__log-head">
+                      <div>
+                        <div className="settings-panel__title">Console log</div>
+                        <div className="settings-panel__sub">Live output from dotnet test.</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setShowVerboseRunLogs((current) => !current)}
+                      >
+                        {showVerboseRunLogs ? 'Show key logs' : 'Show all logs'}
+                      </button>
+                      <div className={`db-updater__log-state db-updater__log-state--${runStatus === 'running' ? 'running' : runStatus === 'complete' ? 'complete' : 'error'}`}>
+                        <span />
+                        {runStatus}
+                      </div>
+                    </div>
+                    <div className="db-updater__log-shell">
+                      <div className="db-updater__log-toolbar">
+                        <span>
+                          {runStatus === 'complete'
+                            ? `Run passed${runWarningCount ? ` · ${runWarningCount} warning(s)` : ''}`
+                            : runStatus === 'failed'
+                              ? `Run failed${runWarningCount ? ` · ${runWarningCount} warning(s)` : ''}`
+                              : 'Activity timeline'}
+                        </span>
+                        <strong>{visibleRunLogEntries.length} / {runLogEntries.length}</strong>
+                      </div>
+                      {runErrorLine && !showVerboseRunLogs && (
+                        <div className="settings-actions" style={{ padding: '8px 14px 0' }}>
+                          <span className="text-sm text-secondary" title={runErrorLine}>
+                            {runErrorLine}
+                          </span>
+                        </div>
+                      )}
+                      <div className="db-updater__log" ref={runLogViewportRef}>
+                        {visibleRunLogEntries.length === 0 ? (
+                          <div className="db-updater__log-empty"><strong>Waiting for output</strong></div>
+                        ) : visibleRunLogEntries.map((entry) => (
+                          <div className={`db-updater__log-row db-updater__log-row--${entry.level}`} key={entry.id}>
+                            <span className="db-updater__log-marker" aria-hidden="true" />
+                            <div className="db-updater__log-main">
+                              <div className="db-updater__log-row-head">
+                                <strong>{entry.level === 'error' ? 'Error' : 'Info'}</strong>
+                                <span>{formatLogDateTime(entry.timestamp)}</span>
+                              </div>
+                              <p>{entry.message}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="settings-actions">
+                      {isRunBusy ? (
+                        <button type="button" className="btn btn--danger btn--sm" onClick={() => { void handleStopRun(); }}>
+                          Stop run
+                        </button>
+                      ) : null}
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
+
     </>
   );
 
@@ -1472,7 +1928,7 @@ export function TestCaseDetail({
       <PageDetailLayout
         breadcrumbs={detailBreadcrumbs}
         heading={{
-          title: testCase.name,
+          title: detailHeadingTitle,
           id: testCase.id,
           count: stepsForDisplay.length,
           countLabel: 'Steps',

@@ -376,7 +376,7 @@ async function fetchJsonWithAction<T>(
 async function patchJson<T>(
   url: string,
   patToken: string,
-  operations: Array<{ op: string; path: string; value: unknown }>,
+  operations: Array<{ op: string; path: string; value?: unknown }>,
   action = 'save your changes',
 ): Promise<T> {
   let response: Response;
@@ -1014,7 +1014,10 @@ export async function updateTestCase(
     stepsXml?: string;
     automatedTestName?: string | null;
     automatedTestStorage?: string | null;
+    automatedTestType?: string | null;
+    automatedTestId?: string | null;
     automationStatus?: string | null;
+    removeAutomationAssociation?: boolean;
   },
   preferredHref?: string,
 ): Promise<ADOTestCase> {
@@ -1040,7 +1043,7 @@ export async function updateTestCase(
   }
 
   // Build PATCH operations using "add" operation (more reliable than "replace")
-  const operations: Array<{ op: string; path: string; value: unknown }> = [];
+  const operations: Array<{ op: string; path: string; value?: unknown }> = [];
 
   // Only add operations for fields that have values
   if (updateData.title && updateData.title.trim()) {
@@ -1064,18 +1067,34 @@ export async function updateTestCase(
   if (updateData.initialSteps !== undefined && updateData.initialSteps.trim()) {
     operations.push({ op: 'add', path: '/fields/Custom.InitialStep', value: updateData.initialSteps });
   }
+  const removeAutomationAssociation = updateData.removeAutomationAssociation === true;
+
   if (Object.prototype.hasOwnProperty.call(updateData, 'automatedTestName')) {
     operations.push({
-      op: 'add',
+      op: removeAutomationAssociation ? 'remove' : 'add',
       path: '/fields/Microsoft.VSTS.TCM.AutomatedTestName',
-      value: typeof updateData.automatedTestName === 'string' ? updateData.automatedTestName : '',
+      ...(removeAutomationAssociation ? {} : { value: typeof updateData.automatedTestName === 'string' ? updateData.automatedTestName : '' }),
     });
   }
   if (Object.prototype.hasOwnProperty.call(updateData, 'automatedTestStorage')) {
     operations.push({
-      op: 'add',
+      op: removeAutomationAssociation ? 'remove' : 'add',
       path: '/fields/Microsoft.VSTS.TCM.AutomatedTestStorage',
-      value: typeof updateData.automatedTestStorage === 'string' ? updateData.automatedTestStorage : '',
+      ...(removeAutomationAssociation ? {} : { value: typeof updateData.automatedTestStorage === 'string' ? updateData.automatedTestStorage : '' }),
+    });
+  }
+  if (Object.prototype.hasOwnProperty.call(updateData, 'automatedTestType')) {
+    operations.push({
+      op: removeAutomationAssociation ? 'remove' : 'add',
+      path: '/fields/Microsoft.VSTS.TCM.AutomatedTestType',
+      ...(removeAutomationAssociation ? {} : { value: typeof updateData.automatedTestType === 'string' ? updateData.automatedTestType : '' }),
+    });
+  }
+  if (Object.prototype.hasOwnProperty.call(updateData, 'automatedTestId')) {
+    operations.push({
+      op: removeAutomationAssociation ? 'remove' : 'add',
+      path: '/fields/Microsoft.VSTS.TCM.AutomatedTestId',
+      ...(removeAutomationAssociation ? {} : { value: typeof updateData.automatedTestId === 'string' ? updateData.automatedTestId : '' }),
     });
   }
   if (Object.prototype.hasOwnProperty.call(updateData, 'automationStatus')) {

@@ -23,6 +23,11 @@ export interface WorkspaceSettingsValues {
   mainDbName: string;
   worldPayDbName: string;
   dbMappings: WorkspaceDbMapping[];
+  testRunWorkingDirectory: string;
+  testRunProjectPath: string;
+  testRunSettingsPath: string;
+  testRunLogger: string;
+  testRunUsePatAsEnv: boolean;
 }
 
 export interface WorkspaceDbMapping {
@@ -43,6 +48,12 @@ type SettingsSection = 'appearance' | 'workspace' | 'db-mappings' | 'about';
 type ValidationState = 'idle' | 'success' | 'error';
 
 const API_VERSION_OPTIONS = ['7.2', '7.1', '7.0', '6.0'];
+const TEST_LOGGER_OPTIONS = [
+  'console;verbosity=detailed',
+  'console;verbosity=normal',
+  'console;verbosity=minimal',
+];
+const AUTO_DETECT_MAX_DEPTH = 4;
 export const DEFAULT_DB_MAPPINGS: WorkspaceDbMapping[] = [
   {
     id: 'main',
@@ -111,6 +122,73 @@ function isAppFontMode(value: string): value is AppFontMode {
   return APP_FONT_OPTIONS.some((item) => item.value === value);
 }
 
+async function scanDirectoryFiles(
+  rootPath: string,
+  fileSuffixes: string[],
+  maxDepth = AUTO_DETECT_MAX_DEPTH,
+): Promise<{ files: string[]; folders: string[] }> {
+  if (!window.desktop?.listDirectory || !rootPath.trim()) {
+    return { files: [], folders: [] };
+  }
+
+  const normalizedSuffixes = fileSuffixes.map((suffix) => suffix.toLowerCase());
+  const ignoredFolderNames = new Set([
+    '.vs',
+    '.git',
+    '.idea',
+    '.vscode',
+    'node_modules',
+    'bin',
+    'obj',
+  ]);
+  const queue: Array<{ path: string; depth: number }> = [{ path: rootPath, depth: 0 }];
+  const files = new Set<string>();
+  const folders = new Set<string>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) break;
+    const entries = await window.desktop.listDirectory(current.path);
+    for (const entry of entries) {
+      if (entry.type === 'directory') {
+        const folderName = entry.name.trim().toLowerCase();
+        if (!folderName || folderName.startsWith('.') || ignoredFolderNames.has(folderName)) {
+          continue;
+        }
+        folders.add(entry.path);
+        if (current.depth < maxDepth) {
+          queue.push({ path: entry.path, depth: current.depth + 1 });
+        }
+      } else if (entry.type === 'file') {
+        const name = entry.name.toLowerCase();
+        if (normalizedSuffixes.some((suffix) => name.endsWith(suffix))) {
+          files.add(entry.path);
+        }
+      }
+    }
+  }
+
+  return {
+    files: Array.from(files).sort((a, b) => a.localeCompare(b)),
+    folders: Array.from(folders).sort((a, b) => a.localeCompare(b)),
+  };
+}
+
+function toRelativePath(rootPath: string, fullPath: string): string {
+  const root = rootPath.trim().replace(/[\\/]+$/, '').toLowerCase();
+  const full = fullPath.trim();
+  if (!root || !full.toLowerCase().startsWith(root)) {
+    return fullPath;
+  }
+  const relative = full.slice(root.length).replace(/^[\\/]+/, '');
+  return relative || '.';
+}
+
+function toPathTail(fullPath: string): string {
+  const parts = fullPath.split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] || fullPath;
+}
+
 export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsProps) {
   const [form, setForm] = useState<WorkspaceSettingsValues>({
     ...values,
@@ -125,6 +203,10 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
   const [dbFileOptions, setDbFileOptions] = useState<string[]>([]);
   const [dbFilesLoading, setDbFilesLoading] = useState(false);
   const [dbFilesMessage, setDbFilesMessage] = useState('DB files load from the selected local DB folder.');
+  const [runProjectOptions, setRunProjectOptions] = useState<string[]>([]);
+  const [runSettingsOptions, setRunSettingsOptions] = useState<string[]>([]);
+  const [seleniumFolderOptions, setSeleniumFolderOptions] = useState<string[]>([]);
+  const [runOptionsLoading, setRunOptionsLoading] = useState(false);
   const { mode, font, setTheme, setFont } = useThemeContext();
   const { addNotification } = useNotification();
 
@@ -232,6 +314,55 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
     };
   }, [form.dbDirectory]);
 
+  useEffect(() => {
+    let active = true;
+    const workingDirectory = form.testRunWorkingDirectory.trim();
+    if (!workingDirectory || !window.desktop?.listDirectory || section !== 'workspace') {
+      setRunProjectOptions([]);
+      setRunSettingsOptions([]);
+      setSeleniumFolderOptions([]);
+      setRunOptionsLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setRunOptionsLoading(true);
+    void scanDirectoryFiles(workingDirectory, ['.csproj', '.runsettings'])
+      .then(({ files, folders }) => {
+        if (!active) return;
+        const csproj = files.filter((filePath) => filePath.toLowerCase().endsWith('.csproj'));
+        const runSettings = files.filter((filePath) => filePath.toLowerCase().endsWith('.runsettings'));
+        setRunProjectOptions(csproj);
+        setRunSettingsOptions(runSettings);
+        const detectedFolders = [workingDirectory, ...folders];
+        setSeleniumFolderOptions(detectedFolders);
+
+        if (!form.testRunProjectPath.trim() && csproj.length > 0) {
+          updateField('testRunProjectPath', csproj[0]);
+        }
+        if (!form.testRunSettingsPath.trim() && runSettings.length > 0) {
+          updateField('testRunSettingsPath', runSettings[0]);
+        }
+        if (!form.seleniumRepoPath.trim() && detectedFolders.length > 0) {
+          updateField('seleniumRepoPath', detectedFolders[0]);
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        setRunProjectOptions([]);
+        setRunSettingsOptions([]);
+        setSeleniumFolderOptions([workingDirectory]);
+      })
+      .finally(() => {
+        if (active) setRunOptionsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [form.testRunProjectPath, form.testRunSettingsPath, form.testRunWorkingDirectory, section]);
+
   const selectedTheme = useMemo(
     () => THEME_MODE_OPTIONS.find((item) => item.value === mode) ?? THEME_MODE_OPTIONS[0],
     [mode],
@@ -257,6 +388,10 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
     : 'About Bromcom Test Builder and system information.';
 
   const updateField = (field: keyof WorkspaceSettingsValues, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateBooleanField = (field: keyof WorkspaceSettingsValues, value: boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -339,29 +474,6 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
     setFont(value);
   };
 
-  const handleBrowseSeleniumRepo = async () => {
-    try {
-      if (!window.desktop?.selectDirectory) {
-        throw new Error('Desktop folder picker is unavailable. Restart the app to load the latest Electron changes.');
-      }
-
-      const selectedPath = await window.desktop?.selectDirectory?.({
-        title: 'Select Selenium workspace or repo',
-        defaultPath: form.seleniumRepoPath,
-      });
-
-      if (!selectedPath) {
-        return;
-      }
-
-      updateField('seleniumRepoPath', selectedPath);
-      addNotification('success', 'Selenium repo path selected.');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to select Selenium repo path.';
-      addNotification('error', message);
-    }
-  };
-
   const handleBrowseDbDirectory = async () => {
     try {
       if (!window.desktop?.selectDirectory) {
@@ -381,6 +493,29 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
       addNotification('success', 'Local DB storage folder selected.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to select Local DB storage folder.';
+      addNotification('error', message);
+    }
+  };
+
+  const handleBrowseWorkingDirectory = async () => {
+    try {
+      if (!window.desktop?.selectDirectory) {
+        throw new Error('Desktop folder picker is unavailable. Restart the app to load the latest Electron changes.');
+      }
+
+      const selectedPath = await window.desktop.selectDirectory({
+        title: 'Select test runner working directory',
+        defaultPath: form.testRunWorkingDirectory || form.seleniumRepoPath || undefined,
+      });
+
+      if (!selectedPath) {
+        return;
+      }
+
+      updateField('testRunWorkingDirectory', selectedPath);
+      addNotification('success', 'Working directory selected.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to select working directory.';
       addNotification('error', message);
     }
   };
@@ -619,11 +754,21 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
                     </div>
                     <div className="settings-summary-chip">
                       <span>Selenium Repo</span>
-                      <strong>{form.seleniumRepoPath.trim() || 'Not set'}</strong>
+                      <strong className="settings-summary-chip__value" title={form.seleniumRepoPath.trim() || 'Not set'}>
+                        {form.seleniumRepoPath.trim() || 'Not set'}
+                      </strong>
                     </div>
                     <div className="settings-summary-chip">
                       <span>DB Folder</span>
-                      <strong>{form.dbDirectory.trim() || 'Not set'}</strong>
+                      <strong className="settings-summary-chip__value" title={form.dbDirectory.trim() || 'Not set'}>
+                        {form.dbDirectory.trim() || 'Not set'}
+                      </strong>
+                    </div>
+                    <div className="settings-summary-chip">
+                      <span>Test Run Workspace</span>
+                      <strong className="settings-summary-chip__value" title={form.testRunWorkingDirectory.trim() || 'Not set'}>
+                        {form.testRunWorkingDirectory.trim() ? toPathTail(form.testRunWorkingDirectory.trim()) : 'Not set'}
+                      </strong>
                     </div>
                   </div>
 
@@ -708,30 +853,128 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
 
                     <div className="settings-panel">
                       <div className="settings-panel__head">
-                        <h3 className="settings-panel__title">Selenium Repo Settings</h3>
+                        <h3 className="settings-panel__title">Automation Workspace Settings</h3>
                         <p className="settings-panel__sub">
-                          Set the local Selenium workspace or repository path used by the in-app script browser.
+                          Configure Selenium repo and dotnet test execution from the Test Detail page.
                         </p>
                       </div>
 
                       <div className="settings-field-grid">
-                        <label className="settings-field settings-field--full" htmlFor="seleniumRepoPath">
-                          <span className="settings-field__label">Selenium workspace or repo path</span>
+                        <label className="settings-field settings-field--full" htmlFor="testRunWorkingDirectory">
+                          <span className="settings-field__label">Working directory</span>
                           <div className="settings-inline-row">
                             <input
-                              id="seleniumRepoPath"
+                              id="testRunWorkingDirectory"
                               className="settings-input"
-                              value={form.seleniumRepoPath}
-                              onChange={(event) => updateField('seleniumRepoPath', event.target.value)}
-                              placeholder="C:\\Repos\\selenium-tests"
+                              value={form.testRunWorkingDirectory}
+                              onChange={(event) => updateField('testRunWorkingDirectory', event.target.value)}
+                              placeholder="C:\\Users\\snkjh\\source\\repos\\Automated Testing Framework"
                             />
                             <button
                               type="button"
                               className="btn btn--secondary btn--sm"
-                              onClick={() => { void handleBrowseSeleniumRepo(); }}
+                              onClick={() => { void handleBrowseWorkingDirectory(); }}
                             >
                               Browse
                             </button>
+                          </div>
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="seleniumRepoPath">
+                          <span className="settings-field__label">Selenium repo folder</span>
+                          <select
+                            id="seleniumRepoPath"
+                            className="settings-input"
+                            value={form.seleniumRepoPath}
+                            onChange={(event) => updateField('seleniumRepoPath', event.target.value)}
+                          >
+                            {!form.seleniumRepoPath && (
+                              <option value="">{runOptionsLoading ? 'Detecting folders...' : NOT_SELECTED_LABEL}</option>
+                            )}
+                            {form.seleniumRepoPath && !seleniumFolderOptions.includes(form.seleniumRepoPath) && (
+                              <option value={form.seleniumRepoPath}>
+                                {toRelativePath(form.testRunWorkingDirectory, form.seleniumRepoPath)}
+                              </option>
+                            )}
+                            {seleniumFolderOptions.map((folderPath) => (
+                              <option key={folderPath} value={folderPath}>
+                                {toRelativePath(form.testRunWorkingDirectory, folderPath) === '.'
+                                  ? '(Working directory)'
+                                  : toRelativePath(form.testRunWorkingDirectory, folderPath)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="testRunProjectPath">
+                          <span className="settings-field__label">Project path (.csproj)</span>
+                          <select
+                            id="testRunProjectPath"
+                            className="settings-input"
+                            value={form.testRunProjectPath}
+                            onChange={(event) => updateField('testRunProjectPath', event.target.value)}
+                          >
+                            {!form.testRunProjectPath && (
+                              <option value="">{runOptionsLoading ? 'Detecting .csproj files...' : NOT_SELECTED_LABEL}</option>
+                            )}
+                            {form.testRunProjectPath && !runProjectOptions.includes(form.testRunProjectPath) && (
+                              <option value={form.testRunProjectPath}>
+                                {toRelativePath(form.testRunWorkingDirectory, form.testRunProjectPath)}
+                              </option>
+                            )}
+                            {runProjectOptions.map((projectPath) => (
+                              <option key={projectPath} value={projectPath}>
+                                {toRelativePath(form.testRunWorkingDirectory, projectPath)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="testRunSettingsPath">
+                          <span className="settings-field__label">Run settings path (optional)</span>
+                          <select
+                            id="testRunSettingsPath"
+                            className="settings-input"
+                            value={form.testRunSettingsPath}
+                            onChange={(event) => updateField('testRunSettingsPath', event.target.value)}
+                          >
+                            <option value="">None</option>
+                            {form.testRunSettingsPath && !runSettingsOptions.includes(form.testRunSettingsPath) && (
+                              <option value={form.testRunSettingsPath}>
+                                {toRelativePath(form.testRunWorkingDirectory, form.testRunSettingsPath)}
+                              </option>
+                            )}
+                            {runSettingsOptions.map((runSettingsPath) => (
+                              <option key={runSettingsPath} value={runSettingsPath}>
+                                {toRelativePath(form.testRunWorkingDirectory, runSettingsPath)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="testRunLogger">
+                          <span className="settings-field__label">Logger</span>
+                          <select
+                            id="testRunLogger"
+                            className="settings-input"
+                            value={form.testRunLogger}
+                            onChange={(event) => updateField('testRunLogger', event.target.value)}
+                          >
+                            {TEST_LOGGER_OPTIONS.map((loggerValue) => (
+                              <option key={loggerValue} value={loggerValue}>{loggerValue}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="testRunUsePatAsEnv">
+                          <span className="settings-field__label">Pass PAT as ADO_PAT env var</span>
+                          <div className="settings-toggle-row">
+                            <button
+                              id="testRunUsePatAsEnv"
+                              type="button"
+                              className={`settings-toggle${form.testRunUsePatAsEnv ? ' is-active' : ''}`}
+                              role="switch"
+                              aria-checked={form.testRunUsePatAsEnv}
+                              onClick={() => updateBooleanField('testRunUsePatAsEnv', !form.testRunUsePatAsEnv)}
+                            >
+                              <span className="settings-toggle__thumb" />
+                            </button>
+                            <span className="settings-field__hint">Uses saved PAT token from workspace settings.</span>
                           </div>
                         </label>
                       </div>
