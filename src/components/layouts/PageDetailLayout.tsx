@@ -21,6 +21,8 @@ interface PageDetailLayoutProps {
   children: React.ReactNode;
   className?: string;
   headingActions?: React.ReactNode;
+  beforeBreadcrumbs?: React.ReactNode;
+  showBreadcrumbs?: boolean;
 }
 
 /**
@@ -38,37 +40,52 @@ export function PageDetailLayout({
   children,
   className = '',
   headingActions,
+  beforeBreadcrumbs,
+  showBreadcrumbs = true,
 }: PageDetailLayoutProps) {
   return (
     <div className={`page-detail-layout ${className}`}>
-      {/* Section 1: Breadcrumbs */}
-      <nav className="page-detail-layout__breadcrumbs breadcrumbs">
-        {breadcrumbs.map((item, idx) => (
-          <React.Fragment key={idx}>
-            {item.isLink && item.onClick ? (
-              <button
-                type="button"
-                className="breadcrumbs__link"
-                onClick={item.onClick}
-                title={item.title ?? item.label}
-              >
-                {item.label}
-              </button>
-            ) : (
-              <span
-                className={item.isActive ? 'breadcrumbs__current' : 'breadcrumbs__item'}
-                title={item.title ?? item.label}
-                aria-current={item.isActive ? 'page' : undefined}
-              >
-                {item.label}
-              </span>
-            )}
-            {idx < breadcrumbs.length - 1 && (
-              <span className="breadcrumbs__separator">/</span>
-            )}
-          </React.Fragment>
-        ))}
-      </nav>
+      {!showBreadcrumbs && beforeBreadcrumbs ? (
+        <div className="page-detail-layout__before-breadcrumbs">
+          {beforeBreadcrumbs}
+        </div>
+      ) : null}
+
+      {showBreadcrumbs && (
+        <nav className="page-detail-layout__breadcrumbs breadcrumbs">
+          {beforeBreadcrumbs ? (
+            <span className="breadcrumbs__lead-action">
+              {beforeBreadcrumbs}
+            </span>
+          ) : null}
+
+          {breadcrumbs.map((item, idx) => (
+            <React.Fragment key={idx}>
+              {item.isLink && item.onClick ? (
+                <button
+                  type="button"
+                  className="breadcrumbs__link"
+                  onClick={item.onClick}
+                  title={item.title ?? item.label}
+                >
+                  {item.label}
+                </button>
+              ) : (
+                <span
+                  className={item.isActive ? 'breadcrumbs__current' : 'breadcrumbs__item'}
+                  title={item.title ?? item.label}
+                  aria-current={item.isActive ? 'page' : undefined}
+                >
+                  {item.label}
+                </span>
+              )}
+              {idx < breadcrumbs.length - 1 && (
+                <span className="breadcrumbs__separator">/</span>
+              )}
+            </React.Fragment>
+          ))}
+        </nav>
+      )}
 
       {/* Section 2: Main Heading */}
       <div className="page-detail-layout__heading-wrapper mb-lg">

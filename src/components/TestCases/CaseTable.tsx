@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { IconArrowDownward, IconArrowUpward, IconDelete, IconDescription, IconRefresh, IconSearch, IconSort, IconX } from '../Common/Icons';
+import { IconArrowDownward, IconArrowUpward, IconCopy, IconDelete, IconDescription, IconMoreHoriz, IconRefresh, IconSearch, IconSort, IconX } from '../Common/Icons';
 import type { ADOTestCase } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { EmptyTestCases } from './EmptyTestCases';
@@ -8,7 +8,7 @@ import { buildWorkItemAdoUrl, deleteTestCase, fetchTestCasesForSuite, getCachedT
 import { buildTestCaseData } from '../../utils/testCaseBuilder';
 import { useNotification } from '../../context/useNotification';
 import azureLogo from '../../assets/azure.png';
-import type { CloneSourceMeta, CreateTestCaseDraft } from '../../utils/testCaseClone';
+import { buildCloneDraftFromTestCase, type CloneSourceMeta, type CreateTestCaseDraft } from '../../utils/testCaseClone';
 
 function getInitials(name: string): string {
   const parts = name.split(/\s+/).filter(Boolean);
@@ -106,6 +106,11 @@ export function CaseTable({
   const [deleteTargetCase, setDeleteTargetCase] = useState<ADOTestCase | null>(null);
   const [blockedRemovalCase, setBlockedRemovalCase] = useState<ADOTestCase | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [openRowActionCaseId, setOpenRowActionCaseId] = useState<number | null>(null);
+  const [rowActionMenuPlacement, setRowActionMenuPlacement] = useState<'down' | 'up'>('down');
+  const [rowCloneDraft, setRowCloneDraft] = useState<CreateTestCaseDraft | null>(null);
+  const [rowCloneSourceCase, setRowCloneSourceCase] = useState<CloneSourceMeta | null>(null);
+  const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const { addNotification } = useNotification();
 
   // Use prop if provided, otherwise use local state
@@ -115,8 +120,24 @@ export function CaseTable({
     setLocalIsCreateMode(value);
   };
   const handleStartCreate = () => {
+    setRowCloneDraft(null);
+    setRowCloneSourceCase(null);
     onRequestCreate?.();
     setIsCreateMode(true);
+  };
+
+  const handleCloneFromRow = (testCase: ADOTestCase) => {
+    try {
+      const draft = buildCloneDraftFromTestCase(testCase);
+      setRowCloneDraft(draft);
+      setRowCloneSourceCase({ id: testCase.id, title: testCase.name });
+      setOpenRowActionCaseId(null);
+      setIsCreateMode(true);
+      onCreateTitleChange?.(draft.formData.title ?? '');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to prepare clone draft.';
+      addNotification('error', message);
+    }
   };
 
 
@@ -232,6 +253,29 @@ export function CaseTable({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [blockedRemovalCase, deleteTargetCase, isDeleting]);
+
+  useEffect(() => {
+    if (openRowActionCaseId === null) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (rowActionMenuRef.current && !rowActionMenuRef.current.contains(event.target as Node)) {
+        setOpenRowActionCaseId(null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenRowActionCaseId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openRowActionCaseId]);
 
   const filteredCases = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -359,6 +403,33 @@ export function CaseTable({
     setSortOrder(field === 'order' ? 'asc' : 'desc');
   };
 
+  const getRowActionMenuPlacement = (triggerButton: HTMLElement): 'down' | 'up' => {
+    const fallbackBoundary = {
+      top: 0,
+      bottom: window.innerHeight,
+    };
+    const boundary = triggerButton.closest('.data-table-wrapper')?.getBoundingClientRect() ?? fallbackBoundary;
+    const triggerRect = triggerButton.getBoundingClientRect();
+    const estimatedMenuHeight = 170;
+    const spaceBelow = boundary.bottom - triggerRect.bottom;
+    const spaceAbove = triggerRect.top - boundary.top;
+    return spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow ? 'up' : 'down';
+  };
+
+  const toggleRowActionMenu = (testCaseId: number, triggerButton: HTMLButtonElement) => {
+    setOpenRowActionCaseId((current) => {
+      if (current === testCaseId) {
+        setRowActionMenuPlacement('down');
+        return null;
+      }
+      setRowActionMenuPlacement(getRowActionMenuPlacement(triggerButton));
+      return testCaseId;
+    });
+  };
+
+  const effectiveCreateDraft = rowCloneDraft ?? initialCreateDraft;
+  const effectiveCreateSourceCase = rowCloneSourceCase ?? createSourceCase;
+
   const renderSortableHeader = (option: SortOption, width?: number) => {
     const isActive = sortField === option.field;
 
@@ -414,15 +485,17 @@ export function CaseTable({
     return (
       <div>
         <CreateTestCaseForm
-          key={createSourceCase ? `clone-${createSourceCase.id}` : `blank-${suiteId}`}
+          key={effectiveCreateSourceCase ? `clone-${effectiveCreateSourceCase.id}` : `blank-${suiteId}`}
           suiteName={suiteName}
           isLoading={false}
           apiError={error}
           workspaceSettings={workspaceSettings}
-          initialDraft={initialCreateDraft}
-          sourceCaseMeta={createSourceCase}
+          initialDraft={effectiveCreateDraft}
+          sourceCaseMeta={effectiveCreateSourceCase}
           onCancel={() => {
             setIsCreateMode(false);
+            setRowCloneDraft(null);
+            setRowCloneSourceCase(null);
             setError(null);
             onCreateTitleChange?.('');
           }}
@@ -652,14 +725,6 @@ export function CaseTable({
                       <button
                         type="button"
                         className="cases-table__action-btn"
-                        onClick={() => onSelectCase(testCase)}
-                        title="Open details"
-                      >
-                        <IconDescription size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        className="cases-table__action-btn"
                         onClick={() => window.open(buildWorkItemAdoUrl(workspaceSettings, testCase.id), '_blank', 'noopener,noreferrer')}
                         title="Open in Azure DevOps"
                         aria-label={`Open test case ${testCase.id} in Azure DevOps`}
@@ -667,14 +732,63 @@ export function CaseTable({
                       >
                         <img src={azureLogo} alt="" width={16} height={16} aria-hidden="true" />
                       </button>
-                      <button
-                        type="button"
-                        className="cases-table__action-btn cases-table__action-btn--danger"
-                        onClick={() => requestRemoveFromSuite(testCase)}
-                        title="Remove from suite"
+
+                      <div
+                        className={`cases-table__row-menu${openRowActionCaseId === testCase.id ? ' is-open' : ''}${openRowActionCaseId === testCase.id && rowActionMenuPlacement === 'up' ? ' cases-table__row-menu--up' : ''}`}
+                        ref={openRowActionCaseId === testCase.id ? rowActionMenuRef : undefined}
                       >
-                        <IconDelete size={16} />
-                      </button>
+                        <button
+                          type="button"
+                          className="cases-table__action-btn"
+                          aria-label={`Actions for test case ${testCase.id}`}
+                          aria-haspopup="menu"
+                          aria-expanded={openRowActionCaseId === testCase.id}
+                          onClick={(event) => {
+                            toggleRowActionMenu(testCase.id, event.currentTarget);
+                          }}
+                        >
+                          <IconMoreHoriz size={16} />
+                        </button>
+                        {openRowActionCaseId === testCase.id && (
+                          <div className="action-menu cases-table__action-menu" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="action-menu__item"
+                              onClick={() => {
+                                setOpenRowActionCaseId(null);
+                                onSelectCase(testCase);
+                              }}
+                            >
+                              <IconDescription size={16} />
+                              <span>Step view</span>
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="action-menu__item"
+                              onClick={() => {
+                                handleCloneFromRow(testCase);
+                              }}
+                            >
+                              <IconCopy size={16} />
+                              <span>Clone / Copy</span>
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="action-menu__item action-menu__item--danger"
+                              onClick={() => {
+                                setOpenRowActionCaseId(null);
+                                requestRemoveFromSuite(testCase);
+                              }}
+                            >
+                              <IconDelete size={16} />
+                              <span>Remove from suite</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>

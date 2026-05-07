@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SuiteTreeNode } from './SuiteTreeNode';
 import {
-  IconArrowRight,
   IconSearch,
   IconUnfoldLess,
   IconUnfoldMore,
@@ -22,7 +21,6 @@ interface SuiteTreePanelProps {
   selectedSuiteId: number | null;
   onSelectSuite: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
   onAddTestCase: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
-  onBackToPlan: () => void;
   workspaceSettings: WorkspaceSettingsValues;
   createPlanSuiteRequest?: number;
 }
@@ -149,7 +147,6 @@ export function SuiteTreePanel({
   selectedSuiteId,
   onSelectSuite,
   onAddTestCase,
-  onBackToPlan,
   workspaceSettings,
   createPlanSuiteRequest = 0,
 }: SuiteTreePanelProps) {
@@ -352,14 +349,6 @@ export function SuiteTreePanel({
               <h3 className="suite-panel__title">Test Suites</h3>
               <span className="suite-panel__root-name" title={createSuitePlanLabel}>{createSuitePlanLabel}</span>
             </div>
-            <button
-              type="button"
-              className="suite-panel__back-btn"
-              onClick={onBackToPlan}
-              title="Back to plans"
-            >
-              <IconArrowRight size={14} className="suite-panel__back-icon" />
-            </button>
           </div>
         </div>
 

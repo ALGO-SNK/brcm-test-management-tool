@@ -61,6 +61,47 @@ interface TestRunLogEntry {
 }
 
 type TestExecutionMode = 'run' | 'debug';
+type DetailMenuType = 'more-details' | 'action' | 'local-execution' | null;
+const DEBUGGER_UI_ENABLED = false;
+const LOCAL_EXECUTION_LOG_CACHE_PREFIX = 'bcm-testbuilder:last-local-execution-log:v1';
+
+interface CachedLocalExecutionLog {
+  runMode: TestExecutionMode;
+  runStatus: 'idle' | 'running' | 'complete' | 'failed' | 'cancelled';
+  logEntries: Array<{
+    level: 'info' | 'error';
+    message: string;
+    timestamp: string;
+  }>;
+  attachments: string[];
+  savedAt: string;
+}
+
+function buildLocalExecutionLogCacheKey(caseId: number): string {
+  return `${LOCAL_EXECUTION_LOG_CACHE_PREFIX}:${caseId}`;
+}
+
+function readCachedLocalExecutionLog(caseId: number): CachedLocalExecutionLog | null {
+  try {
+    const raw = window.localStorage.getItem(buildLocalExecutionLogCacheKey(caseId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedLocalExecutionLog;
+    if (!parsed || !Array.isArray(parsed.logEntries) || !Array.isArray(parsed.attachments)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedLocalExecutionLog(caseId: number, payload: CachedLocalExecutionLog): void {
+  try {
+    window.localStorage.setItem(buildLocalExecutionLogCacheKey(caseId), JSON.stringify(payload));
+  } catch {
+    // Ignore cache write failures (quota/private mode).
+  }
+}
 
 
 function mergeTestCaseData(primary: ADOTestCase, fallback?: ADOTestCase | null): ADOTestCase {
@@ -422,6 +463,7 @@ export function TestCaseDetail({
   const [isDebuggerPaused, setIsDebuggerPaused] = useState(false);
   const [debuggerThreadId, setDebuggerThreadId] = useState<number | null>(null);
   const [debuggerStopDetails, setDebuggerStopDetails] = useState<DesktopDebuggerStopDetails | null>(null);
+  const [openDetailMenu, setOpenDetailMenu] = useState<DetailMenuType>(null);
   const [runLogEntries, setRunLogEntries] = useState<TestRunLogEntry[]>([]);
   const [runAttachments, setRunAttachments] = useState<string[]>([]);
   const reloadCaseControllerRef = useRef<AbortController | null>(null);
@@ -431,6 +473,7 @@ export function TestCaseDetail({
     formData: typeof editFormData;
     steps: ParsedStep[];
   } | null>(null);
+  const actionMenusRef = useRef<HTMLDivElement | null>(null);
   const allowWindowCloseRef = useRef(false);
   const viewStepRefs = useRef<Record<string, HTMLElement | null>>({});
   const { addNotification } = useNotification();
@@ -928,13 +971,15 @@ export function TestCaseDetail({
       && workspaceSettings.testRunProjectPath?.trim()
       && runMethodName.trim(),
   );
-  const isDebugRunnerAvailable = Boolean(window.desktop?.debugDotnetTest);
-  const canDebugTest = canRunTest && isDebugRunnerAvailable;
+  const isDebugRunnerAvailable = DEBUGGER_UI_ENABLED && Boolean(window.desktop?.debugDotnetTest);
+  const canDebugTest = DEBUGGER_UI_ENABLED && canRunTest && isDebugRunnerAvailable;
   const debugDisabledReason = !isDebugRunnerAvailable
     ? 'Debug runner is unavailable. Restart the app to load the latest desktop bridge.'
     : runDisabledReason;
   const canReopenRunModal = runLogEntries.length > 0 || isRunBusy;
-  const hasActiveDebugSession = runMode === 'debug' && isRunBusy && Boolean(activeRunId);
+  const isDebugModeActive = DEBUGGER_UI_ENABLED && runMode === 'debug';
+  const displayRunModeLabel: TestExecutionMode = isDebugModeActive ? 'debug' : 'run';
+  const hasActiveDebugSession = isDebugModeActive && isRunBusy && Boolean(activeRunId);
   const debuggerScopes = Array.isArray(debuggerStopDetails?.scopes) ? debuggerStopDetails.scopes : [];
   const debuggerCallStack = Array.isArray(debuggerStopDetails?.callStack) ? debuggerStopDetails.callStack : [];
   const debuggerCurrentFrame = debuggerCallStack[0] ?? null;
@@ -1011,6 +1056,66 @@ export function TestCaseDetail({
     if (!runLogViewportRef.current) return;
     runLogViewportRef.current.scrollTop = runLogViewportRef.current.scrollHeight;
   }, [runLogEntries]);
+
+  useEffect(() => {
+    if (!testCase?.id) return;
+    if (isRunBusy) return;
+    const cached = readCachedLocalExecutionLog(testCase.id);
+    if (!cached) return;
+
+    setRunMode(cached.runMode);
+    setRunStatus(cached.runStatus);
+    setRunLogEntries(
+      cached.logEntries.map((entry, index) => ({
+        id: `cached-${testCase.id}-${entry.timestamp}-${index}`,
+        level: entry.level,
+        message: entry.message,
+        timestamp: entry.timestamp,
+      })),
+    );
+    setRunAttachments(cached.attachments);
+  }, [isRunBusy, testCase?.id]);
+
+  useEffect(() => {
+    if (!testCase?.id) return;
+    if (runLogEntries.length === 0 && runAttachments.length === 0) return;
+
+    const payload: CachedLocalExecutionLog = {
+      runMode,
+      runStatus,
+      logEntries: runLogEntries.map((entry) => ({
+        level: entry.level,
+        message: entry.message,
+        timestamp: entry.timestamp,
+      })),
+      attachments: runAttachments,
+      savedAt: new Date().toISOString(),
+    };
+    writeCachedLocalExecutionLog(testCase.id, payload);
+  }, [runAttachments, runLogEntries, runMode, runStatus, testCase?.id]);
+
+  useEffect(() => {
+    if (!openDetailMenu) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (actionMenusRef.current && !actionMenusRef.current.contains(event.target as Node)) {
+        setOpenDetailMenu(null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenDetailMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openDetailMenu]);
 
   const handleRunCurrentTest = useCallback(async () => {
     if (!window.desktop?.runDotnetTest) {
@@ -1176,6 +1281,10 @@ export function TestCaseDetail({
       addNotification('error', result?.error || 'Unable to open selected file.');
     }
   }, [addNotification]);
+
+  const toggleDetailMenu = useCallback((menu: Exclude<DetailMenuType, null>) => {
+    setOpenDetailMenu((current) => (current === menu ? null : menu));
+  }, []);
 
 
   const handleWriteAutomationCode = useCallback(async (filePath: string) => {
@@ -1571,12 +1680,12 @@ export function TestCaseDetail({
                     />
                   )}
                 </div>
-                <div className="case-detail-section__actions">
+                <div className="case-detail-section__actions" ref={actionMenusRef}>
                   {!isEditMode && (
-                    <>
+                    <div className="case-detail-toolbar-menus">
                       <button
                         type="button"
-                        className="btn btn--secondary btn--sm"
+                        className="btn btn--secondary btn--sm case-detail-action-btn"
                         onClick={() => { void handleRefresh(); }}
                         aria-label="Refresh"
                         title={!workspaceReady ? 'Configure Organization, Project, and PAT in Settings first' : isRefreshing ? 'Refreshing...' : 'Refresh from Azure DevOps'}
@@ -1589,92 +1698,168 @@ export function TestCaseDetail({
                         >
                           refresh
                         </span>
+                        <span>Refresh</span>
                       </button>
+
+                      <div className={`case-detail-toolbar-menu${openDetailMenu === 'more-details' ? ' is-open' : ''}`}>
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm case-detail-action-btn"
+                          aria-haspopup="menu"
+                          aria-expanded={openDetailMenu === 'more-details'}
+                          onClick={() => toggleDetailMenu('more-details')}
+                        >
+                          <span className="material-symbols" aria-hidden="true">info</span>
+                          <span>More info</span>
+                          <span className="material-symbols" aria-hidden="true">expand_more</span>
+                        </button>
+                        {openDetailMenu === 'more-details' && (
+                          <div className="action-menu" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="action-menu__item"
+                              onClick={() => {
+                                setOpenDetailMenu(null);
+                                window.open(buildWorkItemAdoUrl(workspaceSettings, testCase.id), '_blank', 'noopener,noreferrer');
+                              }}
+                              disabled={!canOpenInAdo}
+                            >
+                              <img className="case-detail__azure-icon" src={azureLogo} alt="" width={16} height={16} aria-hidden="true" />
+                              <span>Open in Azure DevOps</span>
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="action-menu__item"
+                              onClick={() => {
+                                setOpenDetailMenu(null);
+                                setIsAdditionalModalOpen(true);
+                              }}
+                              disabled={additionalRows.length === 0}
+                            >
+                              <span className="material-symbols" aria-hidden="true">info</span>
+                              <span>Additional details</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className={`case-detail-toolbar-menu${openDetailMenu === 'action' ? ' is-open' : ''}`}>
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm case-detail-action-btn"
+                          aria-haspopup="menu"
+                          aria-expanded={openDetailMenu === 'action'}
+                          onClick={() => toggleDetailMenu('action')}
+                        >
+                          <span className="material-symbols" aria-hidden="true">edit</span>
+                          <span>Modify</span>
+                          <span className="material-symbols" aria-hidden="true">expand_more</span>
+                        </button>
+                        {openDetailMenu === 'action' && (
+                          <div className="action-menu" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="action-menu__item"
+                              onClick={() => {
+                                setOpenDetailMenu(null);
+                                setIsEditMode((prev) => !prev);
+                              }}
+                            >
+                              <span className="material-symbols" aria-hidden="true">edit</span>
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="action-menu__item"
+                              onClick={() => {
+                                setOpenDetailMenu(null);
+                                handleClone();
+                              }}
+                              disabled={!canClone}
+                            >
+                              <IconCopy size={16} />
+                              <span>Clone / Copy</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
                       <button
                         type="button"
-                        className="btn btn--secondary btn--sm case-detail__azure-action"
-                        onClick={() => window.open(buildWorkItemAdoUrl(workspaceSettings, testCase.id), '_blank', 'noopener,noreferrer')}
-                        aria-label="Open in Azure DevOps"
-                        title={canOpenInAdo ? 'Open in Azure DevOps' : 'Configure Organization and Project in Settings first'}
-                        disabled={!canOpenInAdo}
-                      >
-                        <img className="case-detail__azure-icon" src={azureLogo} alt="" width={16} height={16} aria-hidden="true" />
-                        {/*<span className="case-detail__azure-action-label">Azure</span>*/}
-                      </button>
-                      <button
-                        type="button"
-                        className={`btn btn--secondary btn--sm case-detail-pane__edit-btn${isEditMode ? ' is-active' : ''}`}
-                        onClick={() => setIsEditMode((prev) => !prev)}
-                        aria-pressed={isEditMode}
-                        aria-label="Edit"
-                        title="Edit"
-                      >
-                        <span className="material-symbols" aria-hidden="true">edit</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
-                        onClick={handleClone}
-                        aria-label="Clone test case"
-                        title={canClone ? 'Create a new test case from this one' : 'Clone is unavailable while loading, saving, refreshing, or editing'}
-                        disabled={!canClone}
-                      >
-                        <IconCopy size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
-                        onClick={() => { void handleRunCurrentTest(); }}
-                        aria-label="Run automated test"
-                        title={canRunTest ? `Run ${runMethodName}` : runDisabledReason}
-                        disabled={!canRunTest || isRunBusy}
-                      >
-                        <span className="material-symbols" aria-hidden="true">play_arrow</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
-                        onClick={() => { void handleDebugCurrentTest(); }}
-                        aria-label="Debug automated test"
-                        title={canDebugTest ? `Debug ${runMethodName}` : debugDisabledReason}
-                        disabled={!canDebugTest || isRunBusy}
-                      >
-                        <span className="material-symbols" aria-hidden="true">bug_report</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
-                        onClick={() => setIsRunModalOpen(true)}
-                        aria-label="View last run log"
-                        title={canReopenRunModal ? 'View last run log' : 'No run log available yet'}
-                        disabled={!canReopenRunModal}
-                      >
-                        <span className="material-symbols" aria-hidden="true">receipt_long</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
+                        className="btn btn--secondary btn--sm case-detail-action-btn"
                         onClick={() => { void handleOpenAutomationManager(); }}
                         aria-label="Open automation manager"
                         title={canOpenAutomationManager ? automationManagerDisabledReason : 'Automation manager is unavailable while loading, saving, refreshing, or editing'}
                         disabled={!canOpenAutomationManager}
                       >
                         <IconFolderCode size={16} />
+                        <span>Automation Manager</span>
                       </button>
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
-                        onClick={() => setIsAdditionalModalOpen(true)}
-                        aria-label="More details"
-                        title={additionalRows.length === 0 ? 'No additional details available' : 'More details'}
-                        disabled={additionalRows.length === 0}
-                      >
-                        <span className="material-symbols" aria-hidden="true">info</span>
-                      </button>
-                      <button type="button" className="btn btn--secondary btn--sm" onClick={onBackToCases}>
-                        Back
-                      </button>
-                    </>
+
+                      <div className={`case-detail-toolbar-menu${openDetailMenu === 'local-execution' ? ' is-open' : ''}`}>
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm case-detail-action-btn"
+                          aria-haspopup="menu"
+                          aria-expanded={openDetailMenu === 'local-execution'}
+                          onClick={() => toggleDetailMenu('local-execution')}
+                        >
+                          <span className="material-symbols" aria-hidden="true">terminal</span>
+                          <span>Local Execution</span>
+                          <span className="material-symbols" aria-hidden="true">expand_more</span>
+                        </button>
+                        {openDetailMenu === 'local-execution' && (
+                          <div className="action-menu" role="menu">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="action-menu__item"
+                              onClick={() => {
+                                setOpenDetailMenu(null);
+                                void handleRunCurrentTest();
+                              }}
+                              disabled={!canRunTest || isRunBusy}
+                            >
+                              <span className="material-symbols" aria-hidden="true">play_arrow</span>
+                              <span>Run Locally</span>
+                            </button>
+                            {DEBUGGER_UI_ENABLED && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="action-menu__item"
+                                onClick={() => {
+                                  setOpenDetailMenu(null);
+                                  void handleDebugCurrentTest();
+                                }}
+                                title={canDebugTest ? `Debug ${runMethodName}` : debugDisabledReason}
+                                disabled={!canDebugTest || isRunBusy}
+                              >
+                                <span className="material-symbols" aria-hidden="true">bug_report</span>
+                                <span>Debug Locally</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="action-menu__item"
+                              onClick={() => {
+                                setOpenDetailMenu(null);
+                                setIsRunModalOpen(true);
+                              }}
+                              disabled={!canReopenRunModal}
+                            >
+                              <span className="material-symbols" aria-hidden="true">receipt_long</span>
+                              <span>Local Execution Log</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
               {isEditMode && (
                 <>
@@ -1965,10 +2150,10 @@ export function TestCaseDetail({
               <header className="settings-workbench__header">
                 <div>
                   <p className="settings-workbench__crumb">Test Runner</p>
-                  <h1 className="settings-workbench__title">{runMode === 'debug' ? 'Debug Progress' : 'Run Progress'}</h1>
+                  <h1 className="settings-workbench__title">{isDebugModeActive ? 'Debug Progress' : 'Run Progress'}</h1>
                   <p className="settings-workbench__subtitle">
-                    {runMethodName} · {runMode} · {runStatus}
-                    {runMode === 'debug' ? ` · ${isDebuggerPaused ? 'paused' : 'running'}${debuggerThreadId ? ` · thread ${debuggerThreadId}` : ''}` : ''}
+                    {runMethodName} · {displayRunModeLabel} · {runStatus}
+                    {isDebugModeActive ? ` · ${isDebuggerPaused ? 'paused' : 'running'}${debuggerThreadId ? ` · thread ${debuggerThreadId}` : ''}` : ''}
                   </p>
                 </div>
                 <button
@@ -2026,7 +2211,7 @@ export function TestCaseDetail({
                       </div>
                     </div>
                     <div className="test-run__footer">
-                      {isRunBusy && runMode === 'debug' ? (
+                      {isRunBusy && isDebugModeActive ? (
                         <>
                           <button
                             type="button"
@@ -2078,14 +2263,14 @@ export function TestCaseDetail({
                           </button>
                         </>
                       ) : null}
-                      {isRunBusy && runMode !== 'debug' ? (
+                      {isRunBusy && !isDebugModeActive ? (
                         <button type="button" className="btn btn--danger btn--sm" onClick={() => { void handleStopRun(); }}>
                           Stop run
                         </button>
                       ) : null}
                     </div>
                   </section>
-                  {runMode === 'debug' && (
+                  {isDebugModeActive && (
                     <section className="settings-panel db-updater__log-panel test-run__debug-panel">
                       <div className="settings-panel__head db-updater__log-head test-run__log-head">
                         <div>

@@ -2010,6 +2010,12 @@ blockquote {
     display: flex;
 }
 
+.page-detail-layout__before-breadcrumbs {
+    flex-shrink: 0;
+    order: 0;
+    margin-bottom: 8px;
+}
+
 .page-detail-layout__breadcrumbs {
     flex-shrink: 0;
     order: 1;
@@ -3941,6 +3947,43 @@ input[type="radio"] {
     cursor: not-allowed;
 }
 
+.action-menu__section-label {
+    color: var(--color-text-muted);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 6px 10px 2px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.action-menu__item--danger {
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger-border);
+    background: var(--color-danger-soft);
+    font-weight: 500;
+}
+
+.action-menu__item--danger:hover:not(:disabled) {
+    background: #d8431538;
+    color: var(--color-danger);
+}
+
+/* Keep destructive menu action visually dangerous even against generic menu hover rules. */
+.action-menu .action-menu__item.action-menu__item--danger {
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger-border);
+    background: var(--color-danger-soft);
+    font-weight: 500;
+}
+
+.action-menu .action-menu__item.action-menu__item--danger:hover:not(:disabled),
+.action-menu .action-menu__item.action-menu__item--danger:focus-visible {
+    color: var(--color-danger);
+    border-color: var(--color-danger-border);
+    background: #d8431538;
+}
+
 .action-menu--suite-tree {
     right: 0;
 }
@@ -5312,6 +5355,21 @@ input[type="radio"] {
     align-items: center;
     gap: 6px;
     display: flex;
+}
+
+.cases-table__row-menu {
+    position: relative;
+    display: inline-flex;
+}
+
+.cases-table__action-menu {
+    right: 0;
+    min-width: 240px;
+}
+
+.cases-table__row-menu--up .action-menu {
+    top: auto;
+    bottom: calc(100% + 6px);
 }
 
 .cases-table__action-btn {
@@ -10606,6 +10664,48 @@ input[type="radio"] {
 
 [data-theme="high-contrast"] .test-run__console-attachments {
     border-top-color: rgba(255, 255, 255, 0.52);
+}
+
+.case-page-back-btn {
+    align-items: center;
+    gap: 6px;
+    display: inline-flex;
+}
+
+.case-detail-toolbar-menus {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    display: flex;
+}
+
+.breadcrumbs__lead-action {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 2px;
+}
+
+.case-detail-toolbar-menu {
+    position: relative;
+    display: inline-flex;
+}
+
+.case-detail-action-btn {
+    align-items: center;
+    gap: 6px;
+    display: inline-flex;
+    white-space: nowrap;
+}
+
+.case-detail-action-btn .material-symbols,
+.case-detail-action-btn .app-icon {
+    font-size: 16px;
+}
+
+.case-detail-toolbar-menu .action-menu {
+    right: 0;
+    min-width: 230px;
 }
 
 .test-run__debug-panel {
