@@ -80,8 +80,29 @@ contextBridge.exposeInMainWorld('desktop', {
   writeTextFile(targetPath, content) {
     return ipcRenderer.invoke('desktop:write-text-file', targetPath, content);
   },
+  openPath(targetPath) {
+    return ipcRenderer.invoke('desktop:open-path', targetPath);
+  },
   runDotnetTest(request) {
     return ipcRenderer.invoke('desktop:run-dotnet-test', request);
+  },
+  debugDotnetTest(request) {
+    return ipcRenderer.invoke('desktop:debug-dotnet-test', request);
+  },
+  debuggerContinue(runId) {
+    return ipcRenderer.invoke('desktop:debugger-continue', runId);
+  },
+  debuggerNext(runId) {
+    return ipcRenderer.invoke('desktop:debugger-next', runId);
+  },
+  debuggerStepIn(runId) {
+    return ipcRenderer.invoke('desktop:debugger-step-in', runId);
+  },
+  debuggerStepOut(runId) {
+    return ipcRenderer.invoke('desktop:debugger-step-out', runId);
+  },
+  debuggerPause(runId) {
+    return ipcRenderer.invoke('desktop:debugger-pause', runId);
   },
   stopDotnetTest(runId) {
     return ipcRenderer.invoke('desktop:stop-dotnet-test', runId);

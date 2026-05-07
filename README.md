@@ -85,3 +85,23 @@ Build renderer and launch Electron against the built files:
 ```bash
 npm run electron:start
 ```
+
+## Bundled Test Debugger (Windows)
+
+Windows builds now bundle `netcoredbg` as an app resource, so end users do not need to install it manually.
+
+- Build command:
+
+```bash
+npm run dist:win
+```
+
+- During `dist:win`, the script `scripts/setup-netcoredbg-win.cjs` downloads the latest `netcoredbg-win64.zip` release and places it under:
+
+`tools/netcoredbg/win-x64/netcoredbg/`
+
+- The Electron main process resolves debugger path in this order:
+  1. `request.debuggerPath` (if passed)
+  2. `BCM_NETCOREDBG_PATH` env var
+  3. bundled app resources (`resources/tools/netcoredbg/...`)
+  4. system `PATH`

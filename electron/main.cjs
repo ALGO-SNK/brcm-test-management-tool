@@ -1,6 +1,8 @@
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawn } = require('node:child_process');
+const { EventEmitter } = require('node:events');
 const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
@@ -49,6 +51,7 @@ const pendingCloseRequestContentsIds = new Set();
 const confirmedCloseContentsIds = new Set();
 let cachedGitExecutable = undefined;
 const activeTestRuns = new Map();
+const activeDebugSessions = new Map();
 
 function resolveAssetFile(fileNames) {
   const names = Array.isArray(fileNames) ? fileNames : [fileNames];
@@ -2090,6 +2093,639 @@ function splitLines(buffer, chunk) {
   return { lines, rest };
 }
 
+function resolveExecutableFromInput(inputPath, workingDirectory, executableNames) {
+  const trimmedInput = String(inputPath || '').trim();
+  if (!trimmedInput) {
+    return '';
+  }
+
+  const absolutePath = path.isAbsolute(trimmedInput) ? trimmedInput : path.join(workingDirectory, trimmedInput);
+  const resolved = path.resolve(absolutePath);
+  if (!fs.existsSync(resolved)) {
+    return '';
+  }
+
+  const stats = fs.statSync(resolved);
+  if (stats.isFile()) {
+    return resolved;
+  }
+
+  if (!stats.isDirectory()) {
+    return '';
+  }
+
+  for (const name of executableNames) {
+    const candidate = path.join(resolved, name);
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return candidate;
+    }
+    const nestedCandidate = path.join(resolved, 'netcoredbg', name);
+    if (fs.existsSync(nestedCandidate) && fs.statSync(nestedCandidate).isFile()) {
+      return nestedCandidate;
+    }
+  }
+
+  return '';
+}
+
+function resolveNetcoreDbgExecutablePath(request, workingDirectory) {
+  const isWindows = process.platform === 'win32';
+  const executableName = isWindows ? 'netcoredbg.exe' : 'netcoredbg';
+  const executableNames = [executableName, 'netcoredbg'];
+
+  const requestedPath = resolveExecutableFromInput(request?.debuggerPath, workingDirectory, executableNames);
+  if (requestedPath) {
+    return { path: requestedPath, source: 'request.debuggerPath' };
+  }
+
+  const envPath = resolveExecutableFromInput(process.env.BCM_NETCOREDBG_PATH, workingDirectory, executableNames);
+  if (envPath) {
+    return { path: envPath, source: 'BCM_NETCOREDBG_PATH' };
+  }
+
+  const searchedCandidates = [];
+  const candidateRoots = [
+    process.resourcesPath || '',
+    path.resolve(__dirname, '..'),
+    process.cwd(),
+  ].filter(Boolean);
+
+  const platformFolder = isWindows ? 'win-x64' : process.platform === 'darwin' ? 'osx-amd64' : 'linux-amd64';
+  const candidateRelativePaths = [
+    path.join('tools', 'netcoredbg', platformFolder, 'netcoredbg', executableName),
+    path.join('tools', 'netcoredbg', platformFolder, executableName),
+    path.join('tools', 'netcoredbg', 'netcoredbg', executableName),
+    path.join('tools', 'netcoredbg', executableName),
+  ];
+
+  for (const root of candidateRoots) {
+    for (const relativeCandidate of candidateRelativePaths) {
+      const absoluteCandidate = path.resolve(root, relativeCandidate);
+      searchedCandidates.push(absoluteCandidate);
+      if (fs.existsSync(absoluteCandidate) && fs.statSync(absoluteCandidate).isFile()) {
+        return { path: absoluteCandidate, source: 'bundled-resource' };
+      }
+    }
+  }
+
+  try {
+    const locatorCommand = isWindows ? 'where.exe' : 'which';
+    const locatorOutput = execFileSync(locatorCommand, ['netcoredbg'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const located = String(locatorOutput || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .find((line) => fs.existsSync(line));
+    if (located) {
+      return { path: located, source: 'PATH' };
+    }
+  } catch {
+    // Ignore PATH lookup failures and return a clear error below.
+  }
+
+  return {
+    path: '',
+    source: '',
+    error: [
+      'netcoredbg executable was not found.',
+      'Expected bundled path under app resources/tools/netcoredbg.',
+      `Searched: ${searchedCandidates.join('; ') || 'none'}`,
+    ].join(' '),
+  };
+}
+
+class NetcoreDbgClient extends EventEmitter {
+  constructor(netcoredbgPath = 'netcoredbg') {
+    super();
+    this.netcoredbgPath = netcoredbgPath;
+    this.process = null;
+    this.sequence = 1;
+    this.buffer = '';
+    this.pendingRequests = new Map();
+    this.lastStderr = '';
+    this.attachedThreadId = null;
+  }
+
+  async start() {
+    return new Promise((resolve, reject) => {
+      let startSettled = false;
+      const settleStart = (callback, value) => {
+        if (startSettled) return;
+        startSettled = true;
+        callback(value);
+      };
+
+      this.process = spawn(this.netcoredbgPath, ['--interpreter=vscode'], {
+        shell: false,
+        windowsHide: true,
+      });
+
+      this.process.stdout.on('data', (data) => {
+        this.handleRawData(data.toString());
+      });
+
+      this.process.stderr.on('data', (data) => {
+        this.lastStderr = String(data.toString() || '').trim();
+      });
+
+      this.process.once('error', (error) => {
+        const wrappedError = new Error(`Failed to start debugger (${this.netcoredbgPath}): ${error.message}`);
+        settleStart(reject, wrappedError);
+        this.failPendingRequests(wrappedError);
+      });
+
+      this.process.once('close', (code) => {
+        const detail = this.lastStderr ? ` ${this.lastStderr}` : '';
+        const closeError = new Error(`Debugger process closed (exit ${code ?? -1}).${detail}`);
+        settleStart(reject, closeError);
+        this.failPendingRequests(closeError);
+      });
+
+      // Allow process to initialize before first DAP request.
+      setTimeout(() => {
+        settleStart(resolve);
+      }, 150);
+    });
+  }
+
+  async initialize() {
+    await this.sendRequest('initialize', {
+      clientID: 'bromcom-electron-test-runner',
+      clientName: 'Bromcom Electron Test Runner',
+      adapterID: 'coreclr',
+      pathFormat: 'path',
+      linesStartAt1: true,
+      columnsStartAt1: true,
+      supportsVariableType: true,
+      supportsVariablePaging: true,
+      supportsRunInTerminalRequest: false,
+    });
+  }
+
+  async attach(processId) {
+    await this.sendRequest('attach', { processId });
+  }
+
+  async configurationDone() {
+    await this.sendRequest('configurationDone', {});
+  }
+
+  async setBreakpoints(sourceFilePath, lines) {
+    if (!sourceFilePath || !Array.isArray(lines) || lines.length === 0) {
+      return;
+    }
+
+    await this.sendRequest('setBreakpoints', {
+      source: {
+        path: sourceFilePath,
+      },
+      breakpoints: lines.map((line) => ({ line })),
+      sourceModified: false,
+    });
+  }
+
+  async setExceptionBreakpoints(filters = ['all']) {
+    await this.sendRequest('setExceptionBreakpoints', {
+      filters,
+    });
+  }
+
+  async threads() {
+    return this.sendRequest('threads', {});
+  }
+
+  async stackTrace(threadId, startFrame = 0, levels = 20) {
+    return this.sendRequest('stackTrace', {
+      threadId,
+      startFrame,
+      levels,
+    });
+  }
+
+  async scopes(frameId) {
+    return this.sendRequest('scopes', {
+      frameId,
+    });
+  }
+
+  async variables(variablesReference, options = {}) {
+    const args = {
+      variablesReference,
+    };
+
+    if (typeof options.filter === 'string' && options.filter.trim()) {
+      args.filter = options.filter.trim();
+    }
+    if (Number.isInteger(options.start) && options.start >= 0) {
+      args.start = options.start;
+    }
+    if (Number.isInteger(options.count) && options.count >= 0) {
+      args.count = options.count;
+    }
+
+    return this.sendRequest('variables', args);
+  }
+
+  async exceptionInfo(threadId) {
+    return this.sendRequest('exceptionInfo', {
+      threadId,
+    });
+  }
+
+  async continue(threadId) {
+    const effectiveThreadId = threadId || this.attachedThreadId || 1;
+    await this.sendRequest('continue', {
+      threadId: effectiveThreadId,
+    });
+  }
+
+  async next(threadId) {
+    const effectiveThreadId = threadId || this.attachedThreadId || 1;
+    await this.sendRequest('next', {
+      threadId: effectiveThreadId,
+    });
+  }
+
+  async stepIn(threadId) {
+    const effectiveThreadId = threadId || this.attachedThreadId || 1;
+    await this.sendRequest('stepIn', {
+      threadId: effectiveThreadId,
+    });
+  }
+
+  async stepOut(threadId) {
+    const effectiveThreadId = threadId || this.attachedThreadId || 1;
+    await this.sendRequest('stepOut', {
+      threadId: effectiveThreadId,
+    });
+  }
+
+  async pause(threadId) {
+    const effectiveThreadId = threadId || this.attachedThreadId || 1;
+    await this.sendRequest('pause', {
+      threadId: effectiveThreadId,
+    });
+  }
+
+  async disconnect() {
+    try {
+      await this.sendRequest('disconnect', {
+        restart: false,
+        terminateDebuggee: true,
+      });
+    } catch {
+      // Ignore disconnect failures while closing.
+    }
+
+    if (this.process && !this.process.killed) {
+      this.process.kill();
+    }
+    this.process = null;
+  }
+
+  failPendingRequests(error) {
+    for (const pending of this.pendingRequests.values()) {
+      pending.reject(error);
+    }
+    this.pendingRequests.clear();
+  }
+
+  sendRequest(command, args) {
+    return new Promise((resolve, reject) => {
+      if (!this.process || !this.process.stdin.writable) {
+        reject(new Error('Debugger process is not running.'));
+        return;
+      }
+
+      const seq = this.sequence++;
+      const message = {
+        seq,
+        type: 'request',
+        command,
+        arguments: args,
+      };
+      this.pendingRequests.set(seq, { resolve, reject });
+
+      const json = JSON.stringify(message);
+      const payload = `Content-Length: ${Buffer.byteLength(json, 'utf8')}\r\n\r\n${json}`;
+      this.process.stdin.write(payload);
+    });
+  }
+
+  handleRawData(data) {
+    this.buffer += data;
+
+    while (true) {
+      const headerEndIndex = this.buffer.indexOf('\r\n\r\n');
+      if (headerEndIndex === -1) return;
+
+      const header = this.buffer.slice(0, headerEndIndex);
+      const contentLengthMatch = header.match(/Content-Length:\s*(\d+)/i);
+      if (!contentLengthMatch) {
+        this.buffer = '';
+        return;
+      }
+
+      const contentLength = Number(contentLengthMatch[1]);
+      const messageStartIndex = headerEndIndex + 4;
+      const messageEndIndex = messageStartIndex + contentLength;
+      if (this.buffer.length < messageEndIndex) return;
+
+      const json = this.buffer.slice(messageStartIndex, messageEndIndex);
+      this.buffer = this.buffer.slice(messageEndIndex);
+
+      let message;
+      try {
+        message = JSON.parse(json);
+      } catch {
+        continue;
+      }
+      this.handleMessage(message);
+    }
+  }
+
+  handleMessage(message) {
+    if (message?.type === 'event') {
+      this.handleEvent(message);
+      this.emit('event', message);
+      return;
+    }
+
+    if (message?.type !== 'response') {
+      return;
+    }
+
+    const pending = this.pendingRequests.get(message.request_seq);
+    if (!pending) return;
+    this.pendingRequests.delete(message.request_seq);
+
+    if (message.success) {
+      pending.resolve(message.body ?? message);
+      return;
+    }
+
+    pending.reject(new Error(message.message || 'Debugger request failed.'));
+  }
+
+  handleEvent(message) {
+    const eventName = message?.event;
+    const body = message?.body || {};
+
+    if (eventName === 'stopped' && Number.isInteger(body.threadId)) {
+      this.attachedThreadId = body.threadId;
+      return;
+    }
+
+    if (eventName === 'thread' && Number.isInteger(body.threadId)) {
+      this.attachedThreadId = body.threadId;
+    }
+  }
+}
+
+async function collectDebuggerStopDetails(debuggerClient, requestedThreadId, reason) {
+  const MAX_STACK_FRAMES = 20;
+  const MAX_SCOPES = 6;
+  const MAX_SCOPE_VARIABLES = 120;
+  let threadId = Number.isInteger(requestedThreadId) ? requestedThreadId : null;
+
+  if (!threadId) {
+    const threadResponse = await debuggerClient.threads();
+    const fallbackThread = Array.isArray(threadResponse?.threads)
+      ? threadResponse.threads.find((thread) => Number.isInteger(thread?.id))
+      : null;
+    if (fallbackThread && Number.isInteger(fallbackThread.id)) {
+      threadId = fallbackThread.id;
+    }
+  }
+
+  const details = {
+    reason: String(reason || ''),
+    threadId,
+    sourcePath: '',
+    sourceName: '',
+    line: 0,
+    column: 0,
+    description: '',
+    callStack: [],
+    scopes: [],
+  };
+
+  if (!threadId) {
+    return details;
+  }
+
+  const stackResponse = await debuggerClient.stackTrace(threadId, 0, MAX_STACK_FRAMES);
+  const frames = Array.isArray(stackResponse?.stackFrames) ? stackResponse.stackFrames : [];
+  details.callStack = frames.map((frame) => ({
+    id: Number(frame?.id || 0),
+    name: String(frame?.name || ''),
+    line: Number(frame?.line || 0),
+    column: Number(frame?.column || 0),
+    sourcePath: String(frame?.source?.path || ''),
+    sourceName: String(frame?.source?.name || ''),
+  }));
+
+  const topFrame = details.callStack[0];
+  if (topFrame) {
+    details.sourcePath = topFrame.sourcePath;
+    details.sourceName = topFrame.sourceName;
+    details.line = topFrame.line;
+    details.column = topFrame.column;
+  }
+
+  if (topFrame?.id) {
+    const scopesResponse = await debuggerClient.scopes(topFrame.id);
+    const scopes = Array.isArray(scopesResponse?.scopes) ? scopesResponse.scopes.slice(0, MAX_SCOPES) : [];
+
+    for (const scope of scopes) {
+      const variablesReference = Number(scope?.variablesReference || 0);
+      const scopeEntry = {
+        name: String(scope?.name || ''),
+        expensive: Boolean(scope?.expensive),
+        variables: [],
+      };
+
+      if (variablesReference > 0) {
+        const variablesResponse = await debuggerClient.variables(variablesReference, { start: 0, count: MAX_SCOPE_VARIABLES });
+        const variables = Array.isArray(variablesResponse?.variables) ? variablesResponse.variables : [];
+        scopeEntry.variables = variables.map((variable) => ({
+          name: String(variable?.name || ''),
+          value: String(variable?.value || ''),
+          type: String(variable?.type || ''),
+          variablesReference: Number(variable?.variablesReference || 0),
+        }));
+      }
+
+      details.scopes.push(scopeEntry);
+    }
+  }
+
+  if (details.reason === 'exception') {
+    try {
+      const exception = await debuggerClient.exceptionInfo(threadId);
+      const breakMode = String(exception?.breakMode || '').trim();
+      const exceptionDescription = String(exception?.description || '').trim();
+      const exceptionId = String(exception?.exceptionId || '').trim();
+      details.description = [exceptionId, exceptionDescription, breakMode].filter(Boolean).join(' | ');
+    } catch {
+      // Some adapter versions do not support exceptionInfo.
+    }
+  }
+
+  return details;
+}
+
+function extractTestHostPidFromOutput(output) {
+  const line = String(output || '');
+  const match = line.match(/Process Id:\s*(\d+)/i)
+    || line.match(/process with id:\s*(\d+)/i)
+    || line.match(/attach.*(?:pid|process(?:\s+id)?)\s*[:=]?\s*(\d+)/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const value = Number.parseInt(match[1], 10);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function isRunAttachmentFile(filePath) {
+  return /\.(png|jpe?g|gif|bmp|webp|avif|pdf|html?|txt|log|zip)$/i.test(filePath);
+}
+
+function collectRecentRunAttachments(directories, runStartedAtMs, expectedBaseNames = []) {
+  const attachments = [];
+  const seen = new Set();
+  const cutoff = Math.max(0, runStartedAtMs - 5000);
+  const expectedNames = expectedBaseNames
+    .map((name) => String(name || '').trim().toLowerCase())
+    .filter(Boolean);
+
+  for (const directory of directories) {
+    if (!directory || !fs.existsSync(directory)) continue;
+    let entries = [];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const filePath = path.join(directory, entry.name);
+      if (!isRunAttachmentFile(filePath)) continue;
+      let stats;
+      try {
+        stats = fs.statSync(filePath);
+      } catch {
+        continue;
+      }
+      const entryName = entry.name.toLowerCase();
+      const isExpectedName = expectedNames.includes(entryName);
+      if (!isExpectedName && stats.mtimeMs < cutoff) continue;
+      if (seen.has(filePath)) continue;
+      seen.add(filePath);
+      attachments.push(filePath);
+    }
+  }
+
+  return attachments.sort((left, right) => {
+    try {
+      return fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs;
+    } catch {
+      return 0;
+    }
+  });
+}
+
+function parseTestNameFromFilter(testFilter) {
+  const raw = String(testFilter || '').trim();
+  const match = raw.match(/^(?:name=)?(.+)$/i);
+  return match ? match[1].trim().replace(/^"|"$/g, '') : '';
+}
+
+function findMethodDeclarationLine(filePath, methodName) {
+  if (!filePath || !methodName || !fs.existsSync(filePath)) {
+    return 0;
+  }
+
+  let content = '';
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return 0;
+  }
+
+  const methodPattern = new RegExp(`\\b(?:public|private|protected|internal)\\s+(?:async\\s+)?(?:void|Task(?:<[^>]+>)?|ValueTask(?:<[^>]+>)?)\\s+${escapeRegExp(methodName)}\\s*\\(`);
+  const lines = content.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    if (methodPattern.test(lines[index])) {
+      return index + 1;
+    }
+  }
+
+  return 0;
+}
+
+function normalizeDebugBreakpoints(inputBreakpoints, workingDirectory) {
+  if (!Array.isArray(inputBreakpoints)) {
+    return [];
+  }
+
+  const normalized = [];
+  const seen = new Set();
+  for (const entry of inputBreakpoints) {
+    const sourcePath = String(entry?.sourcePath || '').trim();
+    const line = Number(entry?.line || 0);
+    if (!sourcePath || !Number.isInteger(line) || line <= 0) {
+      continue;
+    }
+
+    const absolutePath = path.isAbsolute(sourcePath) ? sourcePath : path.join(workingDirectory, sourcePath);
+    const resolvedPath = path.resolve(absolutePath);
+    if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
+      continue;
+    }
+    const key = `${resolvedPath.toLowerCase()}::${line}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push({
+      sourcePath: resolvedPath,
+      line,
+    });
+  }
+
+  return normalized;
+}
+
+function inferDebugBreakpoints(workingDirectory, methodName) {
+  if (!methodName) {
+    return [];
+  }
+
+  try {
+    const foundMethod = findTestMethodInDirectory(workingDirectory, methodName);
+    if (!foundMethod?.found || !foundMethod.filePath) {
+      return [];
+    }
+    const line = findMethodDeclarationLine(foundMethod.filePath, methodName);
+    if (!line) {
+      return [];
+    }
+    return [{
+      sourcePath: path.resolve(foundMethod.filePath),
+      line,
+    }];
+  } catch {
+    return [];
+  }
+}
+
 function resolveRunFileFromInput(inputPath, workingDirectory, allowedExtensions, requiredLabel) {
   const absolutePath = path.isAbsolute(inputPath) ? inputPath : path.join(workingDirectory, inputPath);
   const resolved = path.resolve(absolutePath);
@@ -2118,6 +2754,109 @@ function resolveRunFileFromInput(inputPath, workingDirectory, allowedExtensions,
   return files[0];
 }
 
+function findFileByName(rootDirectory, fileName, allowedExtensions, maxDepth = 4) {
+  const normalizedName = String(fileName || '').trim().toLowerCase();
+  if (!normalizedName || !fs.existsSync(rootDirectory)) {
+    return '';
+  }
+
+  const ignoredFolderNames = new Set(['.vs', '.git', '.idea', '.vscode', 'node_modules', 'bin', 'obj']);
+  const queue = [{ directory: rootDirectory, depth: 0 }];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+
+    let entries = [];
+    try {
+      entries = fs.readdirSync(current.directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(current.directory, entry.name);
+      const entryName = entry.name.toLowerCase();
+      if (entry.isFile()) {
+        if (entryName === normalizedName) {
+          return entryPath;
+        }
+        continue;
+      }
+
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      if (entryName.startsWith('.') || ignoredFolderNames.has(entryName)) {
+        continue;
+      }
+
+      if (current.depth < maxDepth) {
+        queue.push({ directory: entryPath, depth: current.depth + 1 });
+      }
+    }
+  }
+
+  return '';
+}
+
+function escapeXml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function buildTempRunSettingsXml(patToken) {
+  const escapedPat = escapeXml(patToken);
+  const parameterNames = ['PAT', 'HG_PAT', 'AP_PAT', 'PR_PAT', 'AR_PAT', 'AB_PAT', 'BB_PAT', 'SM_PAT'];
+  const parametersXml = parameterNames
+    .map((name) => `    <Parameter name="${name}" value="${escapedPat}" />`)
+    .join('\n');
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <TestRunParameters>
+${parametersXml}
+  </TestRunParameters>
+</RunSettings>
+`;
+}
+
+function createTempRunSettingsFile(runId, patToken) {
+  const tempDir = path.join(os.tmpdir(), 'bcm-testbuilder');
+  fs.mkdirSync(tempDir, { recursive: true });
+  const tempPath = path.join(tempDir, `runsettings-${runId}.runsettings`);
+  fs.writeFileSync(tempPath, buildTempRunSettingsXml(patToken), 'utf8');
+  return tempPath;
+}
+
+function resolveOptionalRunSettingsPath(inputPath, workingDirectory) {
+  const trimmedInput = String(inputPath || '').trim();
+  if (!trimmedInput) {
+    return '';
+  }
+
+  const directPath = path.isAbsolute(trimmedInput) ? trimmedInput : path.join(workingDirectory, trimmedInput);
+  const resolvedDirectPath = path.resolve(directPath);
+  if (fs.existsSync(resolvedDirectPath)) {
+    const stats = fs.statSync(resolvedDirectPath);
+    if (stats.isFile()) {
+      return resolvedDirectPath;
+    }
+  }
+
+  const fallbackPath = findFileByName(
+    workingDirectory,
+    path.basename(trimmedInput),
+    ['.runsettings'],
+  );
+  return fallbackPath || '';
+}
+
 function startDotnetTestRun(request, sender) {
   const workingDirectory = normalizeDirectoryPath(request?.workingDirectory || '');
   const projectPathInput = String(request?.projectPath || '').trim();
@@ -2130,21 +2869,25 @@ function startDotnetTestRun(request, sender) {
     throw new Error('Test filter is required.');
   }
 
-  const runSettingsInput = String(request?.runSettingsPath || '').trim();
-  const runSettingsPath = runSettingsInput
-    ? resolveRunFileFromInput(runSettingsInput, workingDirectory, ['.runsettings'], 'Run settings path')
-    : '';
   const logger = String(request?.logger || 'console;verbosity=detailed').trim() || 'console;verbosity=detailed';
+  const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const runStartedAtMs = Date.now();
+  const projectOutputDirectory = path.join(path.dirname(projectPath), 'bin', 'Debug', 'net8.0');
+  const patToken = typeof request?.patToken === 'string' ? request.patToken.trim() : '';
+  const requestedRunSettingsPath = String(request?.runSettingsPath || '').trim();
+  const resolvedRunSettingsPath = requestedRunSettingsPath
+    ? resolveOptionalRunSettingsPath(requestedRunSettingsPath, workingDirectory)
+    : '';
+  const tempRunSettingsPath = !resolvedRunSettingsPath && patToken ? createTempRunSettingsFile(runId, patToken) : '';
+  const runSettingsPath = resolvedRunSettingsPath || tempRunSettingsPath;
 
   const args = ['test', projectPath, '--filter', testFilter, '--logger', logger];
   if (runSettingsPath) {
     args.push('--settings', runSettingsPath);
   }
-
-  const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const env = { ...process.env };
-  if (request?.passPatAsEnv && typeof request?.patToken === 'string' && request.patToken.trim()) {
-    env.ADO_PAT = request.patToken.trim();
+  if (patToken) {
+    env.ADO_PAT = patToken;
   }
 
   emitTestRunProgress(sender, {
@@ -2165,12 +2908,27 @@ function startDotnetTestRun(request, sender) {
 
   let stdoutBuffer = '';
   let stderrBuffer = '';
+  let runOutputText = '';
+  const testOutputDirectories = new Set();
+  const testName = parseTestNameFromFilter(testFilter);
+  const expectedAttachmentNames = testName ? [`${testName}.jpg`, `${testName}.png`] : [];
+  testOutputDirectories.add(projectOutputDirectory);
+
+  const rememberOutputDirectory = (line) => {
+    const text = String(line || '').trim();
+    const assemblyPath = text.match(/(?:Running all tests in|->)\s+(.+\.(?:dll|exe))$/i)?.[1]?.trim();
+    if (!assemblyPath) return;
+    const resolvedAssemblyPath = path.resolve(assemblyPath);
+    testOutputDirectories.add(path.dirname(resolvedAssemblyPath));
+  };
 
   child.stdout.on('data', (chunk) => {
     const parsed = splitLines(stdoutBuffer, chunk.toString('utf8'));
     stdoutBuffer = parsed.rest;
     for (const line of parsed.lines) {
       if (!line.trim()) continue;
+      runOutputText += `${line}\n`;
+      rememberOutputDirectory(line);
       emitTestRunProgress(sender, { runId, status: 'running', level: 'info', message: line, stream: 'stdout' });
     }
   });
@@ -2180,13 +2938,26 @@ function startDotnetTestRun(request, sender) {
     stderrBuffer = parsed.rest;
     for (const line of parsed.lines) {
       if (!line.trim()) continue;
+      runOutputText += `${line}\n`;
       emitTestRunProgress(sender, { runId, status: 'running', level: 'error', message: line, stream: 'stderr' });
     }
   });
 
   return new Promise((resolve, reject) => {
+    const cleanupTempRunSettings = () => {
+      if (!tempRunSettingsPath) return;
+      try {
+        if (fs.existsSync(tempRunSettingsPath)) {
+          fs.unlinkSync(tempRunSettingsPath);
+        }
+      } catch {
+        // Ignore cleanup failures.
+      }
+    };
+
     child.once('error', (error) => {
       activeTestRuns.delete(runId);
+      cleanupTempRunSettings();
       emitTestRunProgress(sender, {
         runId,
         status: 'failed',
@@ -2199,32 +2970,549 @@ function startDotnetTestRun(request, sender) {
 
     child.once('close', (code, signal) => {
       activeTestRuns.delete(runId);
+      cleanupTempRunSettings();
       if (stdoutBuffer.trim()) {
+        runOutputText += `${stdoutBuffer.trim()}\n`;
+        rememberOutputDirectory(stdoutBuffer.trim());
         emitTestRunProgress(sender, { runId, status: 'running', level: 'info', message: stdoutBuffer.trim(), stream: 'stdout' });
       }
       if (stderrBuffer.trim()) {
+        runOutputText += `${stderrBuffer.trim()}\n`;
         emitTestRunProgress(sender, { runId, status: 'running', level: 'error', message: stderrBuffer.trim(), stream: 'stderr' });
       }
-      const status = signal ? 'cancelled' : code === 0 ? 'complete' : 'failed';
+      const noMatchingTests = /No test matches the given testcase filter|no matching test cases found|Skipping assembly - no matching test cases found/i.test(runOutputText);
+      const status = signal ? 'cancelled' : code === 0 && !noMatchingTests ? 'complete' : 'failed';
+      const finalMessage = noMatchingTests
+        ? 'No tests matched the selected filter.'
+        : status === 'complete'
+          ? 'Test run completed.'
+          : status === 'cancelled'
+            ? 'Test run cancelled.'
+            : `Test run failed (exit ${code ?? -1}).`;
       emitTestRunProgress(sender, {
         runId,
         status,
         level: status === 'complete' ? 'info' : 'error',
-        message: status === 'complete' ? 'Test run completed.' : status === 'cancelled' ? 'Test run cancelled.' : `Test run failed (exit ${code ?? -1}).`,
+        message: finalMessage,
         stream: 'system',
         exitCode: code,
       });
-      resolve({ runId, status, exitCode: code });
+      const recentOutputAttachments = collectRecentRunAttachments(
+        testOutputDirectories,
+        runStartedAtMs,
+        expectedAttachmentNames,
+      );
+      resolve({
+        runId,
+        status,
+        exitCode: code,
+        attachments: recentOutputAttachments,
+      });
     });
   });
 }
 
-function stopDotnetTestRun(runId) {
+function startDotnetDebugRun(request, sender) {
+  const workingDirectory = normalizeDirectoryPath(request?.workingDirectory || '');
+  const debuggerResolution = resolveNetcoreDbgExecutablePath(request, workingDirectory);
+  if (!debuggerResolution.path) {
+    throw new Error(debuggerResolution.error || 'netcoredbg executable was not found.');
+  }
+  const projectPathInput = String(request?.projectPath || '').trim();
+  if (!projectPathInput) {
+    throw new Error('Project path is required.');
+  }
+  const projectPath = resolveRunFileFromInput(projectPathInput, workingDirectory, ['.csproj'], 'Project path');
+  const testFilter = String(request?.testFilter || '').trim();
+  if (!testFilter) {
+    throw new Error('Test filter is required.');
+  }
+
+  const logger = String(request?.logger || 'console;verbosity=detailed').trim() || 'console;verbosity=detailed';
+  const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  const runStartedAtMs = Date.now();
+  const projectOutputDirectory = path.join(path.dirname(projectPath), 'bin', 'Debug', 'net8.0');
+  const patToken = typeof request?.patToken === 'string' ? request.patToken.trim() : '';
+  const requestedRunSettingsPath = String(request?.runSettingsPath || '').trim();
+  const resolvedRunSettingsPath = requestedRunSettingsPath
+    ? resolveOptionalRunSettingsPath(requestedRunSettingsPath, workingDirectory)
+    : '';
+  const tempRunSettingsPath = !resolvedRunSettingsPath && patToken ? createTempRunSettingsFile(runId, patToken) : '';
+  const runSettingsPath = resolvedRunSettingsPath || tempRunSettingsPath;
+
+  const args = ['test', projectPath, '--filter', testFilter, '--logger', logger];
+  if (runSettingsPath) {
+    args.push('--settings', runSettingsPath);
+  }
+  const env = {
+    ...process.env,
+    VSTEST_HOST_DEBUG: '1',
+  };
+  if (patToken) {
+    env.ADO_PAT = patToken;
+  }
+
+  emitTestRunProgress(sender, {
+    runId,
+    mode: 'debug',
+    status: 'running',
+    level: 'info',
+    message: `Starting (debug): dotnet ${args.map((item) => `"${item}"`).join(' ')}`,
+    stream: 'system',
+  });
+  emitTestRunProgress(sender, {
+    runId,
+    mode: 'debug',
+    status: 'running',
+    level: 'info',
+    message: `Using debugger (${debuggerResolution.source}): ${debuggerResolution.path}`,
+    stream: 'system',
+  });
+  emitTestRunProgress(sender, {
+    runId,
+    mode: 'debug',
+    status: 'running',
+    level: 'info',
+    message: 'Waiting for testhost PID and debugger attach...',
+    stream: 'system',
+  });
+
+  const child = spawn('dotnet', args, {
+    cwd: workingDirectory,
+    env,
+    windowsHide: true,
+  });
+
+  activeTestRuns.set(runId, child);
+
+  let stdoutBuffer = '';
+  let stderrBuffer = '';
+  let runOutputText = '';
+  const testOutputDirectories = new Set();
+  const testName = parseTestNameFromFilter(testFilter);
+  const expectedAttachmentNames = testName ? [`${testName}.jpg`, `${testName}.png`] : [];
+  testOutputDirectories.add(projectOutputDirectory);
+  const requestedBreakpoints = normalizeDebugBreakpoints(request?.debugBreakpoints, workingDirectory);
+  const inferredBreakpoints = requestedBreakpoints.length === 0 ? inferDebugBreakpoints(workingDirectory, testName) : [];
+  const debugBreakpoints = [];
+  const seenDebugBreakpoints = new Set();
+  for (const entry of [...requestedBreakpoints, ...inferredBreakpoints]) {
+    const key = `${entry.sourcePath.toLowerCase()}::${entry.line}`;
+    if (seenDebugBreakpoints.has(key)) {
+      continue;
+    }
+    seenDebugBreakpoints.add(key);
+    debugBreakpoints.push(entry);
+  }
+  const breakOnAllExceptions = request?.breakOnExceptions !== false;
+
+  const debugState = {
+    testHostPid: null,
+    debuggerStarted: false,
+    debuggerAttached: false,
+    debuggerPaused: false,
+    debuggerThreadId: null,
+    attachAttempted: false,
+  };
+
+  const rememberOutputDirectory = (line) => {
+    const text = String(line || '').trim();
+    const assemblyPath = text.match(/(?:Running all tests in|->)\s+(.+\.(?:dll|exe))$/i)?.[1]?.trim();
+    if (!assemblyPath) return;
+    const resolvedAssemblyPath = path.resolve(assemblyPath);
+    testOutputDirectories.add(path.dirname(resolvedAssemblyPath));
+  };
+
+  const tryAttachDebugger = (pid) => {
+    if (!pid || debugState.attachAttempted) return;
+    debugState.attachAttempted = true;
+    debugState.testHostPid = pid;
+
+    const attachPromise = (async () => {
+      const debuggerClient = new NetcoreDbgClient(debuggerResolution.path);
+
+      debuggerClient.on('event', (eventMessage) => {
+        const eventName = eventMessage?.event;
+        const body = eventMessage?.body || {};
+        const threadId = Number.isInteger(body.threadId) ? body.threadId : null;
+
+        if (eventName === 'stopped') {
+          debugState.debuggerPaused = true;
+          debugState.debuggerThreadId = threadId;
+
+          void (async () => {
+            let stopDetails = null;
+            try {
+              stopDetails = await collectDebuggerStopDetails(debuggerClient, threadId, body.reason);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : 'Unable to load debug details.';
+              emitTestRunProgress(sender, {
+                runId,
+                mode: 'debug',
+                status: 'running',
+                level: 'error',
+                message: `Failed to inspect paused state: ${message}`,
+                stream: 'system',
+              });
+            }
+
+            const sourcePath = String(stopDetails?.sourcePath || '').trim();
+            const line = Number(stopDetails?.line || 0);
+            const locationText = sourcePath && line > 0 ? ` at ${sourcePath}:${line}` : '';
+            const scopeCount = Array.isArray(stopDetails?.scopes) ? stopDetails.scopes.length : 0;
+            const frameCount = Array.isArray(stopDetails?.callStack) ? stopDetails.callStack.length : 0;
+
+            emitTestRunProgress(sender, {
+              runId,
+              mode: 'debug',
+              status: 'running',
+              level: 'info',
+              message: `Debugger stopped (${body.reason || 'breakpoint'})${threadId ? ` on thread ${threadId}` : ''}${locationText}. Frames: ${frameCount}. Scopes: ${scopeCount}.`,
+              stream: 'system',
+              debuggerEvent: {
+                event: 'stopped',
+                reason: body.reason || '',
+                threadId,
+                details: stopDetails,
+              },
+            });
+          })();
+          return;
+        }
+
+        if (eventName === 'continued') {
+          debugState.debuggerPaused = false;
+          emitTestRunProgress(sender, {
+            runId,
+            mode: 'debug',
+            status: 'running',
+            level: 'info',
+            message: 'Debugger continued.',
+            stream: 'system',
+            debuggerEvent: {
+              event: 'continued',
+              threadId,
+            },
+          });
+          return;
+        }
+
+        if (eventName === 'terminated' || eventName === 'exited') {
+          debugState.debuggerPaused = false;
+          emitTestRunProgress(sender, {
+            runId,
+            mode: 'debug',
+            status: 'running',
+            level: 'info',
+            message: `Debugger ${eventName}.`,
+            stream: 'system',
+            debuggerEvent: {
+              event: eventName,
+              threadId,
+            },
+          });
+        }
+      });
+
+      activeDebugSessions.set(runId, {
+        pendingAttach: Promise.resolve(),
+        client: debuggerClient,
+        lastThreadId: null,
+      });
+
+      await debuggerClient.start();
+      debugState.debuggerStarted = true;
+      await debuggerClient.initialize();
+      await debuggerClient.attach(pid);
+      debugState.debuggerAttached = true;
+
+      emitTestRunProgress(sender, {
+        runId,
+        mode: 'debug',
+        status: 'running',
+        level: 'info',
+        message: `Debugger attached to testhost PID ${pid}.`,
+        stream: 'system',
+      });
+
+      if (breakOnAllExceptions) {
+        await debuggerClient.setExceptionBreakpoints(['all']);
+        emitTestRunProgress(sender, {
+          runId,
+          mode: 'debug',
+          status: 'running',
+          level: 'info',
+          message: 'Exception breakpoints enabled (all).',
+          stream: 'system',
+        });
+      }
+
+      if (debugBreakpoints.length > 0) {
+        const breakpointsByFile = new Map();
+        for (const item of debugBreakpoints) {
+          const key = item.sourcePath;
+          const lines = breakpointsByFile.get(key) || [];
+          lines.push(item.line);
+          breakpointsByFile.set(key, lines);
+        }
+
+        for (const [sourcePath, lines] of breakpointsByFile.entries()) {
+          const uniqueLines = Array.from(new Set(lines)).sort((left, right) => left - right);
+          await debuggerClient.setBreakpoints(sourcePath, uniqueLines);
+          emitTestRunProgress(sender, {
+            runId,
+            mode: 'debug',
+            status: 'running',
+            level: 'info',
+            message: `Breakpoints set: ${path.basename(sourcePath)}:${uniqueLines.join(', ')}`,
+            stream: 'system',
+          });
+        }
+      } else {
+        emitTestRunProgress(sender, {
+          runId,
+          mode: 'debug',
+          status: 'running',
+          level: 'info',
+          message: `No explicit breakpoint found for "${testName}". Debug session will run until a breakpoint or exception is hit.`,
+          stream: 'system',
+        });
+      }
+
+      await debuggerClient.configurationDone();
+      emitTestRunProgress(sender, {
+        runId,
+        mode: 'debug',
+        status: 'running',
+        level: 'info',
+        message: 'Debugger configuration done. Breakpoints and exception handling are active; waiting for the first stop.',
+        stream: 'system',
+      });
+    })().catch((error) => {
+      emitTestRunProgress(sender, {
+        runId,
+        mode: 'debug',
+        status: 'running',
+        level: 'error',
+        message: `Debugger attach failed: ${error?.message || 'Unknown error.'}`,
+        stream: 'system',
+      });
+    });
+
+    activeDebugSessions.set(runId, {
+      ...(activeDebugSessions.get(runId) || {}),
+      pendingAttach: attachPromise,
+    });
+  };
+
+  child.stdout.on('data', (chunk) => {
+    const parsed = splitLines(stdoutBuffer, chunk.toString('utf8'));
+    stdoutBuffer = parsed.rest;
+    for (const line of parsed.lines) {
+      if (!line.trim()) continue;
+      runOutputText += `${line}\n`;
+      rememberOutputDirectory(line);
+      const detectedPid = extractTestHostPidFromOutput(line);
+      if (detectedPid) {
+        emitTestRunProgress(sender, {
+          runId,
+          mode: 'debug',
+          status: 'running',
+          level: 'info',
+          message: `Detected testhost PID ${detectedPid}.`,
+          stream: 'system',
+        });
+        tryAttachDebugger(detectedPid);
+      }
+      emitTestRunProgress(sender, {
+        runId,
+        mode: 'debug',
+        status: 'running',
+        level: 'info',
+        message: line,
+        stream: 'stdout',
+      });
+    }
+  });
+
+  child.stderr.on('data', (chunk) => {
+    const parsed = splitLines(stderrBuffer, chunk.toString('utf8'));
+    stderrBuffer = parsed.rest;
+    for (const line of parsed.lines) {
+      if (!line.trim()) continue;
+      runOutputText += `${line}\n`;
+      emitTestRunProgress(sender, {
+        runId,
+        mode: 'debug',
+        status: 'running',
+        level: 'error',
+        message: line,
+        stream: 'stderr',
+      });
+    }
+  });
+
+  return new Promise((resolve, reject) => {
+    const cleanupTempRunSettings = () => {
+      if (!tempRunSettingsPath) return;
+      try {
+        if (fs.existsSync(tempRunSettingsPath)) {
+          fs.unlinkSync(tempRunSettingsPath);
+        }
+      } catch {
+        // Ignore cleanup failures.
+      }
+    };
+
+    child.once('error', (error) => {
+      activeTestRuns.delete(runId);
+      cleanupTempRunSettings();
+      emitTestRunProgress(sender, {
+        runId,
+        mode: 'debug',
+        status: 'failed',
+        level: 'error',
+        message: error.message || 'Failed to start dotnet test.',
+        stream: 'system',
+      });
+      reject(error);
+    });
+
+    child.once('close', async (code, signal) => {
+      activeTestRuns.delete(runId);
+      cleanupTempRunSettings();
+
+      if (stdoutBuffer.trim()) {
+        runOutputText += `${stdoutBuffer.trim()}\n`;
+        rememberOutputDirectory(stdoutBuffer.trim());
+        const trailingPid = extractTestHostPidFromOutput(stdoutBuffer.trim());
+        if (trailingPid) {
+          tryAttachDebugger(trailingPid);
+        }
+        emitTestRunProgress(sender, {
+          runId,
+          mode: 'debug',
+          status: 'running',
+          level: 'info',
+          message: stdoutBuffer.trim(),
+          stream: 'stdout',
+        });
+      }
+      if (stderrBuffer.trim()) {
+        runOutputText += `${stderrBuffer.trim()}\n`;
+        emitTestRunProgress(sender, {
+          runId,
+          mode: 'debug',
+          status: 'running',
+          level: 'error',
+          message: stderrBuffer.trim(),
+          stream: 'stderr',
+        });
+      }
+
+      const debugSession = activeDebugSessions.get(runId);
+      if (debugSession?.pendingAttach) {
+        try {
+          await debugSession.pendingAttach;
+        } catch {
+          // Attach failures are already reported in the run output.
+        }
+      }
+
+      const activeDebugger = activeDebugSessions.get(runId)?.client;
+      if (activeDebugger?.disconnect) {
+        await activeDebugger.disconnect();
+      }
+      activeDebugSessions.delete(runId);
+
+      const noMatchingTests = /No test matches the given testcase filter|no matching test cases found|Skipping assembly - no matching test cases found/i.test(runOutputText);
+      const status = signal ? 'cancelled' : code === 0 && !noMatchingTests ? 'complete' : 'failed';
+      const finalMessage = noMatchingTests
+        ? 'No tests matched the selected filter.'
+        : status === 'complete'
+          ? 'Debug test run completed.'
+          : status === 'cancelled'
+            ? 'Debug test run cancelled.'
+            : `Debug test run failed (exit ${code ?? -1}).`;
+
+      emitTestRunProgress(sender, {
+        runId,
+        mode: 'debug',
+        status,
+        level: status === 'complete' ? 'info' : 'error',
+        message: finalMessage,
+        stream: 'system',
+        exitCode: code,
+      });
+
+      const recentOutputAttachments = collectRecentRunAttachments(
+        testOutputDirectories,
+        runStartedAtMs,
+        expectedAttachmentNames,
+      );
+
+      resolve({
+        runId,
+        status,
+        exitCode: code,
+        attachments: recentOutputAttachments,
+        testHostPid: debugState.testHostPid,
+        debuggerStarted: debugState.debuggerStarted,
+        debuggerAttached: debugState.debuggerAttached,
+      });
+    });
+  });
+}
+
+async function stopDotnetTestRun(runId) {
   const child = activeTestRuns.get(String(runId || ''));
+  const debugSession = activeDebugSessions.get(String(runId || ''));
+  if (debugSession?.pendingAttach) {
+    try {
+      await debugSession.pendingAttach;
+    } catch {
+      // Ignore attach failures while stopping.
+    }
+  }
+  const activeDebugger = activeDebugSessions.get(String(runId || ''))?.client;
+  if (activeDebugger?.disconnect) {
+    await activeDebugger.disconnect();
+  }
+  activeDebugSessions.delete(String(runId || ''));
+
   if (!child) {
     return { ok: false };
   }
   child.kill('SIGTERM');
+  return { ok: true };
+}
+
+function getDebugSessionOrThrow(runId) {
+  const normalizedRunId = String(runId || '').trim();
+  if (!normalizedRunId) {
+    throw new Error('Run id is required.');
+  }
+
+  const session = activeDebugSessions.get(normalizedRunId);
+  if (!session?.client) {
+    throw new Error('No active debugger session was found for this run.');
+  }
+
+  return { normalizedRunId, session };
+}
+
+async function runDebuggerCommand(runId, command) {
+  const { session } = getDebugSessionOrThrow(runId);
+  if (session.pendingAttach) {
+    await session.pendingAttach;
+  }
+
+  const client = session.client;
+  if (!client || typeof client[command] !== 'function') {
+    throw new Error(`Debugger command "${command}" is not available.`);
+  }
+
+  await client[command]();
   return { ok: true };
 }
 
@@ -2318,8 +3606,41 @@ ipcMain.handle('desktop:write-text-file', (_event, targetPath, content) => {
   fs.writeFileSync(normalizedPath, content, 'utf8');
 });
 
+ipcMain.handle('desktop:open-path', (_event, targetPath) => {
+  const normalizedPath = normalizeFilePath(targetPath);
+  const result = shell.openPath(normalizedPath);
+  if (result) {
+    return { ok: false, error: result };
+  }
+  return { ok: true };
+});
+
 ipcMain.handle('desktop:run-dotnet-test', (event, request) => {
   return startDotnetTestRun(request, event.sender);
+});
+
+ipcMain.handle('desktop:debug-dotnet-test', (event, request) => {
+  return startDotnetDebugRun(request, event.sender);
+});
+
+ipcMain.handle('desktop:debugger-continue', (_event, runId) => {
+  return runDebuggerCommand(runId, 'continue');
+});
+
+ipcMain.handle('desktop:debugger-next', (_event, runId) => {
+  return runDebuggerCommand(runId, 'next');
+});
+
+ipcMain.handle('desktop:debugger-step-in', (_event, runId) => {
+  return runDebuggerCommand(runId, 'stepIn');
+});
+
+ipcMain.handle('desktop:debugger-step-out', (_event, runId) => {
+  return runDebuggerCommand(runId, 'stepOut');
+});
+
+ipcMain.handle('desktop:debugger-pause', (_event, runId) => {
+  return runDebuggerCommand(runId, 'pause');
 });
 
 ipcMain.handle('desktop:stop-dotnet-test', (_event, runId) => {

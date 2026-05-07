@@ -149,6 +149,54 @@ declare global {
 
   type DesktopTestRunLevel = 'info' | 'error';
   type DesktopTestRunStatus = 'running' | 'complete' | 'failed' | 'cancelled';
+  type DesktopTestRunMode = 'run' | 'debug';
+  type DesktopDebuggerEventName = 'stopped' | 'continued' | 'terminated' | 'exited';
+
+  interface DesktopDebuggerVariable {
+    name: string;
+    value: string;
+    type?: string;
+    variablesReference?: number;
+  }
+
+  interface DesktopDebuggerScope {
+    name: string;
+    expensive?: boolean;
+    variables: DesktopDebuggerVariable[];
+  }
+
+  interface DesktopDebuggerStackFrame {
+    id: number;
+    name: string;
+    line: number;
+    column: number;
+    sourcePath?: string;
+    sourceName?: string;
+  }
+
+  interface DesktopDebuggerStopDetails {
+    reason?: string;
+    threadId?: number | null;
+    sourcePath?: string;
+    sourceName?: string;
+    line?: number;
+    column?: number;
+    description?: string;
+    callStack?: DesktopDebuggerStackFrame[];
+    scopes?: DesktopDebuggerScope[];
+  }
+
+  interface DesktopDebuggerEvent {
+    event: DesktopDebuggerEventName;
+    reason?: string;
+    threadId?: number | null;
+    details?: DesktopDebuggerStopDetails | null;
+  }
+
+  interface DesktopDebugBreakpoint {
+    sourcePath: string;
+    line: number;
+  }
 
   interface DesktopTestRunProgress {
     runId: string;
@@ -156,8 +204,10 @@ declare global {
     level: DesktopTestRunLevel;
     message: string;
     timestamp: string;
+    mode?: DesktopTestRunMode;
     stream?: 'stdout' | 'stderr' | 'system';
     exitCode?: number | null;
+    debuggerEvent?: DesktopDebuggerEvent;
   }
 
   interface DesktopTestRunRequest {
@@ -168,12 +218,22 @@ declare global {
     logger?: string;
     patToken?: string;
     passPatAsEnv?: boolean;
+    debuggerPath?: string;
+    breakOnExceptions?: boolean;
+    debugBreakpoints?: DesktopDebugBreakpoint[];
   }
 
   interface DesktopTestRunResult {
     runId: string;
     status: DesktopTestRunStatus;
     exitCode: number | null;
+    attachments?: string[];
+  }
+
+  interface DesktopTestDebugResult extends DesktopTestRunResult {
+    testHostPid: number | null;
+    debuggerStarted: boolean;
+    debuggerAttached: boolean;
   }
 
   interface DesktopApi {
@@ -261,7 +321,14 @@ declare global {
     onDbUpdaterProgress?: (callback: (progress: DesktopDbUpdaterProgress) => void) => (() => void);
     readTextFile?: (targetPath: string) => Promise<string>;
     writeTextFile?: (targetPath: string, content: string) => Promise<void>;
+    openPath?: (targetPath: string) => Promise<{ ok: boolean; error?: string }>;
     runDotnetTest?: (request: DesktopTestRunRequest) => Promise<DesktopTestRunResult>;
+    debugDotnetTest?: (request: DesktopTestRunRequest) => Promise<DesktopTestDebugResult>;
+    debuggerContinue?: (runId: string) => Promise<{ ok: boolean }>;
+    debuggerNext?: (runId: string) => Promise<{ ok: boolean }>;
+    debuggerStepIn?: (runId: string) => Promise<{ ok: boolean }>;
+    debuggerStepOut?: (runId: string) => Promise<{ ok: boolean }>;
+    debuggerPause?: (runId: string) => Promise<{ ok: boolean }>;
     stopDotnetTest?: (runId: string) => Promise<{ ok: boolean }>;
     onTestRunProgress?: (callback: (progress: DesktopTestRunProgress) => void) => (() => void);
   }

@@ -167,3 +167,11 @@ export function IconMoreHoriz(props: IconProps) {
 export function IconOpenInNew(props: IconProps) {
   return <MaterialIcon name="open_in_new" {...props} />;
 }
+
+export function IconPushPin(props: IconProps) {
+  return <MaterialIcon name="push_pin" {...props} />;
+}
+
+export function IconAttachFile(props: IconProps) {
+  return <MaterialIcon name="attach_file" {...props} />;
+}

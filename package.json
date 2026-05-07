@@ -1,7 +1,7 @@
 {
   "name": "bcm-test-builder",
   "private": true,
-  "version": "2026.4.19",
+  "version": "2026.4.20",
   "author": "Bromcom",
   "description": "Bromcom Test Builder desktop app",
   "type": "module",
@@ -69,6 +69,15 @@
       "src/assets/**/*",
       "main.cjs",
       "preload.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": "tools/netcoredbg",
+        "to": "tools/netcoredbg",
+        "filter": [
+          "**/*"
+        ]
+      }
     ]
   },
   "scripts": {
@@ -80,13 +89,14 @@
     "bump-version": "node scripts/bump-version.cjs",
     "bump-version:major": "node scripts/bump-version.cjs major",
     "bump-version:minor": "node scripts/bump-version.cjs minor",
-    "electron:dev": "node electron/dev-runner.cjs",
-    "electron:start": "npm run build && electron .",
+    "electron:dev": "npm run setup:netcoredbg:win && node electron/dev-runner.cjs",
+    "electron:start": "npm run setup:netcoredbg:win && npm run build && electron .",
+    "setup:netcoredbg:win": "node scripts/setup-netcoredbg-win.cjs",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "dist": "npm run typecheck && npm run bump-version && npm run build && electron-builder -mwl",
-    "dist:win": "npm run typecheck && npm run bump-version && npm run build && electron-builder --win",
+    "dist:win": "npm run setup:netcoredbg:win && npm run typecheck && npm run bump-version && npm run build && electron-builder --win",
     "dist:linux": "npm run typecheck && npm run bump-version && npm run build && electron-builder --linux",
     "dist:mac": "npm run typecheck && npm run bump-version && npm run build && electron-builder --mac"
   },
