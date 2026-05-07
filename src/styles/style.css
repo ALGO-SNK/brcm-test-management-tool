@@ -17235,7 +17235,7 @@ input[type="radio"] {
 
 .settings-panel__head {
     border-bottom: 0;
-    background: linear-gradient(#ffffff08, #0000);
+    /*background: linear-gradient(#ffffff08, #0000);*/
     padding: 14px 16px;
 }
 
