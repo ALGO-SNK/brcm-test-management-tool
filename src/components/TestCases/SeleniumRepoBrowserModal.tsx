@@ -18,6 +18,7 @@ import { SearchableSelect } from '../Common/SearchableSelect';
 interface SeleniumRepoBrowserModalProps {
   repoPath: string;
   onClose: () => void;
+  embedded?: boolean;
   mode?: 'browse' | 'manage-automation';
   generatedMethodName?: string;
   associatedMethodName?: string | null;
@@ -89,6 +90,7 @@ function getAncestorDirectoryPaths(rootPath: string, targetFilePath: string): st
 export function SeleniumRepoBrowserModal({
   repoPath,
   onClose,
+  embedded = false,
   mode = 'browse',
   generatedMethodName = '',
   associatedMethodName = null,
@@ -547,6 +549,10 @@ export function SeleniumRepoBrowserModal({
   }, [currentMethodName, expandedPaths, fileTestNamesByPath]);
 
   useEffect(() => {
+    if (embedded) {
+      return undefined;
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onClose();
@@ -557,7 +563,7 @@ export function SeleniumRepoBrowserModal({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose]);
+  }, [embedded, onClose]);
 
   const toggleNode = (targetPath: string) => {
     setExpandedPaths((current) => {
@@ -818,14 +824,21 @@ export function SeleniumRepoBrowserModal({
   };
 
   return (
-    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Selenium repo browser">
-      <button
-        type="button"
-        className="settings-overlay__backdrop"
-        onClick={onClose}
-        aria-label="Close Selenium repo browser"
-      />
-      <div className="settings-dock settings-dock--no-aside">
+    <div
+      className={embedded ? 'settings-page' : 'settings-overlay'}
+      role={embedded ? undefined : 'dialog'}
+      aria-modal={embedded ? undefined : true}
+      aria-label="Selenium repo browser"
+    >
+      {!embedded && (
+        <button
+          type="button"
+          className="settings-overlay__backdrop"
+          onClick={onClose}
+          aria-label="Close Selenium repo browser"
+        />
+      )}
+      <div className={`settings-dock settings-dock--no-aside${embedded ? ' settings-dock--embedded-page' : ''}`}>
         <section className="settings-workbench repo-browser">
           <header className="settings-workbench__header">
             <div>
@@ -885,15 +898,17 @@ export function SeleniumRepoBrowserModal({
               >
                 <IconRefresh size={16} />
               </button>
-              <button
-                type="button"
-                className="settings-workbench__close"
-                onClick={onClose}
-                aria-label="Close Selenium repo browser"
-                title="Close Selenium repo browser"
-              >
-                <IconX size={18} />
-              </button>
+              {!embedded && (
+                <button
+                  type="button"
+                  className="settings-workbench__close"
+                  onClick={onClose}
+                  aria-label="Close Selenium repo browser"
+                  title="Close Selenium repo browser"
+                >
+                  <IconX size={18} />
+                </button>
+              )}
             </div>
           </header>
 

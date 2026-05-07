@@ -5,9 +5,9 @@ import { ThemeContextProvider } from './context/ThemeContext';
 import { useThemeContext } from './context/useThemeContext';
 import { NotificationContextProvider } from './context/NotificationContext';
 import { Toast } from './components/Common/Toast';
-import { Landing } from './components/pages/Landing';
 import { TestCaseList } from './components/pages/TestCaseList';
 import { HelpGuide } from './components/pages/HelpGuide';
+import { MainWorkspace, type MainWorkspaceSection } from './components/pages/MainWorkspace';
 import {
   DEFAULT_DB_MAPPINGS,
   WorkspaceSettings,
@@ -197,6 +197,7 @@ function MuiThemeAdapter({ children }: { children: ReactNode }) {
 export function App() {
   const [currentPage, setCurrentPage]     = useState<PageType>('landing');
   const [previousPage, setPreviousPage]   = useState<ContentPage>('landing');
+  const [mainSection, setMainSection] = useState<MainWorkspaceSection>('plans');
   const [selectedPlan, setSelectedPlan]   = useState<ADOTestPlan | null>(null);
   const [selectedSuite, setSelectedSuite] = useState<ADOTestSuite | null>(null);
   const [selectedSuitePath, setSelectedSuitePath] = useState<ADOTestSuite[]>([]);
@@ -290,14 +291,13 @@ export function App() {
           <Toast />
 
           {activeContentPage === 'landing' && (
-            <Landing
+            <MainWorkspace
+              section={mainSection}
+              onSectionChange={setMainSection}
+              workspaceSettings={workspaceSettings}
+              onSaveWorkspaceSettings={handleSaveWorkspaceSettings}
               onSelectPlan={handleSelectPlan}
               onCreateSuiteForPlan={handleCreateSuiteForPlan}
-              onBrowseSeleniumScripts={handleOpenSeleniumRepoBrowser}
-              onOpenDbUpdater={handleOpenDbUpdater}
-              onHelpClick={handleHelpClick}
-              onSettingsClick={handleSettingsClick}
-              workspaceSettings={workspaceSettings}
             />
           )}
 

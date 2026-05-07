@@ -6,6 +6,7 @@ import { normalizeWorkspaceDbMappings, type WorkspaceDbMapping, type WorkspaceSe
 interface DbUpdaterModalProps {
   workspaceSettings: WorkspaceSettingsValues;
   onClose: () => void;
+  embedded?: boolean;
 }
 
 type TargetKey = string;
@@ -334,7 +335,7 @@ function normalizeOverviewRows(overview: DesktopDbUpdaterOverview): DesktopDbUpd
   };
 }
 
-export function DbUpdaterModal({ workspaceSettings, onClose }: DbUpdaterModalProps) {
+export function DbUpdaterModal({ workspaceSettings, onClose, embedded = false }: DbUpdaterModalProps) {
   const dbMappings = useMemo(
     () => normalizeWorkspaceDbMappings(workspaceSettings),
     [workspaceSettings],
@@ -875,14 +876,21 @@ export function DbUpdaterModal({ workspaceSettings, onClose }: DbUpdaterModalPro
     : 'Inspect the local TestCaseDao data for this plan DB.';
 
   return (
-    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Local DB updater">
-      <button
-        type="button"
-        className="settings-overlay__backdrop"
-        onClick={isRunning ? undefined : onClose}
-        aria-label="Close Local DB updater"
-      />
-      <div className="settings-dock">
+    <div
+      className={embedded ? 'settings-page' : 'settings-overlay'}
+      role={embedded ? undefined : 'dialog'}
+      aria-modal={embedded ? undefined : true}
+      aria-label="Local DB updater"
+    >
+      {!embedded && (
+        <button
+          type="button"
+          className="settings-overlay__backdrop"
+          onClick={isRunning ? undefined : onClose}
+          aria-label="Close Local DB updater"
+        />
+      )}
+      <div className={`settings-dock${embedded ? ' settings-dock--embedded-page' : ''}`}>
         <section className="settings-workbench db-updater">
           <header className="settings-workbench__header">
             <div>
@@ -890,16 +898,18 @@ export function DbUpdaterModal({ workspaceSettings, onClose }: DbUpdaterModalPro
               <h1 className="settings-workbench__title">{sectionTitle}</h1>
               <p className="settings-workbench__subtitle">{sectionSubtitle}</p>
             </div>
-            <button
-              type="button"
-              className="settings-workbench__close"
-              onClick={onClose}
-              disabled={isRunning}
-              aria-label="Close Local DB updater"
-              title="Close Local DB updater"
-            >
-              <IconX size={18} />
-            </button>
+            {!embedded && (
+              <button
+                type="button"
+                className="settings-workbench__close"
+                onClick={onClose}
+                disabled={isRunning}
+                aria-label="Close Local DB updater"
+                title="Close Local DB updater"
+              >
+                <IconX size={18} />
+              </button>
+            )}
           </header>
 
           <div className="settings-workbench__body">

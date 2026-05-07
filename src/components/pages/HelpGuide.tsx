@@ -5,6 +5,7 @@ import appendixGuideHtml from '../../help/ACTION_PARAMETER_APPENDIX.html?raw';
 
 interface HelpGuideProps {
   onBack: () => void;
+  embedded?: boolean;
 }
 
 type HelpSection = 'overview' | 'matrix' | 'appendix';
@@ -193,7 +194,7 @@ function getMatchSnippet(text: string, query: string): string {
   return `${prefix}${text.slice(start, end)}${suffix}`;
 }
 
-export function HelpGuide({ onBack }: HelpGuideProps) {
+export function HelpGuide({ onBack, embedded = false }: HelpGuideProps) {
   const [section, setSection] = useState<HelpSection>('overview');
   const [searchBySection, setSearchBySection] = useState<Record<HelpSection, string>>({
     overview: '',
@@ -239,6 +240,10 @@ export function HelpGuide({ onBack }: HelpGuideProps) {
   }, [section]);
 
   useEffect(() => {
+    if (embedded) {
+      return undefined;
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         onBack();
@@ -249,7 +254,7 @@ export function HelpGuide({ onBack }: HelpGuideProps) {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [onBack]);
+  }, [embedded, onBack]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {
@@ -400,14 +405,21 @@ export function HelpGuide({ onBack }: HelpGuideProps) {
   }, [activeGuide, activateMatch, debouncedQuery]);
 
   return (
-    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Developer guide">
-      <button
-        type="button"
-        className="settings-overlay__backdrop"
-        onClick={onBack}
-        aria-label="Close developer guide"
-      />
-      <div className="settings-dock settings-dock--help">
+    <div
+      className={embedded ? 'settings-page' : 'settings-overlay'}
+      role={embedded ? undefined : 'dialog'}
+      aria-modal={embedded ? undefined : true}
+      aria-label="Developer guide"
+    >
+      {!embedded && (
+        <button
+          type="button"
+          className="settings-overlay__backdrop"
+          onClick={onBack}
+          aria-label="Close developer guide"
+        />
+      )}
+      <div className={`settings-dock settings-dock--help${embedded ? ' settings-dock--embedded-page' : ''}`}>
         <section className="settings-workbench help-guide">
           <header className="settings-workbench__header">
             <div>
@@ -417,15 +429,17 @@ export function HelpGuide({ onBack }: HelpGuideProps) {
                 Combined reference for parameter authoring, execution behavior, and action-specific field contracts.
               </p>
             </div>
-            <button
-              type="button"
-              className="settings-workbench__close"
-              onClick={onBack}
-              aria-label="Close developer guide"
-              title="Close developer guide"
-            >
-              <IconX size={18} />
-            </button>
+            {!embedded && (
+              <button
+                type="button"
+                className="settings-workbench__close"
+                onClick={onBack}
+                aria-label="Close developer guide"
+                title="Close developer guide"
+              >
+                <IconX size={18} />
+              </button>
+            )}
 
             {/* Search box in header - always visible */}
             <div className="help-guide__header-search">

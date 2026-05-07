@@ -42,6 +42,7 @@ interface WorkspaceSettingsProps {
   values: WorkspaceSettingsValues;
   onSave: (values: WorkspaceSettingsValues) => void;
   onBack: () => void;
+  embedded?: boolean;
 }
 
 type SettingsSection = 'appearance' | 'workspace' | 'db-mappings' | 'about';
@@ -189,7 +190,7 @@ function toPathTail(fullPath: string): string {
   return parts[parts.length - 1] || fullPath;
 }
 
-export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsProps) {
+export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: WorkspaceSettingsProps) {
   const [form, setForm] = useState<WorkspaceSettingsValues>({
     ...values,
     dbMappings: normalizeWorkspaceDbMappings(values),
@@ -595,14 +596,21 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
     `settings-nav-item${section === targetSection ? ' is-active' : ''}`;
 
   return (
-    <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="Settings">
-      <button
-        type="button"
-        className="settings-overlay__backdrop"
-        onClick={onBack}
-        aria-label="Close settings overlay"
-      />
-      <div className="settings-dock">
+    <div
+      className={embedded ? 'settings-page' : 'settings-overlay'}
+      role={embedded ? undefined : 'dialog'}
+      aria-modal={embedded ? undefined : true}
+      aria-label="Settings"
+    >
+      {!embedded && (
+        <button
+          type="button"
+          className="settings-overlay__backdrop"
+          onClick={onBack}
+          aria-label="Close settings overlay"
+        />
+      )}
+      <div className={`settings-dock${embedded ? ' settings-dock--embedded-page' : ''}`}>
         <section className="settings-workbench">
           <header className="settings-workbench__header">
             <div>
@@ -610,15 +618,17 @@ export function WorkspaceSettings({ values, onSave, onBack }: WorkspaceSettingsP
               <h1 className="settings-workbench__title">{sectionLabel}</h1>
               <p className="settings-workbench__subtitle">{sectionSubtitle}</p>
             </div>
-            <button
-              type="button"
-              className="settings-workbench__close"
-              onClick={onBack}
-              aria-label="Close settings"
-              title="Close settings"
-            >
-              <IconX size={18} />
-            </button>
+            {!embedded && (
+              <button
+                type="button"
+                className="settings-workbench__close"
+                onClick={onBack}
+                aria-label="Close settings"
+                title="Close settings"
+              >
+                <IconX size={18} />
+              </button>
+            )}
           </header>
 
           <div className="settings-workbench__body">

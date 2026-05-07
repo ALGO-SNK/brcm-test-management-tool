@@ -62,22 +62,26 @@ export function Header({
 
       <div className="app-header__actions">
         {actions}
-        <button
-          className="app-header__icon-btn"
-          onClick={onBrowseSeleniumScripts}
-          disabled={!canOpenSeleniumRepo}
-          title={canOpenSeleniumRepo ? 'Browse Selenium scripts' : 'Set Selenium repo path in Settings first'}
-        >
-          <IconFolderCode size={18} />
-        </button>
-        <button
-          className="app-header__icon-btn"
-          onClick={onOpenDbUpdater}
-          disabled={!canOpenDbUpdater}
-          title="Refresh Local DB"
-        >
-          <IconDatabase size={18} />
-        </button>
+        {(typeof onBrowseSeleniumScripts === 'function') && (
+          <button
+            className="app-header__icon-btn"
+            onClick={onBrowseSeleniumScripts}
+            disabled={!canOpenSeleniumRepo}
+            title={canOpenSeleniumRepo ? 'Browse Selenium scripts' : 'Set Selenium repo path in Settings first'}
+          >
+            <IconFolderCode size={18} />
+          </button>
+        )}
+        {(typeof onOpenDbUpdater === 'function') && (
+          <button
+            className="app-header__icon-btn"
+            onClick={onOpenDbUpdater}
+            disabled={!canOpenDbUpdater}
+            title="Refresh Local DB"
+          >
+            <IconDatabase size={18} />
+          </button>
+        )}
         {/*Hiiden for now*/}
         {/*<button className="app-header__icon-btn" title="Search">
           <IconSearch size={18} />
@@ -92,22 +96,26 @@ export function Header({
         >
           {isLightMode ? <IconMoon size={18} /> : <IconSun size={18} />}
         </button>*/}
-        <button
-          className="app-header__icon-btn"
-          onClick={onHelpClick}
-          disabled={!canOpenHelp}
-          title="Open developer guide"
-        >
-          <IconHelp size={18} />
-        </button>
-        <button
-          className="app-header__icon-btn"
-          onClick={onSettingsClick}
-          disabled={!canOpenSettings}
-          title="Open settings"
-        >
-          <IconSettings size={18} />
-        </button>
+        {(typeof onHelpClick === 'function') && (
+          <button
+            className="app-header__icon-btn"
+            onClick={onHelpClick}
+            disabled={!canOpenHelp}
+            title="Open developer guide"
+          >
+            <IconHelp size={18} />
+          </button>
+        )}
+        {(typeof onSettingsClick === 'function') && (
+          <button
+            className="app-header__icon-btn"
+            onClick={onSettingsClick}
+            disabled={!canOpenSettings}
+            title="Open settings"
+          >
+            <IconSettings size={18} />
+          </button>
+        )}
       </div>
     </header>
   );
