@@ -2168,7 +2168,7 @@ export function TestCaseDetail({
               </header>
               <div className="settings-workbench__body">
                 <div className="settings-content">
-                  <section className="settings-panel db-updater__log-panel">
+                  <section className="settings-panel db-updater__log-panel test-run-terminal">
                     <div className="settings-panel__head db-updater__log-head test-run__log-head">
                       <div>
                         <div className="settings-panel__title">Console log</div>

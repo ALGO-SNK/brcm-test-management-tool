@@ -1,8 +1,6 @@
 import type { ReactNode } from 'react';
 /*import { useThemeContext } from '../../context/useThemeContext';*/
 import {
-  IconDatabase,
-  IconFolderCode,
   IconHelp,
  /* IconMoon,
   IconSearch,*/
@@ -16,9 +14,6 @@ interface HeaderProps {
   contextTitle?: string;
   contextMeta?: string;
   actions?: ReactNode;
-  onBrowseSeleniumScripts?: () => void;
-  canBrowseSeleniumScripts?: boolean;
-  onOpenDbUpdater?: () => void;
   onHelpClick?: () => void;
   onSettingsClick?: () => void;
 }
@@ -28,17 +23,12 @@ export function Header({
   contextTitle,
   contextMeta,
   actions,
-  onBrowseSeleniumScripts,
-  canBrowseSeleniumScripts = false,
-  onOpenDbUpdater,
   onHelpClick,
   onSettingsClick,
 }: HeaderProps) {
  /* const { mode, toggleTheme } = useThemeContext();*/
   const canOpenHelp = typeof onHelpClick === 'function';
   const canOpenSettings = typeof onSettingsClick === 'function';
-  const canOpenSeleniumRepo = typeof onBrowseSeleniumScripts === 'function' && canBrowseSeleniumScripts;
-  const canOpenDbUpdater = typeof onOpenDbUpdater === 'function';
   /*const isLightMode = mode === 'light';*/
 
   return (
@@ -62,26 +52,6 @@ export function Header({
 
       <div className="app-header__actions">
         {actions}
-        {(typeof onBrowseSeleniumScripts === 'function') && (
-          <button
-            className="app-header__icon-btn"
-            onClick={onBrowseSeleniumScripts}
-            disabled={!canOpenSeleniumRepo}
-            title={canOpenSeleniumRepo ? 'Browse Selenium scripts' : 'Set Selenium repo path in Settings first'}
-          >
-            <IconFolderCode size={18} />
-          </button>
-        )}
-        {(typeof onOpenDbUpdater === 'function') && (
-          <button
-            className="app-header__icon-btn"
-            onClick={onOpenDbUpdater}
-            disabled={!canOpenDbUpdater}
-            title="Refresh Local DB"
-          >
-            <IconDatabase size={18} />
-          </button>
-        )}
         {/*Hiiden for now*/}
         {/*<button className="app-header__icon-btn" title="Search">
           <IconSearch size={18} />

@@ -17,8 +17,6 @@ interface TestCaseListProps {
   onSelectCase: (testCase: ADOTestCase) => void;
   onBackToCases: () => void;
   onBackToPlan: () => void;
-  onBrowseSeleniumScripts?: () => void;
-  onOpenDbUpdater?: () => void;
   onHelpClick: () => void;
   onSettingsClick: () => void;
   workspaceSettings: WorkspaceSettingsValues;
@@ -38,8 +36,6 @@ export function TestCaseList({
   onSelectCase,
   onBackToCases,
   onBackToPlan,
-  onBrowseSeleniumScripts,
-  onOpenDbUpdater,
   onHelpClick,
   onSettingsClick,
   workspaceSettings,
@@ -211,9 +207,6 @@ export function TestCaseList({
     <div className="app-shell">
       <Header
         title={plan.name}
-        onBrowseSeleniumScripts={onBrowseSeleniumScripts}
-        canBrowseSeleniumScripts={Boolean(workspaceSettings.seleniumRepoPath.trim())}
-        onOpenDbUpdater={onOpenDbUpdater}
         onHelpClick={onHelpClick}
         onSettingsClick={onSettingsClick}
       />

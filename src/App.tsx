@@ -14,8 +14,6 @@ import {
   normalizeWorkspaceDbMappings,
   type WorkspaceSettingsValues,
 } from './components/pages/WorkspaceSettings';
-import { SeleniumRepoBrowserModal } from './components/TestCases/SeleniumRepoBrowserModal';
-import { DbUpdaterModal } from './components/DbUpdater/DbUpdaterModal';
 import type { ADOTestPlan, ADOTestSuite, ADOTestCase } from './types';
 import type { AppFontMode } from './context/themeContext.shared';
 
@@ -205,8 +203,6 @@ export function App() {
   const [planSuiteCreateRequest, setPlanSuiteCreateRequest] = useState(0);
   const [workspaceSettings, setWorkspaceSettings] =
     useState<WorkspaceSettingsValues>(getInitialWorkspaceSettings);
-  const [isSeleniumRepoBrowserOpen, setIsSeleniumRepoBrowserOpen] = useState(false);
-  const [isDbUpdaterOpen, setIsDbUpdaterOpen] = useState(false);
 
   const handleSelectPlan = (plan: ADOTestPlan) => {
     setSelectedPlan(plan);
@@ -262,21 +258,7 @@ export function App() {
     setWorkspaceSettings(values);
     localStorage.setItem(WORKSPACE_SETTINGS_KEY, JSON.stringify(values));
   };
-  const handleOpenSeleniumRepoBrowser = () => {
-    if (!workspaceSettings.seleniumRepoPath.trim()) {
-      return;
-    }
-    setIsSeleniumRepoBrowserOpen(true);
-  };
-  const handleCloseSeleniumRepoBrowser = () => {
-    setIsSeleniumRepoBrowserOpen(false);
-  };
-  const handleOpenDbUpdater = () => {
-    setIsDbUpdaterOpen(true);
-  };
-  const handleCloseDbUpdater = () => {
-    setIsDbUpdaterOpen(false);
-  };
+
 
   const isSettingsOpen = currentPage === 'settings';
   const isHelpOpen = currentPage === 'help';
@@ -298,6 +280,8 @@ export function App() {
               onSaveWorkspaceSettings={handleSaveWorkspaceSettings}
               onSelectPlan={handleSelectPlan}
               onCreateSuiteForPlan={handleCreateSuiteForPlan}
+              onSettingsClick={handleSettingsClick}
+              onHelpClick={handleHelpClick}
             />
           )}
 
@@ -311,8 +295,6 @@ export function App() {
               onSelectCase={handleSelectCase}
               onBackToCases={handleBackToCases}
               onBackToPlan={handleBackToPlan}
-              onBrowseSeleniumScripts={handleOpenSeleniumRepoBrowser}
-              onOpenDbUpdater={handleOpenDbUpdater}
               onHelpClick={handleHelpClick}
               onSettingsClick={handleSettingsClick}
               workspaceSettings={workspaceSettings}
@@ -332,19 +314,7 @@ export function App() {
             <HelpGuide onBack={handleBackFromHelp} />
           )}
 
-          {isSeleniumRepoBrowserOpen && workspaceSettings.seleniumRepoPath.trim() && (
-            <SeleniumRepoBrowserModal
-              repoPath={workspaceSettings.seleniumRepoPath.trim()}
-              onClose={handleCloseSeleniumRepoBrowser}
-            />
-          )}
 
-          {isDbUpdaterOpen && (
-            <DbUpdaterModal
-              workspaceSettings={workspaceSettings}
-              onClose={handleCloseDbUpdater}
-            />
-          )}
         </NotificationContextProvider>
       </MuiThemeAdapter>
     </ThemeContextProvider>

@@ -3,12 +3,11 @@ import { Header } from '../layouts/Header';
 import { PlansList, type ConnectionStatus } from '../TestPlans/PlansList';
 import { DbUpdaterModal } from '../DbUpdater/DbUpdaterModal';
 import { SeleniumRepoBrowserModal } from '../TestCases/SeleniumRepoBrowserModal';
-import { HelpGuide } from './HelpGuide';
-import { WorkspaceSettings, type WorkspaceSettingsValues } from './WorkspaceSettings';
-import { IconDatabase, IconFolderCode, IconHelp, IconSettings } from '../Common/Icons';
+import type { WorkspaceSettingsValues } from './WorkspaceSettings';
+import { IconDatabase, IconFolderCode } from '../Common/Icons';
 import type { ADOTestPlan } from '../../types';
 
-export type MainWorkspaceSection = 'plans' | 'automation-repo' | 'db-manager' | 'workspace' | 'guide';
+export type MainWorkspaceSection = 'plans' | 'automation-repo' | 'db-manager';
 
 interface MainWorkspaceProps {
   section: MainWorkspaceSection;
@@ -17,6 +16,8 @@ interface MainWorkspaceProps {
   onSaveWorkspaceSettings: (values: WorkspaceSettingsValues) => void;
   onSelectPlan: (plan: ADOTestPlan) => void;
   onCreateSuiteForPlan: (plan: ADOTestPlan) => void;
+  onSettingsClick: () => void;
+  onHelpClick: () => void;
 }
 
 interface WorkspaceNavItem {
@@ -41,16 +42,6 @@ const WORKSPACE_NAV_ITEMS: WorkspaceNavItem[] = [
     title: 'Database Manager',
     icon: <IconDatabase size={16} />,
   },
-  {
-    id: 'workspace',
-    title: 'Workspace Manager',
-    icon: <IconSettings size={16} />,
-  },
-  {
-    id: 'guide',
-    title: 'Action Guide',
-    icon: <IconHelp size={16} />,
-  },
 ];
 
 function getConnectionMeta(status: ConnectionStatus) {
@@ -73,6 +64,8 @@ export function MainWorkspace({
   onSaveWorkspaceSettings,
   onSelectPlan,
   onCreateSuiteForPlan,
+  onSettingsClick,
+  onHelpClick,
 }: MainWorkspaceProps) {
   const [planCount, setPlanCount] = useState(0);
   const [planRefreshToken, setPlanRefreshToken] = useState(0);
@@ -119,19 +112,6 @@ export function MainWorkspace({
     if (section === 'plans') {
       return plansView;
     }
-    if (section === 'workspace') {
-      return (
-        <WorkspaceSettings
-          values={workspaceSettings}
-          onSave={onSaveWorkspaceSettings}
-          onBack={() => onSectionChange('plans')}
-          embedded
-        />
-      );
-    }
-    if (section === 'guide') {
-      return <HelpGuide onBack={() => onSectionChange('plans')} embedded />;
-    }
     if (section === 'db-manager') {
       return <DbUpdaterModal workspaceSettings={workspaceSettings} onClose={() => onSectionChange('plans')} embedded />;
     }
@@ -148,7 +128,7 @@ export function MainWorkspace({
               <button
                 type="button"
                 className="btn btn--primary btn--sm"
-                onClick={() => onSectionChange('workspace')}
+                onClick={onSettingsClick}
               >
                 Open Workspace Manager
               </button>
@@ -162,7 +142,11 @@ export function MainWorkspace({
 
   return (
     <div className="app-shell">
-      <Header title={projectName} />
+      <Header
+        title={projectName}
+        onSettingsClick={onSettingsClick}
+        onHelpClick={onHelpClick}
+      />
       <main className="app-main app-main--scroll">
         <div className="split-pane split-pane--workspace">
           <aside className="split-pane__sidebar split-pane__sidebar--workspace">
