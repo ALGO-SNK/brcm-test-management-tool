@@ -176,8 +176,6 @@ export function TestCaseList({
     : 'Back to plan list';
 
   const breadcrumbs = [
-    { label: 'Plans', onClick: onBackToPlan, isLink: true, title: 'Plans' },
-    { label: planBreadcrumbLabel, onClick: onBackToPlan, isLink: true, title: planBreadcrumbLabel },
     ...breadcrumbSuitePath.map((pathSuite, index) => ({
       label: pathSuite.name,
       title: pathSuite.name,

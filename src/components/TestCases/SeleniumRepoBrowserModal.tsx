@@ -102,6 +102,7 @@ export function SeleniumRepoBrowserModal({
   refreshToken = 0,
 }: SeleniumRepoBrowserModalProps) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set([repoPath]));
+  const [activeTab, setActiveTab] = useState<'repo' | 'git'>('repo');
   const [nodesByPath, setNodesByPath] = useState<Record<string, NodeState>>({});
   const [fileTestNamesByPath, setFileTestNamesByPath] = useState<Record<string, FileTestNamesState>>({});
   const [gitBranch, setGitBranch] = useState<GitBranchState>({
@@ -843,61 +844,10 @@ export function SeleniumRepoBrowserModal({
           <header className="settings-workbench__header">
             <div>
               <p className="settings-workbench__crumb">Selenium Scripts / Repo Browser</p>
-              <h1 className="settings-workbench__title">{getNodeName(repoPath)}</h1>
+              <h1 className="settings-workbench__title">Automation Repo</h1>
               <p className="settings-workbench__subtitle">{repoPath}</p>
             </div>
             <div className="repo-browser__header-actions">
-              <div className="repo-browser__repo-meta" aria-live="polite">
-                {gitBranch.isGitRepository && gitBranch.branches.length > 0 ? (
-                  <div
-                    className={`repo-browser__branch-select${gitBranch.branch ? ' is-active' : ''}${isBranchSelectDisabled ? ' is-disabled' : ''}`}
-                    title={gitBranch.gitAvailable ? 'Switch Git branch' : gitBranch.message ?? 'Git executable unavailable'}
-                  >
-                    <IconBranch size={15} className="repo-browser__branch-select-icon" />
-                    <SearchableSelect
-                      className="repo-browser__branch-dropdown"
-                      options={branchOptions}
-                      value={currentBranchValue}
-                      onChange={(value) => {
-                        if (isBranchSelectDisabled) {
-                          return;
-                        }
-                        void handleBranchChange(value);
-                      }}
-                      placeholder="Search branches"
-                      emptyLabel={branchLabel}
-                    />
-                  </div>
-                ) : (
-                  <span
-                    className={`repo-browser__branch-pill${gitBranch.branch ? ' is-active' : ''}`}
-                    title={gitBranch.message ?? undefined}
-                  >
-                    <IconBranch size={15} />
-                    <span>{branchLabel}</span>
-                  </span>
-                )}
-              </div>
-              <label className="repo-browser__search repo-browser__search--header" htmlFor="repo-browser-search">
-                <IconSearch size={15} />
-                <input
-                  id="repo-browser-search"
-                  type="text"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search files or test methods"
-                />
-              </label>
-              <button
-                type="button"
-                className="btn btn--secondary btn--sm"
-                onClick={() => {
-                  void reloadRepository();
-                }}
-                title="Refresh repo browser"
-              >
-                <IconRefresh size={16} />
-              </button>
               {!embedded && (
                 <button
                   type="button"
@@ -912,53 +862,162 @@ export function SeleniumRepoBrowserModal({
             </div>
           </header>
 
-          <div className="settings-workbench__body repo-browser__body">
+          <div className="settings-workbench__tabs">
+            <button
+              type="button"
+              className={`settings-workbench__tab ${activeTab === 'repo' ? 'is-active' : ''}`}
+              onClick={() => setActiveTab('repo')}
+            >
+              Repo Manage
+            </button>
+            <button
+              type="button"
+              className={`settings-workbench__tab ${activeTab === 'git' ? 'is-active' : ''}`}
+              onClick={() => setActiveTab('git')}
+            >
+              Git
+            </button>
+          </div>
+
+          <div className="settings-workbench__body repo-browser__body" style={{ marginTop: '16px' }}>
             <div className="settings-content">
-              <section className="settings-pane">
-                <div className="settings-panel">
-                  <div className="settings-panel__head">
-                    <h3 className="settings-panel__title">Repository Contents</h3>
-                    <p className="settings-panel__sub">
-                      {mode === 'manage-automation'
-                        ? 'Browse classes, write the generated test method, and manage the Azure test association from the tree.'
-                        : 'Browse folders and files from the configured Selenium workspace or repository.'}
-                    </p>
-                    {mode === 'manage-automation' && methodSearch.loading && (
-                      <p className="repo-browser__scan-status" aria-live="polite">
-                        <span className="repo-browser__scan-spinner" aria-hidden="true" />
-                        {`Searching repository for ${methodSearch.methodName}...`}
-                      </p>
-                    )}
-                  </div>
-                  <div className="repo-browser__panel">
-                    {rootNode?.loading && rootNode.entries.length === 0 ? (
-                      <div className="repo-browser__state">Loading repository contents...</div>
-                    ) : null}
-                    {renderEntries(repoPath)}
-                  </div>
-                  {mode === 'manage-automation' && (
-                    <div className="repo-browser__assign-bar">
-                      <div className="repo-browser__preview">
-                        <div className="repo-browser__preview-title">Automation Manager</div>
-                        <div className="repo-browser__preview-line">
-                          {associatedMethodName ? 'Azure method' : 'Generated method'}: {currentMethodName || 'Unavailable'}
+              {activeTab === 'repo' && (
+                <section className="settings-pane">
+                  <div className="settings-panel">
+                    <div className="settings-panel__head" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <h3 className="settings-panel__title">Repository Contents</h3>
+                          <p className="settings-panel__sub">
+                            {mode === 'manage-automation'
+                              ? 'Browse classes, write the generated test method, and manage the Azure test association from the tree.'
+                              : 'Browse folders and files from the configured Selenium workspace or repository.'}
+                          </p>
+                          {mode === 'manage-automation' && methodSearch.loading && (
+                            <p className="repo-browser__scan-status" aria-live="polite">
+                              <span className="repo-browser__scan-spinner" aria-hidden="true" />
+                              {`Searching repository for ${methodSearch.methodName}...`}
+                            </p>
+                          )}
                         </div>
-                        <div className="repo-browser__preview-line">
-                          Associated method: {associatedMethodName || 'Not associated'}
-                        </div>
-                        <div className="repo-browser__preview-line">
-                          Associated class: {associatedClassName || 'Not associated'}
-                        </div>
-                        <div className="repo-browser__preview-line">
-                          {hasMatchingMethodAnywhere
-                            ? 'Showing related class and current test method.'
-                            : 'Current test script is not available. Pick a class and add code first.'}
+                        <div className="repo-browser__header-actions" style={{ flexShrink: 0 }}>
+                          <div className="repo-browser__repo-meta" aria-live="polite">
+                            {gitBranch.isGitRepository && gitBranch.branches.length > 0 ? (
+                              <div
+                                className={`repo-browser__branch-select${gitBranch.branch ? ' is-active' : ''}${isBranchSelectDisabled ? ' is-disabled' : ''}`}
+                                title={gitBranch.gitAvailable ? 'Switch Git branch' : gitBranch.message ?? 'Git executable unavailable'}
+                              >
+                                <IconBranch size={15} className="repo-browser__branch-select-icon" />
+                                <SearchableSelect
+                                  className="repo-browser__branch-dropdown"
+                                  options={branchOptions}
+                                  value={currentBranchValue}
+                                  onChange={(value) => {
+                                    if (isBranchSelectDisabled) {
+                                      return;
+                                    }
+                                    void handleBranchChange(value);
+                                  }}
+                                  placeholder="Search branches"
+                                  emptyLabel={branchLabel}
+                                />
+                              </div>
+                            ) : (
+                              <span
+                                className={`repo-browser__branch-pill${gitBranch.branch ? ' is-active' : ''}`}
+                                title={gitBranch.message ?? undefined}
+                              >
+                                <IconBranch size={15} />
+                                <span>{branchLabel}</span>
+                              </span>
+                            )}
+                          </div>
+                          <label className="repo-browser__search repo-browser__search--header" htmlFor="repo-browser-search">
+                            <IconSearch size={15} />
+                            <input
+                              id="repo-browser-search"
+                              type="text"
+                              value={searchTerm}
+                              onChange={(event) => setSearchTerm(event.target.value)}
+                              placeholder="Search files or test methods"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="btn btn--secondary btn--sm"
+                            onClick={() => {
+                              void reloadRepository();
+                            }}
+                            title="Refresh repo browser"
+                          >
+                            <IconRefresh size={16} />
+                          </button>
                         </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              </section>
+                    <div className="repo-browser__panel">
+                      {rootNode?.loading && rootNode.entries.length === 0 ? (
+                        <div className="repo-browser__state">Loading repository contents...</div>
+                      ) : null}
+                      {renderEntries(repoPath)}
+                    </div>
+                    {mode === 'manage-automation' && (
+                      <div className="repo-browser__assign-bar">
+                        <div className="repo-browser__preview">
+                          <div className="repo-browser__preview-title">Automation Manager</div>
+                          <div className="repo-browser__preview-line">
+                            {associatedMethodName ? 'Azure method' : 'Generated method'}: {currentMethodName || 'Unavailable'}
+                          </div>
+                          <div className="repo-browser__preview-line">
+                            Associated method: {associatedMethodName || 'Not associated'}
+                          </div>
+                          <div className="repo-browser__preview-line">
+                            Associated class: {associatedClassName || 'Not associated'}
+                          </div>
+                          <div className="repo-browser__preview-line">
+                            {hasMatchingMethodAnywhere
+                              ? 'Showing related class and current test method.'
+                              : 'Current test script is not available. Pick a class and add code first.'}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+              {activeTab === 'git' && (
+                <section className="settings-pane">
+                  <div className="settings-panel">
+                    <div className="settings-panel__head">
+                      <h3 className="settings-panel__title">Git Changes</h3>
+                      <p className="settings-panel__sub">
+                        Manage local commits and git operations for the Automation Repo.
+                      </p>
+                    </div>
+                    <div className="repo-browser__panel" style={{ padding: '24px' }}>
+                      <div className="repo-browser__state" style={{ padding: 0 }}>
+                        <div style={{ marginBottom: '16px' }}>
+                          <textarea 
+                            className="form-control" 
+                            placeholder="Enter a message <Required>"
+                            rows={3}
+                            style={{ width: '100%', resize: 'vertical' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+                          <button type="button" className="btn btn--primary btn--sm">
+                            Commit All
+                          </button>
+                        </div>
+                        <div style={{ textAlign: 'left', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                          <h4 style={{ fontSize: '14px', marginBottom: '8px', color: 'var(--text-color)' }}>Changes</h4>
+                          <p className="settings-panel__sub">No local changes are currently tracked in this view.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
             </div>
           </div>
         </section>

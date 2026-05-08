@@ -3002,24 +3002,40 @@ function startDotnetTestRun(request, sender) {
         exitCode: finalCode,
       });
 
-      const recentOutputAttachments = collectRecentRunAttachments(
-        testOutputDirectories,
-        runStartedAtMs,
-        expectedAttachmentNames,
-      );
+      // Delay resolve to ensure all progress events (sent via sender.send)
+      // arrive at the renderer before the invoke response (promise resolution).
+      // Without this, the renderer can process the resolve before the final
+      // progress event, and a late-arriving 'running' event from buffer flush
+      // overwrites the terminal status.
+      setTimeout(async () => {
+        // Retry attachment collection to handle filesystem flush delays
+        let recentOutputAttachments = collectRecentRunAttachments(
+          testOutputDirectories,
+          runStartedAtMs,
+          expectedAttachmentNames,
+        );
+        if (recentOutputAttachments.length === 0 && expectedAttachmentNames.length > 0) {
+          await delay(1500);
+          recentOutputAttachments = collectRecentRunAttachments(
+            testOutputDirectories,
+            runStartedAtMs,
+            expectedAttachmentNames,
+          );
+        }
 
-      resolve({
-        runId,
-        status,
-        exitCode: finalCode,
-        attachments: recentOutputAttachments,
-      });
+        resolve({
+          runId,
+          status,
+          exitCode: finalCode,
+          attachments: recentOutputAttachments,
+        });
 
-      try {
-        child.kill('SIGKILL');
-      } catch (e) {
-        // ignore kill errors
-      }
+        try {
+          child.kill('SIGKILL');
+        } catch (e) {
+          // ignore kill errors
+        }
+      }, 150);
     };
 
     child.once('error', (error) => {
@@ -3482,27 +3498,39 @@ function startDotnetDebugRun(request, sender) {
         exitCode: finalCode,
       });
 
-      const recentOutputAttachments = collectRecentRunAttachments(
-        testOutputDirectories,
-        runStartedAtMs,
-        expectedAttachmentNames,
-      );
+      // Delay resolve to ensure all progress events (sent via sender.send)
+      // arrive at the renderer before the invoke response (promise resolution).
+      setTimeout(async () => {
+        let recentOutputAttachments = collectRecentRunAttachments(
+          testOutputDirectories,
+          runStartedAtMs,
+          expectedAttachmentNames,
+        );
+        if (recentOutputAttachments.length === 0 && expectedAttachmentNames.length > 0) {
+          await delay(1500);
+          recentOutputAttachments = collectRecentRunAttachments(
+            testOutputDirectories,
+            runStartedAtMs,
+            expectedAttachmentNames,
+          );
+        }
 
-      resolve({
-        runId,
-        status,
-        exitCode: finalCode,
-        attachments: recentOutputAttachments,
-        testHostPid: debugState.testHostPid,
-        debuggerStarted: debugState.debuggerStarted,
-        debuggerAttached: debugState.debuggerAttached,
-      });
+        resolve({
+          runId,
+          status,
+          exitCode: finalCode,
+          attachments: recentOutputAttachments,
+          testHostPid: debugState.testHostPid,
+          debuggerStarted: debugState.debuggerStarted,
+          debuggerAttached: debugState.debuggerAttached,
+        });
 
-      try {
-        child.kill('SIGKILL');
-      } catch (e) {
-        // ignore
-      }
+        try {
+          child.kill('SIGKILL');
+        } catch (e) {
+          // ignore
+        }
+      }, 150);
     };
 
     child.once('error', (error) => {
@@ -3666,6 +3694,21 @@ ipcMain.handle('desktop:get-db-updater-overview', (_event, settings) => {
 ipcMain.handle('desktop:read-text-file', (_event, targetPath) => {
   const normalizedPath = normalizeFilePath(targetPath);
   return fs.readFileSync(normalizedPath, 'utf8');
+});
+
+ipcMain.handle('desktop:read-image-base64', (_event, targetPath) => {
+  const normalizedPath = normalizeFilePath(targetPath);
+  if (!fs.existsSync(normalizedPath)) {
+    return null;
+  }
+  const ext = path.extname(normalizedPath).toLowerCase();
+  let mime = 'image/png';
+  if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+  if (ext === '.gif') mime = 'image/gif';
+  if (ext === '.webp') mime = 'image/webp';
+  
+  const buffer = fs.readFileSync(normalizedPath);
+  return `data:${mime};base64,${buffer.toString('base64')}`;
 });
 
 ipcMain.handle('desktop:write-text-file', (_event, targetPath, content) => {

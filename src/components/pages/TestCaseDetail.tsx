@@ -65,6 +65,63 @@ type DetailMenuType = 'more-details' | 'action' | 'local-execution' | null;
 const DEBUGGER_UI_ENABLED = false;
 const LOCAL_EXECUTION_LOG_CACHE_PREFIX = 'bcm-testbuilder:last-local-execution-log:v1';
 
+function InlineImagePreview({ path, onOpen }: { path: string; onOpen: () => void }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const result = await window.desktop?.readImageBase64?.(path);
+        if (active && result) {
+          setDataUrl(result);
+        }
+      } catch {
+        // ignore errors
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [path]);
+
+  if (!dataUrl) {
+    return (
+      <button
+        type="button"
+        className="test-run__console-attachment"
+        onClick={onOpen}
+        aria-label={`Open attachment`}
+        title={path}
+      >
+        <IconAttachFile size={15} />
+        <span>{path.split(/[\\/]/).pop() || path}</span>
+        <IconOpenInNew size={13} />
+      </button>
+    );
+  }
+
+  return (
+    <div className="test-run__attachment-preview-container" style={{ marginTop: '12px' }}>
+      <img
+        src={dataUrl}
+        alt="Test run attachment"
+        onClick={onOpen}
+        title="Click to open image externally"
+        style={{
+          maxWidth: '100%',
+          maxHeight: '400px',
+          cursor: 'pointer',
+          borderRadius: '4px',
+          border: '1px solid var(--border-color)',
+          display: 'block',
+        }}
+      />
+    </div>
+  );
+}
+
 interface CachedLocalExecutionLog {
   runMode: TestExecutionMode;
   runStatus: 'idle' | 'running' | 'complete' | 'failed' | 'cancelled';
@@ -1123,7 +1180,14 @@ export function TestCaseDetail({
         setDebuggerThreadId(null);
         setDebuggerStopDetails(null);
       }
-      setRunStatus(progress.status);
+      // Use functional update to prevent 'running' from overwriting a terminal
+      // status. This guards against IPC ordering where buffer-flush progress
+      // events arrive after the promise resolved with the final status.
+      setRunStatus((current) => {
+        const isTerminal = current === 'complete' || current === 'failed' || current === 'cancelled';
+        if (isTerminal && progress.status === 'running') return current;
+        return progress.status;
+      });
       setRunLogEntries((current) => [
         ...current,
         {
@@ -1240,7 +1304,16 @@ export function TestCaseDetail({
       });
       setActiveRunId(result.runId);
       setRunStatus(result.status);
-      setRunAttachments(Array.isArray(result.attachments) ? result.attachments : []);
+      
+      let attachments = Array.isArray(result.attachments) ? [...result.attachments] : [];
+      if (result.status !== 'complete' && result.status !== 'cancelled') {
+        const separator = workingDirectory.endsWith('\\') || workingDirectory.endsWith('/') ? '' : '\\';
+        const fallbackAttachmentPath = `${workingDirectory}${separator}BromCom.Tests\\bin\\Debug\\net8.0\\${runMethodName.trim()}.jpg`.replace(/\//g, '\\');
+        if (!attachments.some((a) => a.toLowerCase() === fallbackAttachmentPath.toLowerCase())) {
+          attachments.push(fallbackAttachmentPath);
+        }
+      }
+      setRunAttachments(attachments);
       if (result.status === 'complete') {
         addNotification('success', `Test run passed for ${runMethodName}.`);
       } else if (result.status === 'cancelled') {
@@ -1299,7 +1372,16 @@ export function TestCaseDetail({
       });
       setActiveRunId(result.runId);
       setRunStatus(result.status);
-      setRunAttachments(Array.isArray(result.attachments) ? result.attachments : []);
+
+      let attachments = Array.isArray(result.attachments) ? [...result.attachments] : [];
+      if (result.status !== 'complete' && result.status !== 'cancelled') {
+        const separator = workingDirectory.endsWith('\\') || workingDirectory.endsWith('/') ? '' : '\\';
+        const fallbackAttachmentPath = `${workingDirectory}${separator}BromCom.Tests\\bin\\Debug\\net8.0\\${runMethodName.trim()}.jpg`.replace(/\//g, '\\');
+        if (!attachments.some((a) => a.toLowerCase() === fallbackAttachmentPath.toLowerCase())) {
+          attachments.push(fallbackAttachmentPath);
+        }
+      }
+      setRunAttachments(attachments);
       if (result.status === 'complete') {
         if (result.debuggerAttached && result.testHostPid) {
           addNotification('success', `Debug run completed (PID ${result.testHostPid} attached).`);
@@ -1621,6 +1703,72 @@ export function TestCaseDetail({
     if (!testCase) return [];
     return buildAdditionalDetailRows(testCase, plan);
   }, [plan, testCase]);
+
+  const formattedRunLogEntries = useMemo(() => {
+    const result = [];
+    let summary = {
+      status: null as string | null,
+      time: null as string | null,
+      total: null as string | null,
+      passed: null as string | null,
+      failed: null as string | null,
+      skipped: null as string | null,
+    };
+
+    for (const entry of runLogEntries) {
+      const msg = entry.message.trim();
+      if (/^Test Run (Failed|Successful)\./i.test(msg)) {
+        summary.status = msg;
+        continue;
+      }
+      if (/^Total time:/i.test(msg)) {
+        summary.time = msg.replace(/^Total time:\s*/i, '');
+        continue;
+      }
+      if (/^Total tests:/i.test(msg)) {
+        summary.total = msg.replace(/^Total tests:\s*/i, '');
+        continue;
+      }
+      if (/^Passed:/i.test(msg)) {
+        summary.passed = msg.replace(/^Passed:\s*/i, '');
+        continue;
+      }
+      if (/^Failed:/i.test(msg)) {
+        summary.failed = msg.replace(/^Failed:\s*/i, '');
+        continue;
+      }
+      if (/^Skipped:/i.test(msg)) {
+        summary.skipped = msg.replace(/^Skipped:\s*/i, '');
+        continue;
+      }
+      result.push(entry);
+    }
+
+    if (summary.status || summary.total) {
+      if (summary.status) {
+        result.push({
+          id: 'summary-status',
+          level: summary.status.includes('Failed') ? 'error' : 'info',
+          message: `${summary.status}${summary.time ? ` Total Time: ${summary.time}` : ''}`,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (summary.total) {
+        let counts = `Total tests: ${summary.total}`;
+        if (summary.passed) counts += `, Passed: ${summary.passed}`;
+        if (summary.failed) counts += `, Failed: ${summary.failed}`;
+        if (summary.skipped) counts += `, Skipped: ${summary.skipped}`;
+        result.push({
+          id: 'summary-counts',
+          level: summary.status?.includes('Failed') ? 'error' : 'info',
+          message: counts,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    return result;
+  }, [runLogEntries]);
 
   const loadingView = (
     <div className="cases-loading-state" aria-live="polite">
@@ -2264,9 +2412,9 @@ export function TestCaseDetail({
                     </div>
                     <div className="db-updater__log-shell">
                       <div className="test-run__console" ref={runLogViewportRef}>
-                        {runLogEntries.length === 0 ? (
+                        {formattedRunLogEntries.length === 0 ? (
                           <div className="db-updater__log-empty"><strong>Waiting for output</strong></div>
-                        ) : runLogEntries.map((entry) => {
+                        ) : formattedRunLogEntries.map((entry) => {
                           const category = getConsoleMessageCategory(entry.message);
                           return (
                             <div className={`test-run__console-line test-run__console-line--${entry.level} test-run__console-line--category-${category}`} key={entry.id}>
@@ -2275,22 +2423,14 @@ export function TestCaseDetail({
                           );
                         })}
                         {runScreenshotAttachments.length > 0 && (
-                          <div className="test-run__console-attachments">
+                          <div className="test-run__console-attachments" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
                             {runScreenshotAttachments.map((attachmentPath) => {
-                              const fileName = attachmentPath.split(/[\\/]/).pop() || attachmentPath;
                               return (
-                                <button
+                                <InlineImagePreview
                                   key={attachmentPath}
-                                  type="button"
-                                  className="test-run__console-attachment"
-                                  onClick={() => { void handleOpenRunArtifact(attachmentPath); }}
-                                  aria-label={`Open attachment ${fileName}`}
-                                  title={attachmentPath}
-                                >
-                                  <IconAttachFile size={15} />
-                                  <span>{fileName}</span>
-                                  <IconOpenInNew size={13} />
-                                </button>
+                                  path={attachmentPath}
+                                  onOpen={() => { void handleOpenRunArtifact(attachmentPath); }}
+                                />
                               );
                             })}
                           </div>

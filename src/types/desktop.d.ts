@@ -320,6 +320,7 @@ declare global {
     }) => Promise<DesktopDbUpdaterOverview>;
     onDbUpdaterProgress?: (callback: (progress: DesktopDbUpdaterProgress) => void) => (() => void);
     readTextFile?: (targetPath: string) => Promise<string>;
+    readImageBase64?: (targetPath: string) => Promise<string | null>;
     writeTextFile?: (targetPath: string, content: string) => Promise<void>;
     openPath?: (targetPath: string) => Promise<{ ok: boolean; error?: string }>;
     runDotnetTest?: (request: DesktopTestRunRequest) => Promise<DesktopTestRunResult>;

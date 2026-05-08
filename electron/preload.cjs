@@ -77,6 +77,9 @@ contextBridge.exposeInMainWorld('desktop', {
   readTextFile(targetPath) {
     return ipcRenderer.invoke('desktop:read-text-file', targetPath);
   },
+  readImageBase64(targetPath) {
+    return ipcRenderer.invoke('desktop:read-image-base64', targetPath);
+  },
   writeTextFile(targetPath, content) {
     return ipcRenderer.invoke('desktop:write-text-file', targetPath, content);
   },
