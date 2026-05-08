@@ -19973,3 +19973,161 @@ input[type="radio"] {
         display: none !important;
     }
 }
+
+/* Theme-Aware Terminal UI with PowerShell Console */
+.test-run-terminal {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+    color: var(--color-text);
+}
+
+.test-run-terminal .settings-panel__head {
+    background: var(--color-surface-subtle);
+    border-bottom: 1px solid var(--color-border-soft);
+}
+
+.test-run-terminal .settings-panel__title {
+    color: var(--color-text-heading);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+/* Ensure the modal body never scrolls when it contains the test runner */
+.settings-workbench__body:has(.test-run-terminal) {
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-workbench__body:has(.test-run-terminal) .settings-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.test-run-terminal.settings-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-bottom: 0;
+}
+
+.test-run-terminal .db-updater__log-shell {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: transparent;
+    border: none;
+}
+
+/* Aesthetic for the Console Window based on Theme Context */
+.test-run-terminal .test-run__console {
+    flex: 1;
+    background: var(--color-surface-subtle);
+    color: var(--color-text);
+    border: none;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 13.5px;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+    padding: 16px 20px;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+}
+
+[data-theme="dark"] .test-run-terminal .test-run__console,
+[data-theme="high-contrast"] .test-run-terminal .test-run__console {
+    background: #0c1119;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.test-run-terminal .test-run__footer {
+    background: var(--color-surface-subtle);
+    border-top: 1px solid var(--color-border-soft);
+}
+
+/* Console Text Colors */
+.test-run-terminal .test-run__console-line {
+    color: inherit;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.08);
+}
+
+.test-run-terminal .test-run__console-line:last-child {
+    border-bottom: none;
+}
+
+/* System Noise Dimming */
+.test-run-terminal .test-run__console-line--category-noise {
+    font-size: 0.95em;
+    padding: 1px 0;
+    border-bottom: none;
+    color: var(--color-text-muted);
+}
+
+.test-run-terminal .test-run__console-line--error .test-run__console-msg {
+    color: var(--color-danger);
+}
+
+/* Warnings */
+.test-run-terminal .test-run__console-line--warn .test-run__console-msg,
+.test-run-terminal .test-run__console-line--warning .test-run__console-msg {
+    color: var(--color-warning);
+}
+
+/* Syntax Highlighting Classes */
+.test-run-terminal .test-run__text-error,
+.test-run-terminal .test-run__text-danger {
+    color: var(--color-danger);
+    font-weight: 700;
+}
+
+.test-run-terminal .test-run__text-success {
+    color: var(--color-success);
+    font-weight: 700;
+}
+
+.test-run-terminal .test-run__text-muted {
+    color: var(--color-text-muted);
+    font-style: italic;
+    opacity: 0.85;
+}
+
+.test-run-terminal .test-run__text-info {
+    color: var(--color-primary);
+    font-weight: 500;
+}
+
+.test-run-terminal .test-run__text-highlight {
+    color: var(--color-text-heading);
+    font-weight: 700;
+}
+
+.test-run-terminal .test-run__console-msg::selection,
+.test-run-terminal .test-run__console-msg *::selection {
+    background: var(--color-primary-soft);
+    color: var(--color-text);
+}
+
+/* Action buttons in terminal footer */
+.test-run-terminal .test-run__footer .btn--secondary {
+    background: var(--color-surface);
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+}
+
+.test-run-terminal .test-run__footer .btn--secondary:hover {
+    background: var(--color-surface-hover);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}

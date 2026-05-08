@@ -163,34 +163,17 @@ export function TestCaseList({
   const handleNavigateBack = useCallback(() => {
     if (selectedCase) {
       onBackToCases();
-      return;
+    } else {
+      onBackToPlan();
     }
+  }, [onBackToCases, onBackToPlan, selectedCase]);
 
-    if (resolvedSuitePath.length > 1) {
-      const parentPath = resolvedSuitePath.slice(0, -1);
-      const parentSuite = parentPath[parentPath.length - 1];
-      if (parentSuite) {
-        onSelectSuite(parentSuite, parentPath);
-        return;
-      }
-    }
-
-    onBackToPlan();
-  }, [onBackToCases, onBackToPlan, onSelectSuite, resolvedSuitePath, selectedCase]);
-
-  const parentSuiteLabel = resolvedSuitePath.length > 1
-    ? resolvedSuitePath[resolvedSuitePath.length - 2]?.name?.trim() || 'Parent Suite'
-    : '';
   const backButtonLabel = selectedCase
     ? 'Test Case List'
-    : resolvedSuitePath.length > 1
-      ? parentSuiteLabel
-      : 'Plan List';
+    : 'Plan List';
   const backButtonTitle = selectedCase
     ? 'Back to test case list'
-    : resolvedSuitePath.length > 1
-      ? `Back to parent suite: ${parentSuiteLabel}`
-      : 'Back to plan list';
+    : 'Back to plan list';
 
   const breadcrumbs = [
     { label: 'Plans', onClick: onBackToPlan, isLink: true, title: 'Plans' },
@@ -235,7 +218,6 @@ export function TestCaseList({
           <div className="split-pane__content" style={{ padding: sidebarWidth ? 'var(--space-5) clamp(10px, 1.8vw, 16px)' : '0' }}>
             {suite ? (
               <PageDetailLayout
-                showBreadcrumbs={false}
                 beforeBreadcrumbs={(
                   <button
                     type="button"

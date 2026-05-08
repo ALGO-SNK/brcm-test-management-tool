@@ -2906,6 +2906,7 @@ function startDotnetTestRun(request, sender) {
 
   activeTestRuns.set(runId, child);
 
+  let isFinalized = false;
   let stdoutBuffer = '';
   let stderrBuffer = '';
   let runOutputText = '';
@@ -2923,6 +2924,7 @@ function startDotnetTestRun(request, sender) {
   };
 
   child.stdout.on('data', (chunk) => {
+    if (isFinalized) return;
     const parsed = splitLines(stdoutBuffer, chunk.toString('utf8'));
     stdoutBuffer = parsed.rest;
     for (const line of parsed.lines) {
@@ -2934,6 +2936,7 @@ function startDotnetTestRun(request, sender) {
   });
 
   child.stderr.on('data', (chunk) => {
+    if (isFinalized) return;
     const parsed = splitLines(stderrBuffer, chunk.toString('utf8'));
     stderrBuffer = parsed.rest;
     for (const line of parsed.lines) {
@@ -2955,7 +2958,73 @@ function startDotnetTestRun(request, sender) {
       }
     };
 
+    const finalizeRun = (code, signal) => {
+      if (isFinalized) return;
+      isFinalized = true;
+
+      activeTestRuns.delete(runId);
+      cleanupTempRunSettings();
+
+      if (stdoutBuffer.trim()) {
+        runOutputText += `${stdoutBuffer.trim()}\n`;
+        rememberOutputDirectory(stdoutBuffer.trim());
+        emitTestRunProgress(sender, { runId, status: 'running', level: 'info', message: stdoutBuffer.trim(), stream: 'stdout' });
+      }
+      if (stderrBuffer.trim()) {
+        runOutputText += `${stderrBuffer.trim()}\n`;
+        emitTestRunProgress(sender, { runId, status: 'running', level: 'error', message: stderrBuffer.trim(), stream: 'stderr' });
+      }
+
+      const noMatchingTests = /No test matches the given testcase filter|no matching test cases found|Skipping assembly - no matching test cases found/i.test(runOutputText);
+      
+      let finalCode = code;
+      if (finalCode === null || finalCode === undefined) {
+        if (/Test Run Successful\./i.test(runOutputText)) finalCode = 0;
+        else if (/Test Run Failed\./i.test(runOutputText)) finalCode = 1;
+        else finalCode = 0;
+      }
+
+      const status = signal ? 'cancelled' : finalCode === 0 && !noMatchingTests ? 'complete' : 'failed';
+      const finalMessage = noMatchingTests
+        ? 'No tests matched the selected filter.'
+        : status === 'complete'
+          ? 'Test run completed.'
+          : status === 'cancelled'
+            ? 'Test run cancelled.'
+            : `Test run failed (exit ${finalCode ?? -1}).`;
+
+      emitTestRunProgress(sender, {
+        runId,
+        status,
+        level: status === 'complete' ? 'info' : 'error',
+        message: finalMessage,
+        stream: 'system',
+        exitCode: finalCode,
+      });
+
+      const recentOutputAttachments = collectRecentRunAttachments(
+        testOutputDirectories,
+        runStartedAtMs,
+        expectedAttachmentNames,
+      );
+
+      resolve({
+        runId,
+        status,
+        exitCode: finalCode,
+        attachments: recentOutputAttachments,
+      });
+
+      try {
+        child.kill('SIGKILL');
+      } catch (e) {
+        // ignore kill errors
+      }
+    };
+
     child.once('error', (error) => {
+      if (isFinalized) return;
+      isFinalized = true;
       activeTestRuns.delete(runId);
       cleanupTempRunSettings();
       emitTestRunProgress(sender, {
@@ -2968,46 +3037,14 @@ function startDotnetTestRun(request, sender) {
       reject(error);
     });
 
-    child.once('close', (code, signal) => {
-      activeTestRuns.delete(runId);
-      cleanupTempRunSettings();
-      if (stdoutBuffer.trim()) {
-        runOutputText += `${stdoutBuffer.trim()}\n`;
-        rememberOutputDirectory(stdoutBuffer.trim());
-        emitTestRunProgress(sender, { runId, status: 'running', level: 'info', message: stdoutBuffer.trim(), stream: 'stdout' });
+    child.once('exit', (code, signal) => finalizeRun(code, signal));
+
+    // Monitor stdout for explicit completion markers if the process hangs
+    child.stdout.on('data', () => {
+      if (isFinalized) return;
+      if (/Test Run (?:Failed|Successful)\./i.test(runOutputText) && /Total time:/i.test(runOutputText)) {
+        setTimeout(() => finalizeRun(null, null), 500); // Give it a tiny delay to ensure everything is flushed
       }
-      if (stderrBuffer.trim()) {
-        runOutputText += `${stderrBuffer.trim()}\n`;
-        emitTestRunProgress(sender, { runId, status: 'running', level: 'error', message: stderrBuffer.trim(), stream: 'stderr' });
-      }
-      const noMatchingTests = /No test matches the given testcase filter|no matching test cases found|Skipping assembly - no matching test cases found/i.test(runOutputText);
-      const status = signal ? 'cancelled' : code === 0 && !noMatchingTests ? 'complete' : 'failed';
-      const finalMessage = noMatchingTests
-        ? 'No tests matched the selected filter.'
-        : status === 'complete'
-          ? 'Test run completed.'
-          : status === 'cancelled'
-            ? 'Test run cancelled.'
-            : `Test run failed (exit ${code ?? -1}).`;
-      emitTestRunProgress(sender, {
-        runId,
-        status,
-        level: status === 'complete' ? 'info' : 'error',
-        message: finalMessage,
-        stream: 'system',
-        exitCode: code,
-      });
-      const recentOutputAttachments = collectRecentRunAttachments(
-        testOutputDirectories,
-        runStartedAtMs,
-        expectedAttachmentNames,
-      );
-      resolve({
-        runId,
-        status,
-        exitCode: code,
-        attachments: recentOutputAttachments,
-      });
     });
   });
 }
@@ -3085,6 +3122,7 @@ function startDotnetDebugRun(request, sender) {
 
   activeTestRuns.set(runId, child);
 
+  let isFinalized = false;
   let stdoutBuffer = '';
   let stderrBuffer = '';
   let runOutputText = '';
@@ -3306,6 +3344,7 @@ function startDotnetDebugRun(request, sender) {
   };
 
   child.stdout.on('data', (chunk) => {
+    if (isFinalized) return;
     const parsed = splitLines(stdoutBuffer, chunk.toString('utf8'));
     stdoutBuffer = parsed.rest;
     for (const line of parsed.lines) {
@@ -3336,6 +3375,7 @@ function startDotnetDebugRun(request, sender) {
   });
 
   child.stderr.on('data', (chunk) => {
+    if (isFinalized) return;
     const parsed = splitLines(stderrBuffer, chunk.toString('utf8'));
     stderrBuffer = parsed.rest;
     for (const line of parsed.lines) {
@@ -3364,21 +3404,10 @@ function startDotnetDebugRun(request, sender) {
       }
     };
 
-    child.once('error', (error) => {
-      activeTestRuns.delete(runId);
-      cleanupTempRunSettings();
-      emitTestRunProgress(sender, {
-        runId,
-        mode: 'debug',
-        status: 'failed',
-        level: 'error',
-        message: error.message || 'Failed to start dotnet test.',
-        stream: 'system',
-      });
-      reject(error);
-    });
+    const finalizeRun = async (code, signal) => {
+      if (isFinalized) return;
+      isFinalized = true;
 
-    child.once('close', async (code, signal) => {
       activeTestRuns.delete(runId);
       cleanupTempRunSettings();
 
@@ -3426,14 +3455,22 @@ function startDotnetDebugRun(request, sender) {
       activeDebugSessions.delete(runId);
 
       const noMatchingTests = /No test matches the given testcase filter|no matching test cases found|Skipping assembly - no matching test cases found/i.test(runOutputText);
-      const status = signal ? 'cancelled' : code === 0 && !noMatchingTests ? 'complete' : 'failed';
+      
+      let finalCode = code;
+      if (finalCode === null || finalCode === undefined) {
+        if (/Test Run Successful\./i.test(runOutputText)) finalCode = 0;
+        else if (/Test Run Failed\./i.test(runOutputText)) finalCode = 1;
+        else finalCode = 0;
+      }
+
+      const status = signal ? 'cancelled' : finalCode === 0 && !noMatchingTests ? 'complete' : 'failed';
       const finalMessage = noMatchingTests
         ? 'No tests matched the selected filter.'
         : status === 'complete'
           ? 'Debug test run completed.'
           : status === 'cancelled'
             ? 'Debug test run cancelled.'
-            : `Debug test run failed (exit ${code ?? -1}).`;
+            : `Debug test run failed (exit ${finalCode ?? -1}).`;
 
       emitTestRunProgress(sender, {
         runId,
@@ -3442,7 +3479,7 @@ function startDotnetDebugRun(request, sender) {
         level: status === 'complete' ? 'info' : 'error',
         message: finalMessage,
         stream: 'system',
-        exitCode: code,
+        exitCode: finalCode,
       });
 
       const recentOutputAttachments = collectRecentRunAttachments(
@@ -3454,12 +3491,45 @@ function startDotnetDebugRun(request, sender) {
       resolve({
         runId,
         status,
-        exitCode: code,
+        exitCode: finalCode,
         attachments: recentOutputAttachments,
         testHostPid: debugState.testHostPid,
         debuggerStarted: debugState.debuggerStarted,
         debuggerAttached: debugState.debuggerAttached,
       });
+
+      try {
+        child.kill('SIGKILL');
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    child.once('error', (error) => {
+      if (isFinalized) return;
+      isFinalized = true;
+      activeTestRuns.delete(runId);
+      cleanupTempRunSettings();
+      emitTestRunProgress(sender, {
+        runId,
+        mode: 'debug',
+        status: 'failed',
+        level: 'error',
+        message: error.message || 'Failed to start dotnet test.',
+        stream: 'system',
+      });
+      reject(error);
+    });
+
+    child.once('exit', (code, signal) => {
+      void finalizeRun(code, signal);
+    });
+
+    child.stdout.on('data', () => {
+      if (isFinalized) return;
+      if (/Test Run (?:Failed|Successful)\./i.test(runOutputText) && /Total time:/i.test(runOutputText)) {
+        setTimeout(() => { void finalizeRun(null, null); }, 500);
+      }
     });
   });
 }

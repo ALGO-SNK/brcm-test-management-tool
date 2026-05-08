@@ -987,6 +987,90 @@ export function TestCaseDetail({
     ? `${debuggerCurrentFrame.sourcePath || debuggerCurrentFrame.sourceName || 'Unknown source'}:${debuggerCurrentFrame.line || 0}`
     : 'Not available';
 
+  const handleToggleLogStream = useCallback(() => {
+    setIsLogStreamPaused((prev) => !prev);
+  }, []);
+
+  const getConsoleMessageCategory = (message: string) => {
+    if (!message) return 'default';
+    if (
+      /^Starting: dotnet/i.test(message) ||
+      /^Determining projects/i.test(message) ||
+      /up-to-date for restore/i.test(message) ||
+      /\.dll$/i.test(message.trim()) ||
+      /^Test run for/i.test(message) ||
+      /^A total of \d+ test files matched/i.test(message) ||
+      /^NUnit Adapter/i.test(message) ||
+      /^Running all tests in/i.test(message) ||
+      /NUnit3TestExecutor converted/i.test(message) ||
+      /^Starting ChromeDriver/i.test(message) ||
+      /^Only local connections are allowed/i.test(message) ||
+      /chromedriver\.chromium\.org\/security-considerations/i.test(message) ||
+      /ChromeDriver was started successfully/i.test(message)
+    ) {
+      return 'noise';
+    }
+    if (/^Error:/i.test(message) || /^Error Message:/i.test(message) || /Exception:/i.test(message) || /SyntaxError:/i.test(message) || /^\s*Failed /i.test(message) || /^Test Run Failed/i.test(message)) {
+      return 'danger';
+    }
+    if (/^\s*Passed /i.test(message) || /^Test Run Successful/i.test(message)) {
+      return 'success';
+    }
+    return 'default';
+  };
+
+  const renderConsoleMessage = (message: string) => {
+    if (!message) return null;
+    
+    // Preserve strict leading whitespace for stack traces and structural logs
+    const leadingWhitespaceMatch = message.match(/^(\s+)/);
+    const leadingSpaceCount = leadingWhitespaceMatch ? leadingWhitespaceMatch[1].length : 0;
+    
+    // We wrap the whole line text so we can inject styles but keep spaces intact
+    const lineContent = (content: React.ReactNode) => {
+      if (leadingSpaceCount > 0) {
+        return (
+          <span style={{ display: 'inline-block', textIndent: `${leadingSpaceCount * 0.8}ch` }}>
+            {content}
+          </span>
+        );
+      }
+      return content;
+    };
+
+    if (/^Error:/i.test(message) || /^Error Message:/i.test(message) || /Exception:/i.test(message) || /SyntaxError:/i.test(message)) {
+      return lineContent(<span className="test-run__text-error">{message}</span>);
+    }
+    if (/^\s*Failed /i.test(message) || /Failed:\s*[1-9]/i.test(message) || /^Test Run Failed/i.test(message)) {
+      return lineContent(<strong className="test-run__text-danger">{message}</strong>);
+    }
+    if (/^\s*Passed /i.test(message) || /Passed:\s*[1-9]/i.test(message) || /^Test Run Successful/i.test(message)) {
+      return lineContent(<strong className="test-run__text-success">{message}</strong>);
+    }
+    if (/^Stack Trace:/i.test(message) || /^\s*at /i.test(message)) {
+      return lineContent(<span className="test-run__text-muted">{message}</span>);
+    }
+    if (/^Starting:/i.test(message) || /^Starting ChromeDriver/i.test(message) || /^NUnit Adapter/i.test(message)) {
+      return lineContent(<span className="test-run__text-info">{message}</span>);
+    }
+    
+    // Important context logs that should be extremely readable and bold
+    if (
+      /^Test Case Name:/i.test(message) ||
+      /^Total time:/i.test(message) ||
+      /^Time taken to Load/i.test(message) ||
+      /^Fetching/i.test(message) ||
+      /^Creating Connection/i.test(message) ||
+      /^Getting WorkItem Client/i.test(message) ||
+      /^Initializing Local Database/i.test(message) ||
+      /^Action=/i.test(message)
+    ) {
+      return lineContent(<strong className="test-run__text-highlight">{message}</strong>);
+    }
+
+    return lineContent(message);
+  };
+
   const handleClone = useCallback(() => {
     if (!testCase || !onClone) return;
 
@@ -2175,18 +2259,21 @@ export function TestCaseDetail({
                       </div>
                       <div className={`db-updater__log-state db-updater__log-state--${runStatus === 'running' ? 'running' : runStatus === 'complete' ? 'complete' : 'error'}`}>
                         <span />
-                        {runStatus}
+                        {runStatus === 'running' ? 'Running' : runStatus === 'complete' ? 'Passed' : runStatus === 'failed' ? 'Failed' : 'Stopped'}
                       </div>
                     </div>
                     <div className="db-updater__log-shell">
                       <div className="test-run__console" ref={runLogViewportRef}>
                         {runLogEntries.length === 0 ? (
                           <div className="db-updater__log-empty"><strong>Waiting for output</strong></div>
-                        ) : runLogEntries.map((entry) => (
-                          <div className={`test-run__console-line test-run__console-line--${entry.level}`} key={entry.id}>
-                            <span className="test-run__console-msg">{entry.message}</span>
-                          </div>
-                        ))}
+                        ) : runLogEntries.map((entry) => {
+                          const category = getConsoleMessageCategory(entry.message);
+                          return (
+                            <div className={`test-run__console-line test-run__console-line--${entry.level} test-run__console-line--category-${category}`} key={entry.id}>
+                              <span className="test-run__console-msg">{renderConsoleMessage(entry.message)}</span>
+                            </div>
+                          );
+                        })}
                         {runScreenshotAttachments.length > 0 && (
                           <div className="test-run__console-attachments">
                             {runScreenshotAttachments.map((attachmentPath) => {
@@ -2271,7 +2358,7 @@ export function TestCaseDetail({
                     </div>
                   </section>
                   {isDebugModeActive && (
-                    <section className="settings-panel db-updater__log-panel test-run__debug-panel">
+                    <section className="settings-panel db-updater__log-panel test-run__debug-panel test-run-terminal">
                       <div className="settings-panel__head db-updater__log-head test-run__log-head">
                         <div>
                           <div className="settings-panel__title">Paused context</div>
