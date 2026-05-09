@@ -28,7 +28,27 @@ declare global {
     path: string;
     additions: number;
     deletions: number;
-    status: string;
+    status: 'M' | 'A' | 'D' | 'U' | '?' | string;
+  }
+
+  interface DesktopGitStatus {
+    branch: string | null;
+    isGitRepository: boolean;
+    staged: DesktopGitChangedFile[];
+    unstaged: DesktopGitChangedFile[];
+    untracked: DesktopGitChangedFile[];
+    aheadCount: number;
+    behindCount: number;
+  }
+
+  interface DesktopGitOperationResult {
+    success: boolean;
+    message?: string;
+    error?: string;
+  }
+
+  interface DesktopGitCommitResult extends DesktopGitOperationResult {
+    commitHash?: string;
   }
 
   interface DesktopMethodSearchResult {
@@ -250,10 +270,28 @@ declare global {
     listDirectory?: (targetPath: string) => Promise<DesktopDirectoryEntry[]>;
     findTestMethod?: (rootPath: string, methodName: string) => Promise<DesktopMethodSearchResult>;
     getGitBranch?: (targetPath: string) => Promise<DesktopGitBranchInfo>;
+    getGitStatus?: (targetPath: string) => Promise<DesktopGitStatus>;
+    gitAdd?: (targetPath: string, filePaths: string[]) => Promise<DesktopGitOperationResult>;
+    gitUnstage?: (targetPath: string, filePaths: string[]) => Promise<DesktopGitOperationResult>;
+    gitCommit?: (targetPath: string, message: string) => Promise<DesktopGitCommitResult>;
+    gitPush?: (targetPath: string) => Promise<DesktopGitOperationResult>;
+    gitPull?: (targetPath: string) => Promise<DesktopGitOperationResult>;
+    gitFetch?: (targetPath: string) => Promise<DesktopGitOperationResult>;
+    gitSync?: (targetPath: string) => Promise<DesktopGitOperationResult>;
     switchGitBranch?: (
       targetPath: string,
       targetBranch: { name: string; type: 'local' | 'remote'; allowCommit?: boolean },
     ) => Promise<DesktopGitBranchInfo>;
+    gitDiscard?: (targetPath: string, filePaths: string[]) => Promise<DesktopGitOperationResult>;
+    gitStash?: (
+      targetPath: string,
+      payload?: { message?: string; files?: string[] },
+    ) => Promise<DesktopGitOperationResult>;
+    gitStashPop?: (
+      targetPath: string,
+      payload?: { stashRef?: string },
+    ) => Promise<DesktopGitOperationResult>;
+    gitListStashes?: (targetPath: string) => Promise<Array<{ ref: string; message: string; age: string }>>;
     runDbUpdater?: (settings: {
       organization: string;
       projectName: string;

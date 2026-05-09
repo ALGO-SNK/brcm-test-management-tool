@@ -4,6 +4,7 @@ import './styles/style.css'
 import './styles/font-overrides.css'
 import './styles/testcase-detail-overrides.css'
 import './styles/help-guide.css'
+import './styles/git-manager.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(

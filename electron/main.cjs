@@ -1951,17 +1951,22 @@ function isLocalChangesBranchSwitchError(error) {
 }
 
 function readGitChangedFiles(normalizedPath) {
-  const changesByPath = new Map();
+  // Use case-insensitive normalized key for dedup. Map.set() with same key
+  // overwrites, so duplicates from numstat + status (or rename-related noise)
+  // collapse to one entry.
+  const changesByKey = new Map();
+  const normalizePath = (p) => p.trim().replace(/\\/g, '/');
+  const dedupKey = (p) => p.toLowerCase();
 
   const numstatOutput = runGitCommand(normalizedPath, ['diff', '--numstat', 'HEAD', '--']);
   if (numstatOutput) {
     numstatOutput.split(/\r?\n/).forEach((line) => {
-      const [additionsValue, deletionsValue, filePath] = line.split('\t');
-      if (!filePath) {
-        return;
-      }
-
-      changesByPath.set(filePath, {
+      const [additionsValue, deletionsValue, rawPath] = line.split('\t');
+      if (!rawPath) return;
+      // Skip rename markers like "old => new" — keep only proper file paths
+      if (rawPath.includes(' => ') || rawPath.includes('{')) return;
+      const filePath = normalizePath(rawPath);
+      changesByKey.set(dedupKey(filePath), {
         path: filePath,
         additions: Number.parseInt(additionsValue, 10) || 0,
         deletions: Number.parseInt(deletionsValue, 10) || 0,
@@ -1972,24 +1977,23 @@ function readGitChangedFiles(normalizedPath) {
 
   const statusOutput = runGitCommand(normalizedPath, ['status', '--porcelain=v1', '-z']);
   if (!statusOutput) {
-    return Array.from(changesByPath.values());
+    return Array.from(changesByKey.values());
   }
 
   const records = statusOutput.split('\0').filter(Boolean);
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index];
     const statusCode = record.slice(0, 2);
-    const filePath = record.slice(3);
-    if (!filePath) {
-      continue;
-    }
+    const filePath = normalizePath(record.slice(3));
+    if (!filePath) continue;
 
     if (statusCode[0] === 'R' || statusCode[0] === 'C') {
       index += 1;
     }
 
-    const existing = changesByPath.get(filePath);
-    changesByPath.set(filePath, {
+    const key = dedupKey(filePath);
+    const existing = changesByKey.get(key);
+    changesByKey.set(key, {
       path: filePath,
       additions: existing?.additions ?? 0,
       deletions: existing?.deletions ?? 0,
@@ -1997,7 +2001,7 @@ function readGitChangedFiles(normalizedPath) {
     });
   }
 
-  return Array.from(changesByPath.values())
+  return Array.from(changesByKey.values())
     .sort((left, right) => left.path.localeCompare(right.path, undefined, { sensitivity: 'base' }));
 }
 
@@ -2008,6 +2012,344 @@ function commitGitChanges(normalizedPath, branchName) {
     '-m',
     `Bromcom Test Builder: save changes before switching to ${branchName}`,
   ]);
+}
+
+// ============================================================================
+// Git Manager: status, stage/unstage, commit, push/pull/fetch/sync, stash, discard
+// ============================================================================
+
+function readGitStatus(targetPath) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  const branchInfo = readGitBranch(normalizedPath);
+  if (!branchInfo.isGitRepository || !branchInfo.gitAvailable) {
+    return {
+      branch: branchInfo.branch,
+      isGitRepository: branchInfo.isGitRepository,
+      staged: [],
+      unstaged: [],
+      untracked: [],
+      aheadCount: 0,
+      behindCount: 0,
+    };
+  }
+
+  const staged = [];
+  const unstaged = [];
+  const untracked = [];
+
+  // Get porcelain status (X = index/staged status, Y = working tree/unstaged status)
+  let statusOutput;
+  try {
+    // Important: do NOT trim — null-byte separator can be eaten by .trim() in some cases.
+    // Call the raw exec instead.
+    const gitExecutable = getGitExecutable();
+    if (gitExecutable) {
+      statusOutput = execFileSync(
+        gitExecutable,
+        ['-C', normalizedPath, 'status', '--porcelain=v1', '-z'],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 15000, windowsHide: true },
+      );
+    } else {
+      statusOutput = '';
+    }
+  } catch {
+    statusOutput = '';
+  }
+
+  // Build a numstat lookup for additions/deletions counts
+  const stagedNumstat = new Map();
+  const unstagedNumstat = new Map();
+  try {
+    const stagedDiff = runGitCommand(normalizedPath, ['diff', '--numstat', '--cached', '--']);
+    stagedDiff.split(/\r?\n/).forEach((line) => {
+      const [add, del, file] = line.split('\t');
+      if (file) stagedNumstat.set(file, { additions: Number(add) || 0, deletions: Number(del) || 0 });
+    });
+  } catch { /* empty index ok */ }
+  try {
+    const unstagedDiff = runGitCommand(normalizedPath, ['diff', '--numstat', '--']);
+    unstagedDiff.split(/\r?\n/).forEach((line) => {
+      const [add, del, file] = line.split('\t');
+      if (file) unstagedNumstat.set(file, { additions: Number(add) || 0, deletions: Number(del) || 0 });
+    });
+  } catch { /* clean working tree ok */ }
+
+  if (statusOutput) {
+    // Debug: log raw porcelain output (visible in Electron main process terminal)
+    if (process.env.GIT_STATUS_DEBUG === '1') {
+      console.log('[gitStatus] raw output:', JSON.stringify(statusOutput));
+    }
+    // Track seen paths (case-insensitive) per category to dedupe Windows
+    // case-folding artifacts and any double-reporting from git.
+    const seenStaged = new Set();
+    const seenUnstaged = new Set();
+    const seenUntracked = new Set();
+    const records = statusOutput.split('\0').filter(Boolean);
+    for (let i = 0; i < records.length; i += 1) {
+      const record = records[i];
+      const xy = record.slice(0, 2);
+      const X = xy[0];
+      const Y = xy[1];
+      // Normalize path: forward slashes, trim trailing/leading whitespace
+      const filePath = record.slice(3).trim().replace(/\\/g, '/');
+      if (!filePath) continue;
+      // Dedup key: case-insensitive normalized path
+      const dedupKey = filePath.toLowerCase();
+      if (process.env.GIT_STATUS_DEBUG === '1') {
+        console.log(`[gitStatus] record="${record}" X="${X}" Y="${Y}" path="${filePath}"`);
+      }
+
+      // Renames: next record is the source file (skip)
+      if (X === 'R' || X === 'C') {
+        i += 1;
+      }
+
+      // Untracked
+      if (X === '?' && Y === '?') {
+        if (!seenUntracked.has(dedupKey)) {
+          seenUntracked.add(dedupKey);
+          untracked.push({ path: filePath, additions: 0, deletions: 0, status: '?' });
+        }
+        continue;
+      }
+
+      // Conflict (unmerged)
+      if (X === 'U' || Y === 'U' || (X === 'A' && Y === 'A') || (X === 'D' && Y === 'D')) {
+        if (!seenUnstaged.has(dedupKey)) {
+          seenUnstaged.add(dedupKey);
+          unstaged.push({ path: filePath, additions: 0, deletions: 0, status: 'U' });
+        }
+        continue;
+      }
+
+      // Staged (X column non-empty, non-?)
+      if (X && X !== ' ' && X !== '?') {
+        if (!seenStaged.has(dedupKey)) {
+          seenStaged.add(dedupKey);
+          const meta = stagedNumstat.get(filePath) || { additions: 0, deletions: 0 };
+          staged.push({
+            path: filePath,
+            additions: meta.additions,
+            deletions: meta.deletions,
+            status: X,
+          });
+        }
+      }
+
+      // Unstaged (Y column non-empty)
+      if (Y && Y !== ' ' && Y !== '?') {
+        if (!seenUnstaged.has(dedupKey)) {
+          seenUnstaged.add(dedupKey);
+          const meta = unstagedNumstat.get(filePath) || { additions: 0, deletions: 0 };
+          unstaged.push({
+            path: filePath,
+            additions: meta.additions,
+            deletions: meta.deletions,
+            status: Y,
+          });
+        }
+      }
+    }
+  }
+
+  // Ahead/behind counts (compared to upstream)
+  let aheadCount = 0;
+  let behindCount = 0;
+  try {
+    const counts = runGitCommand(normalizedPath, ['rev-list', '--left-right', '--count', '@{upstream}...HEAD']);
+    const [behindStr, aheadStr] = counts.split(/\s+/);
+    behindCount = Number(behindStr) || 0;
+    aheadCount = Number(aheadStr) || 0;
+  } catch { /* no upstream is fine */ }
+
+  // Sort each group by path
+  const sortByPath = (a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: 'base' });
+  staged.sort(sortByPath);
+  unstaged.sort(sortByPath);
+  untracked.sort(sortByPath);
+
+  return {
+    branch: branchInfo.branch,
+    isGitRepository: true,
+    staged,
+    unstaged,
+    untracked,
+    aheadCount,
+    behindCount,
+  };
+}
+
+function gitAddFiles(targetPath, filePaths) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  const files = Array.isArray(filePaths) ? filePaths.filter(Boolean) : [];
+  if (files.length === 0) {
+    return { success: false, error: 'No files provided to stage.' };
+  }
+  try {
+    runGitCommand(normalizedPath, ['add', '--', ...files]);
+    return { success: true, message: `Staged ${files.length} file(s).` };
+  } catch (error) {
+    return { success: false, error: error?.message || 'git add failed' };
+  }
+}
+
+function gitUnstageFiles(targetPath, filePaths) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  const files = Array.isArray(filePaths) ? filePaths.filter(Boolean) : [];
+  if (files.length === 0) {
+    return { success: false, error: 'No files provided to unstage.' };
+  }
+  try {
+    // git restore --staged is the modern command; fall back to reset HEAD if it fails
+    try {
+      runGitCommand(normalizedPath, ['restore', '--staged', '--', ...files]);
+    } catch {
+      runGitCommand(normalizedPath, ['reset', 'HEAD', '--', ...files]);
+    }
+    return { success: true, message: `Unstaged ${files.length} file(s).` };
+  } catch (error) {
+    return { success: false, error: error?.message || 'git unstage failed' };
+  }
+}
+
+function gitCommitChanges(targetPath, message) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  const trimmed = typeof message === 'string' ? message.trim() : '';
+  if (!trimmed) {
+    return { success: false, error: 'Commit message cannot be empty.' };
+  }
+  try {
+    runGitCommand(normalizedPath, ['commit', '-m', trimmed]);
+    let commitHash;
+    try {
+      commitHash = runGitCommand(normalizedPath, ['rev-parse', 'HEAD']);
+    } catch { /* ignore */ }
+    return { success: true, message: 'Commit created.', commitHash };
+  } catch (error) {
+    return { success: false, error: error?.message || 'git commit failed' };
+  }
+}
+
+function gitPush(targetPath) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  try {
+    const output = runGitCommand(normalizedPath, ['push']);
+    return { success: true, message: output || 'Pushed to remote.' };
+  } catch (error) {
+    return { success: false, error: error?.message || 'git push failed' };
+  }
+}
+
+function gitPull(targetPath) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  try {
+    const output = runGitCommand(normalizedPath, ['pull', '--ff-only']);
+    return { success: true, message: output || 'Pulled latest changes.' };
+  } catch (error) {
+    return { success: false, error: error?.message || 'git pull failed' };
+  }
+}
+
+function gitFetch(targetPath) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  try {
+    const output = runGitCommand(normalizedPath, ['fetch', '--all', '--prune']);
+    return { success: true, message: output || 'Fetched remote refs.' };
+  } catch (error) {
+    return { success: false, error: error?.message || 'git fetch failed' };
+  }
+}
+
+function gitSync(targetPath) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  try {
+    runGitCommand(normalizedPath, ['pull', '--ff-only']);
+    runGitCommand(normalizedPath, ['push']);
+    return { success: true, message: 'Synchronized with remote.' };
+  } catch (error) {
+    return { success: false, error: error?.message || 'git sync failed' };
+  }
+}
+
+function gitDiscardFiles(targetPath, filePaths) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  const files = Array.isArray(filePaths) ? filePaths.filter(Boolean) : [];
+  if (files.length === 0) {
+    return { success: false, error: 'No files provided to discard.' };
+  }
+  try {
+    // For tracked files: restore (modern) or checkout -- (legacy)
+    // For untracked files: clean -f
+    const trackedFiles = [];
+    const untrackedFiles = [];
+    for (const file of files) {
+      try {
+        runGitCommand(normalizedPath, ['ls-files', '--error-unmatch', '--', file]);
+        trackedFiles.push(file);
+      } catch {
+        untrackedFiles.push(file);
+      }
+    }
+    if (trackedFiles.length > 0) {
+      try {
+        runGitCommand(normalizedPath, ['restore', '--', ...trackedFiles]);
+      } catch {
+        runGitCommand(normalizedPath, ['checkout', '--', ...trackedFiles]);
+      }
+    }
+    if (untrackedFiles.length > 0) {
+      runGitCommand(normalizedPath, ['clean', '-f', '--', ...untrackedFiles]);
+    }
+    return { success: true, message: `Discarded ${files.length} file(s).` };
+  } catch (error) {
+    return { success: false, error: error?.message || 'git discard failed' };
+  }
+}
+
+function gitStash(targetPath, payload) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  const message = payload?.message ? String(payload.message) : '';
+  const files = Array.isArray(payload?.files) ? payload.files.filter(Boolean) : [];
+  try {
+    const args = ['stash', 'push', '--include-untracked'];
+    if (message) {
+      args.push('-m', message);
+    }
+    if (files.length > 0) {
+      args.push('--', ...files);
+    }
+    const output = runGitCommand(normalizedPath, args);
+    return { success: true, message: output || 'Changes stashed.' };
+  } catch (error) {
+    return { success: false, error: error?.message || 'git stash failed' };
+  }
+}
+
+function gitStashPop(targetPath, payload) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  const stashRef = payload?.stashRef ? String(payload.stashRef) : '';
+  try {
+    const args = ['stash', 'pop'];
+    if (stashRef) args.push(stashRef);
+    const output = runGitCommand(normalizedPath, args);
+    return { success: true, message: output || 'Stash applied.' };
+  } catch (error) {
+    return { success: false, error: error?.message || 'git stash pop failed' };
+  }
+}
+
+function gitListStashes(targetPath) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  try {
+    const output = runGitCommand(normalizedPath, ['stash', 'list', '--format=%gd|%s|%cr']);
+    if (!output) return [];
+    return output.split(/\r?\n/).filter(Boolean).map((line) => {
+      const [ref, message, age] = line.split('|');
+      return { ref, message: message || '', age: age || '' };
+    });
+  } catch {
+    return [];
+  }
 }
 
 function switchToKnownBranch(normalizedPath, branchName, branchType, currentInfo) {
@@ -3673,6 +4015,54 @@ ipcMain.handle('desktop:get-git-branch', (_event, targetPath) => {
 
 ipcMain.handle('desktop:switch-git-branch', (_event, targetPath, targetBranch) => {
   return switchGitBranch(targetPath, targetBranch);
+});
+
+ipcMain.handle('desktop:get-git-status', (_event, targetPath) => {
+  return readGitStatus(targetPath);
+});
+
+ipcMain.handle('desktop:git-add', (_event, targetPath, filePaths) => {
+  return gitAddFiles(targetPath, filePaths);
+});
+
+ipcMain.handle('desktop:git-unstage', (_event, targetPath, filePaths) => {
+  return gitUnstageFiles(targetPath, filePaths);
+});
+
+ipcMain.handle('desktop:git-commit', (_event, targetPath, message) => {
+  return gitCommitChanges(targetPath, message);
+});
+
+ipcMain.handle('desktop:git-push', (_event, targetPath) => {
+  return gitPush(targetPath);
+});
+
+ipcMain.handle('desktop:git-pull', (_event, targetPath) => {
+  return gitPull(targetPath);
+});
+
+ipcMain.handle('desktop:git-fetch', (_event, targetPath) => {
+  return gitFetch(targetPath);
+});
+
+ipcMain.handle('desktop:git-sync', (_event, targetPath) => {
+  return gitSync(targetPath);
+});
+
+ipcMain.handle('desktop:git-discard', (_event, targetPath, filePaths) => {
+  return gitDiscardFiles(targetPath, filePaths);
+});
+
+ipcMain.handle('desktop:git-stash', (_event, targetPath, payload) => {
+  return gitStash(targetPath, payload);
+});
+
+ipcMain.handle('desktop:git-stash-pop', (_event, targetPath, payload) => {
+  return gitStashPop(targetPath, payload);
+});
+
+ipcMain.handle('desktop:git-list-stashes', (_event, targetPath) => {
+  return gitListStashes(targetPath);
 });
 
 ipcMain.handle('desktop:run-db-updater', (event, settings, options) => {

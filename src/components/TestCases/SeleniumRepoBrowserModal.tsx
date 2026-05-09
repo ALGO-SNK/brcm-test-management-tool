@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   IconAddLink,
-  IconBranch,
   IconChevronRight,
   IconCode,
   IconDescription,
@@ -13,7 +12,7 @@ import {
   IconX,
 } from '../Common/Icons';
 import { useNotification } from '../../context/useNotification';
-import { SearchableSelect } from '../Common/SearchableSelect';
+import { GitManager, type GitFile } from './GitManager';
 
 interface SeleniumRepoBrowserModalProps {
   repoPath: string;
@@ -60,15 +59,137 @@ type MethodSearchState = {
   methodName: string;
 };
 
-function getNodeName(repoPath: string): string {
-  const normalized = repoPath.replace(/[\\/]+$/, '');
-  const parts = normalized.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] ?? repoPath;
-}
-
 function extractTestMethodNames(content: string): string[] {
   const matches = Array.from(content.matchAll(/\[Test\][\s\S]*?public\s+void\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/g));
   return matches.map((match) => match[1]).filter(Boolean);
+}
+
+const CSHARP_KEYWORDS = new Set([
+  'abstract', 'as', 'async', 'await', 'base', 'bool', 'break', 'byte', 'case', 'catch',
+  'char', 'checked', 'class', 'const', 'continue', 'decimal', 'default', 'delegate',
+  'do', 'double', 'else', 'enum', 'event', 'explicit', 'extern', 'false', 'finally',
+  'fixed', 'float', 'for', 'foreach', 'goto', 'if', 'implicit', 'in', 'int', 'interface',
+  'internal', 'is', 'lock', 'long', 'namespace', 'new', 'null', 'object', 'operator',
+  'out', 'override', 'params', 'private', 'protected', 'public', 'readonly', 'ref',
+  'return', 'sbyte', 'sealed', 'short', 'sizeof', 'stackalloc', 'static', 'string',
+  'struct', 'switch', 'this', 'throw', 'true', 'try', 'typeof', 'uint', 'ulong',
+  'unchecked', 'unsafe', 'ushort', 'using', 'var', 'virtual', 'void', 'volatile',
+  'while', 'yield', 'get', 'set', 'global', 'partial', 'where', 'add', 'remove',
+]);
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function renderCodeWithLineNumbers(html: string): string {
+  const lines = html.split('\n');
+  // Tab width matches CSS tab-size: 4
+  const TAB_WIDTH = 4;
+  return lines
+    .map((line, idx) => {
+      // Detect leading whitespace to compute hanging indent for wrapped lines.
+      const leadingMatch = line.match(/^([ \t]*)/);
+      const leading = leadingMatch ? leadingMatch[1] : '';
+      const indentChars = leading.replace(/\t/g, ' '.repeat(TAB_WIDTH)).length;
+      // Add 2ch extra hang so wrapped continuations are visually distinct from real
+      // code at the same depth (IDE convention).
+      const hangIndent = indentChars + 2;
+      // Stored as CSS var — only consumed when .is-wrapped class is on
+      const indentStyle = ' style="--cs-indent:' + hangIndent + 'ch"';
+      return (
+        '<span class="cs-line"><span class="cs-line-number">' +
+        (idx + 1) +
+        '</span><span class="cs-line-content"' +
+        indentStyle +
+        '>' +
+        (line || ' ') +
+        '</span></span>'
+      );
+    })
+    .join('');
+}
+
+
+function highlightCSharp(code: string): string {
+  const placeholders: string[] = [];
+  const placeholder = (cls: string, text: string) => {
+    const idx = placeholders.length;
+    placeholders.push(`<span class="cs-${cls}">${escapeHtml(text)}</span>`);
+    return `__SENTINEL__${idx}__SENTINEL__`;
+  };
+
+  let working = code;
+  // Block comments
+  working = working.replace(/\/\*[\s\S]*?\*\//g, (m) => placeholder('comment', m));
+  // Line comments
+  working = working.replace(/\/\/[^\n]*/g, (m) => placeholder('comment', m));
+  // Strings (double-quoted, including verbatim @"...")
+  working = working.replace(/@"(?:[^"]|"")*"/g, (m) => placeholder('string', m));
+  working = working.replace(/"(?:\\.|[^"\\])*"/g, (m) => placeholder('string', m));
+  // Char literals
+  working = working.replace(/'(?:\\.|[^'\\])'/g, (m) => placeholder('string', m));
+  // Attributes [Test], [Category("x")]
+  working = working.replace(/\[[A-Za-z_][A-Za-z0-9_.]*(?:\([^\]]*\))?\]/g, (m) => placeholder('attribute', m));
+  // Numbers
+  working = working.replace(/\b\d+(?:\.\d+)?[fFdDmMlL]?\b/g, (m) => placeholder('number', m));
+
+  // Escape what's left
+  working = escapeHtml(working);
+
+  // Highlight keywords
+  working = working.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (m, word) => {
+    if (CSHARP_KEYWORDS.has(word)) {
+      return `<span class="cs-keyword">${word}</span>`;
+    }
+    return m;
+  });
+
+  // Highlight type names following `class`, `new`, `:` (inheritance)
+  working = working.replace(
+    /(<span class="cs-keyword">(?:class|new|interface|struct|enum)<\/span>\s+)([A-Za-z_][A-Za-z0-9_]*)/g,
+    (_m, prefix, name) => `${prefix}<span class="cs-type">${name}</span>`,
+  );
+
+  // Restore placeholders (loop to handle nested placeholders, e.g. string inside attribute)
+  let prev = '';
+  while (prev !== working) {
+    prev = working;
+    working = working.replace(/__SENTINEL__(\d+)__SENTINEL__/g, (_m, idx) => placeholders[Number(idx)] ?? '');
+  }
+
+  return working;
+}
+
+// Normalize git status strings from various sources (porcelain codes, words, etc.)
+// to our single-char codes: M=modified, A=added (includes untracked), D=deleted, U=unmerged
+// Note: '?' (untracked) maps to 'A' for consistent UI — new files always show as 'A'.
+function normalizeGitStatus(raw: string | undefined | null): 'M' | 'A' | 'D' | 'U' | '?' {
+  if (!raw) return 'M';
+  const s = String(raw).trim().toUpperCase();
+  // Single-char already
+  if (s === 'M' || s === 'A' || s === 'D' || s === 'U') return s;
+  // Untracked → display as Added for consistency
+  if (s === '??' || s === '?') return 'A';
+  // Porcelain codes
+  if (s === 'UU' || s === 'AA' || s === 'DD' || s === 'AU' || s === 'UA' || s === 'DU' || s === 'UD') return 'U';
+  if (s === 'MM' || s === 'AM' || s === 'MD' || s === 'AD' || s === 'RM') return 'M';
+  // Word forms
+  if (s === 'MODIFIED') return 'M';
+  if (s === 'ADDED' || s === 'NEW' || s === 'UNTRACKED') return 'A';
+  if (s === 'DELETED' || s === 'REMOVED') return 'D';
+  if (s === 'UNMERGED' || s === 'CONFLICT' || s === 'CONFLICTED') return 'U';
+  if (s === 'RENAMED') return 'M';
+  if (s === 'COPIED') return 'A';
+  // Fallback: take first letter
+  const firstChar = s.charAt(0);
+  if (firstChar === 'M' || firstChar === 'A' || firstChar === 'D' || firstChar === 'U') {
+    return firstChar as 'M' | 'A' | 'D' | 'U';
+  }
+  if (firstChar === '?') return 'A';
+  return 'M';
 }
 
 function getAncestorDirectoryPaths(rootPath: string, targetFilePath: string): string[] {
@@ -102,7 +223,6 @@ export function SeleniumRepoBrowserModal({
   refreshToken = 0,
 }: SeleniumRepoBrowserModalProps) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set([repoPath]));
-  const [activeTab, setActiveTab] = useState<'repo' | 'git'>('repo');
   const [nodesByPath, setNodesByPath] = useState<Record<string, NodeState>>({});
   const [fileTestNamesByPath, setFileTestNamesByPath] = useState<Record<string, FileTestNamesState>>({});
   const [gitBranch, setGitBranch] = useState<GitBranchState>({
@@ -113,6 +233,17 @@ export function SeleniumRepoBrowserModal({
     branches: [],
     message: null,
   });
+  const [gitStatus, setGitStatus] = useState<{
+    unstagedFiles: GitFile[];
+    stagedFiles: GitFile[];
+    aheadCount: number;
+    behindCount: number;
+  }>({
+    unstagedFiles: [],
+    stagedFiles: [],
+    aheadCount: 0,
+    behindCount: 0,
+  });
   const [branchSwitching, setBranchSwitching] = useState(false);
   const [pendingBranchSwitch, setPendingBranchSwitch] = useState<PendingBranchSwitch | null>(null);
   const [methodSearch, setMethodSearch] = useState<MethodSearchState>({
@@ -120,11 +251,130 @@ export function SeleniumRepoBrowserModal({
     methodName: '',
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [previewFile, setPreviewFile] = useState<{
+    path: string;
+    content: string;
+    loading: boolean;
+    error: string | null;
+  } | null>(null);
+  const [wrapCode, setWrapCode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('repo-browser:wrap-code') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('repo-browser:wrap-code', wrapCode ? '1' : '0');
+    } catch { /* ignore */ }
+  }, [wrapCode]);
+  // Panel widths as percentages of container — defaults to 30:50:20
+  const [panelWidths, setPanelWidths] = useState<{ left: number; middle: number; right: number }>(() => {
+    try {
+      const saved = localStorage.getItem('repo-browser:panel-widths');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.left === 'number' && typeof parsed.middle === 'number' && typeof parsed.right === 'number') {
+          return parsed;
+        }
+      }
+    } catch { /* ignore */ }
+    return { left: 30, middle: 50, right: 20 };
+  });
+  const dragStateRef = useRef<{ handle: 'left' | 'right'; startX: number; startLeft: number; startMiddle: number; startRight: number; containerWidth: number } | null>(null);
+  const splitPaneRef = useRef<HTMLDivElement | null>(null);
   const methodRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const { addNotification } = useNotification();
 
+  // Persist panel widths
+  useEffect(() => {
+    try {
+      localStorage.setItem('repo-browser:panel-widths', JSON.stringify(panelWidths));
+    } catch { /* ignore */ }
+  }, [panelWidths]);
+
+  const handleResizeStart = (handle: 'left' | 'right') => (event: React.MouseEvent) => {
+    event.preventDefault();
+    const container = splitPaneRef.current;
+    if (!container) return;
+    dragStateRef.current = {
+      handle,
+      startX: event.clientX,
+      startLeft: panelWidths.left,
+      startMiddle: panelWidths.middle,
+      startRight: panelWidths.right,
+      containerWidth: container.getBoundingClientRect().width,
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      const drag = dragStateRef.current;
+      if (!drag) return;
+      const deltaPct = ((event.clientX - drag.startX) / drag.containerWidth) * 100;
+      const MIN = 10; // minimum % per panel
+      if (drag.handle === 'left') {
+        const newLeft = Math.max(MIN, Math.min(drag.startLeft + drag.startMiddle - MIN, drag.startLeft + deltaPct));
+        const newMiddle = drag.startLeft + drag.startMiddle - newLeft;
+        setPanelWidths({ left: newLeft, middle: newMiddle, right: drag.startRight });
+      } else {
+        // right handle: between middle and right
+        const newRight = Math.max(MIN, Math.min(drag.startMiddle + drag.startRight - MIN, drag.startRight - deltaPct));
+        const newMiddle = drag.startMiddle + drag.startRight - newRight;
+        setPanelWidths({ left: drag.startLeft, middle: newMiddle, right: newRight });
+      }
+    };
+    const handleMouseUp = () => {
+      if (dragStateRef.current) {
+        dragStateRef.current = null;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const loadFilePreview = async (filePath: string) => {
+    if (!window.desktop?.readTextFile) {
+      setPreviewFile({ path: filePath, content: '', loading: false, error: 'File reading not available' });
+      return;
+    }
+    setPreviewFile({ path: filePath, content: '', loading: true, error: null });
+    try {
+      const content = await window.desktop.readTextFile(filePath);
+      setPreviewFile({ path: filePath, content, loading: false, error: null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load file';
+      setPreviewFile({ path: filePath, content: '', loading: false, error: message });
+    }
+  };
+
   const rootNode = useMemo(() => nodesByPath[repoPath], [nodesByPath, repoPath]);
   const isClassFile = (entry: DesktopDirectoryEntry) => entry.type === 'file' && entry.name.toLowerCase().endsWith('.cs');
+
+  // Hide system / build folders that clutter the tree
+  const HIDDEN_NAMES = new Set([
+    'bin', 'obj', 'node_modules', 'packages',
+    'dist', 'build', 'out', '.cache',
+    'testresults', '.testresults',
+    '.git', '.vs', '.vscode', '.idea', '.svn', '.hg', '.next',
+  ]);
+  const isHiddenEntry = (entry: DesktopDirectoryEntry): boolean => {
+    const lower = entry.name.toLowerCase();
+    if (HIDDEN_NAMES.has(lower)) return true;
+    // Hide other dotfiles/dotfolders
+    if (entry.name.startsWith('.')) return true;
+    return false;
+  };
   const getEntryClassName = (entryName: string) => entryName.replace(/\.cs$/i, '');
   const currentMethodName = associatedMethodName || generatedMethodName;
   const hasMatchingMethodAnywhere = useMemo(
@@ -404,6 +654,43 @@ export function SeleniumRepoBrowserModal({
     }
   };
 
+  const loadGitStatus = async (targetPath: string) => {
+    if (!window.desktop?.getGitStatus) {
+      return;
+    }
+
+    try {
+      const status = await window.desktop.getGitStatus(targetPath);
+      const mapToGitFile = (file: DesktopGitChangedFile): GitFile => ({
+        ...file,
+        status: normalizeGitStatus(file.status),
+      });
+      // Untracked files (newly created, not yet in git) display as 'A' (Added)
+      // for consistency with newly-staged files. Tooltip clarifies the difference.
+      const mapUntrackedToGitFile = (file: DesktopGitChangedFile): GitFile => ({
+        ...file,
+        status: 'A',
+      });
+
+      setGitStatus({
+        unstagedFiles: [
+          ...(status.unstaged || []).map(mapToGitFile),
+          ...(status.untracked || []).map(mapUntrackedToGitFile),
+        ],
+        stagedFiles: (status.staged || []).map(mapToGitFile),
+        aheadCount: status.aheadCount || 0,
+        behindCount: status.behindCount || 0,
+      });
+    } catch {
+      setGitStatus({
+        unstagedFiles: [],
+        stagedFiles: [],
+        aheadCount: 0,
+        behindCount: 0,
+      });
+    }
+  };
+
   const reloadRepository = async () => {
     setNodesByPath({});
     setFileTestNamesByPath({});
@@ -411,6 +698,7 @@ export function SeleniumRepoBrowserModal({
     await Promise.all([
       loadPath(repoPath, true),
       loadGitBranch(repoPath),
+      loadGitStatus(repoPath),
     ]);
   };
 
@@ -447,7 +735,22 @@ export function SeleniumRepoBrowserModal({
           branch: selectedBranch,
           changedFiles: info.changedFiles ?? [],
         });
+        // Populate the Git Manager's CHANGES section from the changedFiles so
+        // user can see/stage/commit them. Also call loadGitStatus in case the
+        // desktop API provides more detailed staged/unstaged separation.
+        const changedAsGitFiles: GitFile[] = (info.changedFiles ?? []).map((f) => ({
+          ...f,
+          status: normalizeGitStatus(f.status),
+        }));
+        // Fully reset the status to avoid stale staged/aheadCount from previous branch
+        setGitStatus({
+          unstagedFiles: changedAsGitFiles,
+          stagedFiles: [],
+          aheadCount: 0,
+          behindCount: 0,
+        });
         void loadGitBranch(repoPath);
+        void loadGitStatus(repoPath);
         return;
       }
 
@@ -502,9 +805,74 @@ export function SeleniumRepoBrowserModal({
     }
   };
 
+  const handleStashAndSwitchBranch = async () => {
+    if (!pendingBranchSwitch || !window.desktop?.gitStash || !window.desktop?.switchGitBranch) {
+      addNotification('error', 'Stash unavailable. Restart the app to load latest changes.');
+      return;
+    }
+    setBranchSwitching(true);
+    try {
+      // Stash all working-tree + untracked changes
+      const stashResult = await window.desktop.gitStash(repoPath, {
+        message: `Auto-stash before switching to ${pendingBranchSwitch.branch.name}`,
+      });
+      if (!stashResult?.success) {
+        throw new Error(stashResult?.error || stashResult?.message || 'Failed to stash changes');
+      }
+      // Now safe to switch branch
+      const info = await window.desktop.switchGitBranch(repoPath, {
+        name: pendingBranchSwitch.branch.name,
+        type: pendingBranchSwitch.branch.type,
+      });
+      setPendingBranchSwitch(null);
+      setGitBranch({
+        loading: false,
+        branch: info.branch,
+        isGitRepository: info.isGitRepository,
+        gitAvailable: info.gitAvailable,
+        branches: info.branches,
+        message: info.message,
+      });
+      await reloadRepository();
+      addNotification('success', `Stashed changes and switched to ${info.branch ?? pendingBranchSwitch.branch.name}. Use Stash Pop to restore them.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to stash changes and switch branch.';
+      addNotification('error', message);
+      void loadGitBranch(repoPath);
+    } finally {
+      setBranchSwitching(false);
+    }
+  };
+
   useEffect(() => {
     void reloadRepository();
   }, [repoPath, refreshToken]);
+
+  // Auto-refresh git status every 4s so the Git Manager always reflects the
+  // current repo state (changes from external edits, branch ops, etc.).
+  // Also re-fetch when the window regains focus.
+  useEffect(() => {
+    if (!repoPath) return;
+    let cancelled = false;
+    const tick = () => {
+      if (!cancelled && document.visibilityState === 'visible') {
+        void loadGitStatus(repoPath);
+      }
+    };
+    const intervalId = window.setInterval(tick, 4000);
+    const handleFocus = () => {
+      if (!cancelled) void loadGitStatus(repoPath);
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoPath]);
 
   useEffect(() => {
     if (!currentMethodName) {
@@ -533,6 +901,85 @@ export function SeleniumRepoBrowserModal({
       return next;
     });
   }, [currentMethodName, fileTestNamesByPath]);
+
+  // When the user types a search term, auto-expand any class file whose method
+  // names match. This makes search results visible without manual clicks.
+  useEffect(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (term.length === 0) return;
+    const filesToExpand: string[] = [];
+    Object.entries(fileTestNamesByPath).forEach(([filePath, state]) => {
+      if (state.names.some((name) => name.toLowerCase().includes(term))) {
+        filesToExpand.push(filePath);
+      }
+    });
+    if (filesToExpand.length === 0) return;
+    setExpandedPaths((current) => {
+      const next = new Set(current);
+      let changed = false;
+      filesToExpand.forEach((p) => {
+        if (!next.has(p)) {
+          next.add(p);
+          changed = true;
+        }
+        // Also expand all ancestor directories
+        getAncestorDirectoryPaths(repoPath, p).forEach((ancestor) => {
+          if (!next.has(ancestor)) {
+            next.add(ancestor);
+            changed = true;
+          }
+        });
+      });
+      return changed ? next : current;
+    });
+  }, [searchTerm, fileTestNamesByPath, repoPath]);
+
+  // Auto-load all unloaded directories during search so the strict filter has
+  // complete data to evaluate. Avoids "false matches" of unloaded folders.
+  useEffect(() => {
+    const term = searchTerm.trim();
+    if (term.length === 0) return;
+    // Walk through all loaded directories and load any of their unloaded subdirs.
+    // This cascades: as new dirs load, this effect re-runs and loads deeper dirs.
+    Object.values(nodesByPath).forEach((node) => {
+      node.entries.forEach((entry) => {
+        if (entry.type === 'directory' && !nodesByPath[entry.path]) {
+          // Skip system folders (matches isHiddenEntry pattern)
+          const lower = entry.name.toLowerCase();
+          if (HIDDEN_NAMES.has(lower) || entry.name.startsWith('.')) return;
+          void loadPath(entry.path);
+        }
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, nodesByPath]);
+
+  // Auto-expand directories that contain matches during search, so users see
+  // the matched items immediately without needing to manually expand parents.
+  useEffect(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (term.length === 0) return;
+    const dirsToExpand: string[] = [];
+    Object.entries(nodesByPath).forEach(([dirPath, state]) => {
+      const hasMatch = state.entries.some((e) => e.name.toLowerCase().includes(term));
+      if (hasMatch) {
+        dirsToExpand.push(dirPath);
+        getAncestorDirectoryPaths(repoPath, dirPath).forEach((a) => dirsToExpand.push(a));
+      }
+    });
+    if (dirsToExpand.length === 0) return;
+    setExpandedPaths((current) => {
+      const next = new Set(current);
+      let changed = false;
+      dirsToExpand.forEach((p) => {
+        if (!next.has(p)) {
+          next.add(p);
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [searchTerm, nodesByPath, repoPath]);
 
   useEffect(() => {
     if (!currentMethodName) {
@@ -587,29 +1034,6 @@ export function SeleniumRepoBrowserModal({
   };
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const branchLabel = gitBranch.loading
-    ? 'Checking branch...'
-    : branchSwitching
-      ? 'Switching branch...'
-    : gitBranch.branch
-      ? `Branch: ${gitBranch.branch}`
-      : gitBranch.isGitRepository
-        ? 'Branch unavailable'
-        : gitBranch.message
-          ? 'Git branch lookup unavailable'
-        : 'Not a Git repository';
-  const currentBranchOption = gitBranch.branches.find((branch) => branch.current)
-    ?? gitBranch.branches.find((branch) => branch.type === 'local' && branch.name === gitBranch.branch);
-  const currentBranchValue = currentBranchOption ? `${currentBranchOption.type}:${currentBranchOption.name}` : '';
-  const branchOptions = useMemo(
-    () => gitBranch.branches.map((branch) => ({
-      value: `${branch.type}:${branch.name}`,
-      label: branch.name,
-      group: branch.type === 'remote' ? 'Remote branches' : 'Local branches',
-    })),
-    [gitBranch.branches],
-  );
-  const isBranchSelectDisabled = !gitBranch.gitAvailable || gitBranch.loading || branchSwitching || actionBusy;
 
   const entryMatchesSearch = (entry: DesktopDirectoryEntry): boolean => {
     if (normalizedSearch.length === 0) {
@@ -627,6 +1051,8 @@ export function SeleniumRepoBrowserModal({
 
     if (entry.type === 'directory') {
       const childNode = nodesByPath[entry.path];
+      // Strict filter: directory shows only if loaded AND contains matches.
+      // The auto-loader effect (below) loads unloaded directories during search.
       if (!childNode) {
         return false;
       }
@@ -700,6 +1126,11 @@ export function SeleniumRepoBrowserModal({
             return null;
           }
 
+          // Hide system / build folders (.git, bin, obj, node_modules, etc.)
+          if (isHiddenEntry(entry)) {
+            return null;
+          }
+
           return (
             <div key={entry.path}>
               <div
@@ -719,11 +1150,25 @@ export function SeleniumRepoBrowserModal({
                     <span className="repo-browser__label">{entry.name}</span>
                   </button>
                 ) : canExpandClassFile ? (
-                  <div className={`repo-browser__item repo-browser__item--file${isAssociatedClass ? ' is-selected' : ''}`}>
+                  <div
+                    className={`repo-browser__item repo-browser__item--file is-clickable${isAssociatedClass ? ' is-selected' : ''}${previewFile?.path === entry.path ? ' is-preview-active' : ''}`}
+                    onClick={() => void loadFilePreview(entry.path)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        void loadFilePreview(entry.path);
+                      }
+                    }}
+                  >
                     <button
                       type="button"
                       className={`repo-browser__toggle-btn${isExpanded ? ' is-expanded' : ''}`}
-                      onClick={() => toggleNode(entry.path)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleNode(entry.path);
+                      }}
                       title={isExpanded ? 'Collapse class file' : 'Expand class file'}
                     >
                       <IconChevronRight size={14} />
@@ -756,7 +1201,19 @@ export function SeleniumRepoBrowserModal({
                     )}
                   </div>
                 ) : (
-                  <div className="repo-browser__item repo-browser__item--file" title={entry.path}>
+                  <div
+                    className={`repo-browser__item repo-browser__item--file is-clickable${previewFile?.path === entry.path ? ' is-preview-active' : ''}`}
+                    title={entry.path}
+                    onClick={() => void loadFilePreview(entry.path)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        void loadFilePreview(entry.path);
+                      }
+                    }}
+                  >
                     <span className="repo-browser__chevron repo-browser__chevron--placeholder" aria-hidden="true" />
                     <IconDescription size={16} />
                     <span className="repo-browser__item-copy">
@@ -862,233 +1319,357 @@ export function SeleniumRepoBrowserModal({
             </div>
           </header>
 
-          <div className="settings-workbench__tabs">
-            <button
-              type="button"
-              className={`settings-workbench__tab ${activeTab === 'repo' ? 'is-active' : ''}`}
-              onClick={() => setActiveTab('repo')}
-            >
-              Repo Manage
-            </button>
-            <button
-              type="button"
-              className={`settings-workbench__tab ${activeTab === 'git' ? 'is-active' : ''}`}
-              onClick={() => setActiveTab('git')}
-            >
-              Git
-            </button>
-          </div>
-
-          <div className="settings-workbench__body repo-browser__body" style={{ marginTop: '16px' }}>
-            <div className="settings-content">
-              {activeTab === 'repo' && (
-                <section className="settings-pane">
-                  <div className="settings-panel">
-                    <div className="settings-panel__head" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                          <h3 className="settings-panel__title">Repository Contents</h3>
-                          <p className="settings-panel__sub">
-                            {mode === 'manage-automation'
-                              ? 'Browse classes, write the generated test method, and manage the Azure test association from the tree.'
-                              : 'Browse folders and files from the configured Selenium workspace or repository.'}
-                          </p>
-                          {mode === 'manage-automation' && methodSearch.loading && (
-                            <p className="repo-browser__scan-status" aria-live="polite">
-                              <span className="repo-browser__scan-spinner" aria-hidden="true" />
-                              {`Searching repository for ${methodSearch.methodName}...`}
-                            </p>
-                          )}
-                        </div>
-                        <div className="repo-browser__header-actions" style={{ flexShrink: 0 }}>
-                          <div className="repo-browser__repo-meta" aria-live="polite">
-                            {gitBranch.isGitRepository && gitBranch.branches.length > 0 ? (
-                              <div
-                                className={`repo-browser__branch-select${gitBranch.branch ? ' is-active' : ''}${isBranchSelectDisabled ? ' is-disabled' : ''}`}
-                                title={gitBranch.gitAvailable ? 'Switch Git branch' : gitBranch.message ?? 'Git executable unavailable'}
-                              >
-                                <IconBranch size={15} className="repo-browser__branch-select-icon" />
-                                <SearchableSelect
-                                  className="repo-browser__branch-dropdown"
-                                  options={branchOptions}
-                                  value={currentBranchValue}
-                                  onChange={(value) => {
-                                    if (isBranchSelectDisabled) {
-                                      return;
-                                    }
-                                    void handleBranchChange(value);
-                                  }}
-                                  placeholder="Search branches"
-                                  emptyLabel={branchLabel}
-                                />
-                              </div>
-                            ) : (
-                              <span
-                                className={`repo-browser__branch-pill${gitBranch.branch ? ' is-active' : ''}`}
-                                title={gitBranch.message ?? undefined}
-                              >
-                                <IconBranch size={15} />
-                                <span>{branchLabel}</span>
-                              </span>
-                            )}
-                          </div>
-                          <label className="repo-browser__search repo-browser__search--header" htmlFor="repo-browser-search">
-                            <IconSearch size={15} />
-                            <input
-                              id="repo-browser-search"
-                              type="text"
-                              value={searchTerm}
-                              onChange={(event) => setSearchTerm(event.target.value)}
-                              placeholder="Search files or test methods"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="btn btn--secondary btn--sm"
-                            onClick={() => {
-                              void reloadRepository();
-                            }}
-                            title="Refresh repo browser"
-                          >
-                            <IconRefresh size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="repo-browser__panel">
-                      {rootNode?.loading && rootNode.entries.length === 0 ? (
-                        <div className="repo-browser__state">Loading repository contents...</div>
-                      ) : null}
-                      {renderEntries(repoPath)}
-                    </div>
-                    {mode === 'manage-automation' && (
-                      <div className="repo-browser__assign-bar">
-                        <div className="repo-browser__preview">
-                          <div className="repo-browser__preview-title">Automation Manager</div>
-                          <div className="repo-browser__preview-line">
-                            {associatedMethodName ? 'Azure method' : 'Generated method'}: {currentMethodName || 'Unavailable'}
-                          </div>
-                          <div className="repo-browser__preview-line">
-                            Associated method: {associatedMethodName || 'Not associated'}
-                          </div>
-                          <div className="repo-browser__preview-line">
-                            Associated class: {associatedClassName || 'Not associated'}
-                          </div>
-                          <div className="repo-browser__preview-line">
-                            {hasMatchingMethodAnywhere
-                              ? 'Showing related class and current test method.'
-                              : 'Current test script is not available. Pick a class and add code first.'}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </section>
-              )}
-              {activeTab === 'git' && (
-                <section className="settings-pane">
-                  <div className="settings-panel">
-                    <div className="settings-panel__head">
-                      <h3 className="settings-panel__title">Git Changes</h3>
+          <div
+            className="repo-browser__split-pane"
+            ref={splitPaneRef}
+            style={{
+              gridTemplateColumns: `${panelWidths.left}fr 2px ${panelWidths.middle}fr 2px ${panelWidths.right}fr`,
+            }}
+          >
+            {/* Left Panel: Repo Manager */}
+            <div className="repo-browser__left-panel">
+              <section className="settings-pane">
+                <div className="settings-panel">
+                  <div className="settings-panel__head">
+                    <div>
+                      <h3 className="settings-panel__title">REPO</h3>
                       <p className="settings-panel__sub">
-                        Manage local commits and git operations for the Automation Repo.
+                        {mode === 'manage-automation'
+                          ? 'Browse classes, write the generated test method, and manage the Azure test association from the tree.'
+                          : 'Browse folders and files from the configured Selenium workspace or repository.'}
                       </p>
+                      {mode === 'manage-automation' && methodSearch.loading && (
+                        <p className="repo-browser__scan-status" aria-live="polite">
+                          <span className="repo-browser__scan-spinner" aria-hidden="true" />
+                          {`Searching repository for ${methodSearch.methodName}...`}
+                        </p>
+                      )}
                     </div>
-                    <div className="repo-browser__panel" style={{ padding: '24px' }}>
-                      <div className="repo-browser__state" style={{ padding: 0 }}>
-                        <div style={{ marginBottom: '16px' }}>
-                          <textarea 
-                            className="form-control" 
-                            placeholder="Enter a message <Required>"
-                            rows={3}
-                            style={{ width: '100%', resize: 'vertical' }}
-                          />
+                    <div className="repo-browser__header-actions">
+                      <label className="repo-browser__search repo-browser__search--header" htmlFor="repo-browser-search">
+                        <IconSearch size={15} />
+                        <input
+                          id="repo-browser-search"
+                          type="text"
+                          value={searchTerm}
+                          onChange={(event) => setSearchTerm(event.target.value)}
+                          placeholder="Search files"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => {
+                          void reloadRepository();
+                        }}
+                        title="Refresh repo browser"
+                      >
+                        <IconRefresh size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => {
+                          // Collapse everything except the repo root
+                          setExpandedPaths(new Set([repoPath]));
+                        }}
+                        title="Collapse all folders"
+                        aria-label="Collapse all folders"
+                      >
+                        <svg
+                          width={16}
+                          height={16}
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M3 7l3-3 3 3" />
+                          <path d="M3 12l3-3 3 3" />
+                          <path d="M11 5h2" />
+                          <path d="M11 9h2" />
+                          <path d="M11 13h2" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="repo-browser__panel">
+                    {rootNode?.loading && rootNode.entries.length === 0 ? (
+                      <div className="repo-browser__state">Loading repository contents...</div>
+                    ) : null}
+                    {(() => {
+                      // Detect "no search matches" state. When user is searching but
+                      // no entries pass the filter, show a clear message.
+                      if (normalizedSearch.length === 0) return renderEntries(repoPath);
+                      const hasMatch = (() => {
+                        const visit = (entries: DesktopDirectoryEntry[]): boolean => {
+                          for (const entry of entries) {
+                            if (isHiddenEntry(entry)) continue;
+                            if (entry.name.toLowerCase().includes(normalizedSearch)) return true;
+                            if (isClassFile(entry)) {
+                              const methods = fileTestNamesByPath[entry.path]?.names ?? [];
+                              if (methods.some((m) => m.toLowerCase().includes(normalizedSearch))) return true;
+                            }
+                            if (entry.type === 'directory') {
+                              const child = nodesByPath[entry.path];
+                              if (child && visit(child.entries)) return true;
+                            }
+                          }
+                          return false;
+                        };
+                        return visit(rootNode?.entries ?? []);
+                      })();
+                      // While unloaded directories are still being scanned, show "Searching..."
+                      const stillLoading = Object.values(nodesByPath).some((n) => n.loading);
+                      if (!hasMatch) {
+                        return (
+                          <div className="repo-browser__state repo-browser__state--empty">
+                            {stillLoading
+                              ? `Searching for "${searchTerm}"...`
+                              : `No matches for "${searchTerm}"`}
+                          </div>
+                        );
+                      }
+                      return renderEntries(repoPath);
+                    })()}
+                  </div>
+                  {mode === 'manage-automation' && (
+                    <div className="repo-browser__assign-bar">
+                      <div className="repo-browser__preview">
+                        <div className="repo-browser__preview-title">Automation Manager</div>
+                        <div className="repo-browser__preview-line">
+                          {associatedMethodName ? 'Azure method' : 'Generated method'}: {currentMethodName || 'Unavailable'}
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-                          <button type="button" className="btn btn--primary btn--sm">
-                            Commit All
-                          </button>
+                        <div className="repo-browser__preview-line">
+                          Associated method: {associatedMethodName || 'Not associated'}
                         </div>
-                        <div style={{ textAlign: 'left', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                          <h4 style={{ fontSize: '14px', marginBottom: '8px', color: 'var(--text-color)' }}>Changes</h4>
-                          <p className="settings-panel__sub">No local changes are currently tracked in this view.</p>
+                        <div className="repo-browser__preview-line">
+                          Associated class: {associatedClassName || 'Not associated'}
+                        </div>
+                        <div className="repo-browser__preview-line">
+                          {hasMatchingMethodAnywhere
+                            ? 'Showing related class and current test method.'
+                            : 'Current test script is not available. Pick a class and add code first.'}
                         </div>
                       </div>
                     </div>
+                  )}
+                </div>
+              </section>
+            </div>
+
+            {/* Resize handle: left | middle */}
+            <div
+              className="repo-browser__resize-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize repo and preview panels"
+              onMouseDown={handleResizeStart('left')}
+            />
+
+            {/* Middle Panel: Code Preview */}
+            <div className="repo-browser__middle-panel">
+              <div className="repo-browser__preview-header">
+                <span className="repo-browser__preview-label">PREVIEW</span>
+                {previewFile && (
+                  <span className="repo-browser__preview-filename" title={previewFile.path}>
+                    {previewFile.path.split(/[\\/]/).pop()}
+                  </span>
+                )}
+                {previewFile && (
+                  <button
+                    type="button"
+                    className={`repo-browser__preview-toggle${wrapCode ? ' is-active' : ''}`}
+                    onClick={() => setWrapCode((w) => !w)}
+                    title={wrapCode ? 'Disable word wrap' : 'Enable word wrap'}
+                    aria-label="Toggle word wrap"
+                    aria-pressed={wrapCode}
+                  >
+                    ↩
+                  </button>
+                )}
+                {previewFile && (
+                  <button
+                    type="button"
+                    className="repo-browser__preview-close"
+                    onClick={() => setPreviewFile(null)}
+                    title="Close preview"
+                    aria-label="Close preview"
+                  >
+                    <IconX size={14} />
+                  </button>
+                )}
+              </div>
+              <div className="repo-browser__preview-body">
+                {!previewFile ? (
+                  <div className="repo-browser__preview-empty">
+                    <IconCode size={32} />
+                    <p>Select a file from the repository to preview its content</p>
                   </div>
-                </section>
-              )}
+                ) : previewFile.loading ? (
+                  <div className="repo-browser__preview-empty">Loading...</div>
+                ) : previewFile.error ? (
+                  <div className="repo-browser__preview-empty repo-browser__preview-empty--error">
+                    {previewFile.error}
+                  </div>
+                ) : (
+                  <pre className={`repo-browser__preview-code${wrapCode ? ' is-wrapped' : ''}`}>
+                    <code
+                      dangerouslySetInnerHTML={{
+                        __html: renderCodeWithLineNumbers(
+                          previewFile.path.toLowerCase().endsWith('.cs')
+                            ? highlightCSharp(previewFile.content)
+                            : escapeHtml(previewFile.content),
+                        ),
+                      }}
+                    />
+                  </pre>
+                )}
+              </div>
+            </div>
+
+            {/* Resize handle: middle | right */}
+            <div
+              className="repo-browser__resize-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize preview and git panels"
+              onMouseDown={handleResizeStart('right')}
+            />
+
+            {/* Right Panel: Git Manager */}
+            <div className="repo-browser__right-panel">
+              <GitManager
+                repoPath={repoPath}
+                unstagedFiles={gitStatus.unstagedFiles}
+                stagedFiles={gitStatus.stagedFiles}
+                branch={gitBranch.branch}
+                branches={gitBranch.branches}
+                aheadCount={gitStatus.aheadCount}
+                behindCount={gitStatus.behindCount}
+                isLoading={gitBranch.loading}
+                onStatusChange={() => {
+                  // Lightweight refresh — only re-fetch git status (changed files).
+                  // No need to reload the file tree or method names.
+                  void loadGitStatus(repoPath);
+                }}
+                onBranchChange={(branchValue) => {
+                  void handleBranchChange(branchValue);
+                }}
+              />
             </div>
           </div>
         </section>
       </div>
-      {pendingBranchSwitch && (
-        <div className="repo-browser__branch-conflict" role="dialog" aria-modal="true" aria-label="Commit changes to switch branch">
-          <button
-            type="button"
-            className="repo-browser__branch-conflict-backdrop"
-            onClick={() => {
-              if (!branchSwitching) {
-                setPendingBranchSwitch(null);
-              }
-            }}
-            aria-label="Cancel branch switch"
-          />
-          <div className="repo-browser__branch-conflict-panel">
-            <div className="repo-browser__branch-conflict-head">
-              <h3>Commit changes to switch branch</h3>
-              <button
-                type="button"
-                className="repo-browser__branch-conflict-close"
-                onClick={() => setPendingBranchSwitch(null)}
-                disabled={branchSwitching}
-                aria-label="Cancel branch switch"
-              >
-                <IconX size={16} />
-              </button>
-            </div>
-            <p className="repo-browser__branch-conflict-copy">
-              Your changes to the following files would be overwritten by checkout:
-            </p>
-            <div className="repo-browser__branch-conflict-files">
-              {pendingBranchSwitch.changedFiles.length > 0 ? (
-                pendingBranchSwitch.changedFiles.map((file) => (
-                  <div key={`${file.status}:${file.path}`} className="repo-browser__branch-conflict-file">
-                    <span className="repo-browser__branch-conflict-path">{file.path}</span>
-                    <span className="repo-browser__branch-conflict-stats">
-                      <span className="repo-browser__branch-conflict-add">+{file.additions}</span>
-                      <span className="repo-browser__branch-conflict-del">-{file.deletions}</span>
-                    </span>
+      {pendingBranchSwitch && (() => {
+        // Dedupe files by case-insensitive path (fixes git's occasional double-reporting)
+        const seen = new Set<string>();
+        const dedupedFiles = pendingBranchSwitch.changedFiles.filter((f) => {
+          const key = f.path.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        const getStatusBadge = (rawStatus: string) => {
+          const s = normalizeGitStatus(rawStatus);
+          const label: Record<string, string> = {
+            M: 'Modified',
+            A: 'Added',
+            D: 'Deleted',
+            U: 'Unmerged',
+            '?': 'Untracked',
+          };
+          return { code: s, label: label[s] || s };
+        };
+
+        return (
+          <div className="repo-browser__branch-conflict" role="dialog" aria-modal="true" aria-label="Switch branch — local changes detected">
+            <button
+              type="button"
+              className="repo-browser__branch-conflict-backdrop"
+              onClick={() => {
+                if (!branchSwitching) {
+                  setPendingBranchSwitch(null);
+                }
+              }}
+              aria-label="Cancel branch switch"
+            />
+            <div className="repo-browser__branch-conflict-panel">
+              <div className="repo-browser__branch-conflict-head">
+                <h3>Local changes detected</h3>
+                <button
+                  type="button"
+                  className="repo-browser__branch-conflict-close"
+                  onClick={() => setPendingBranchSwitch(null)}
+                  disabled={branchSwitching}
+                  aria-label="Cancel branch switch"
+                >
+                  <IconX size={16} />
+                </button>
+              </div>
+              <p className="repo-browser__branch-conflict-copy">
+                Switching to <strong>{pendingBranchSwitch.branch.name}</strong> would overwrite the following file{dedupedFiles.length !== 1 ? 's' : ''}:
+              </p>
+              <div className="repo-browser__branch-conflict-files">
+                {dedupedFiles.length > 0 ? (
+                  dedupedFiles.map((file) => {
+                    const badge = getStatusBadge(file.status);
+                    return (
+                      <div key={file.path} className={`repo-browser__branch-conflict-file git-status--${badge.code === '?' ? 'untracked' : badge.label.toLowerCase()}`}>
+                        <span
+                          className={`repo-browser__branch-conflict-status git-status--${badge.code === '?' ? 'untracked' : badge.label.toLowerCase()}`}
+                          title={badge.label}
+                        >
+                          {badge.code}
+                        </span>
+                        <span className="repo-browser__branch-conflict-path" title={file.path}>{file.path}</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="repo-browser__branch-conflict-file">
+                    <span className="repo-browser__branch-conflict-path">Local repository changes</span>
                   </div>
-                ))
-              ) : (
-                <div className="repo-browser__branch-conflict-file">
-                  <span className="repo-browser__branch-conflict-path">Local repository changes</span>
-                </div>
-              )}
-            </div>
-            <p className="repo-browser__branch-conflict-copy">Please commit your changes to continue</p>
-            <div className="repo-browser__branch-conflict-actions">
-              <button
-                type="button"
-                className="btn btn--secondary"
-                onClick={() => setPendingBranchSwitch(null)}
-                disabled={branchSwitching}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => { void handleCommitAndSwitchBranch(); }}
-                disabled={branchSwitching}
-              >
-                {branchSwitching ? 'Committing...' : 'Commit and switch branch...'}
-              </button>
+                )}
+              </div>
+              <p className="repo-browser__branch-conflict-help">
+                Choose how to handle them:
+              </p>
+              <div className="repo-browser__branch-conflict-actions">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => setPendingBranchSwitch(null)}
+                  disabled={branchSwitching}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  onClick={() => { void handleStashAndSwitchBranch(); }}
+                  disabled={branchSwitching}
+                  title="Save changes to stash, switch branch. Use Stash Pop later to restore."
+                >
+                  📦 {branchSwitching ? 'Stashing...' : 'Stash & Switch'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => { void handleCommitAndSwitchBranch(); }}
+                  disabled={branchSwitching}
+                  title="Commit changes to current branch, then switch"
+                >
+                  {branchSwitching ? 'Committing...' : 'Commit & Switch'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
