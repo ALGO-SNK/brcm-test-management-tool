@@ -228,6 +228,35 @@ function isScreenshotAttachment(filePath: string): boolean {
   return /\.(png|jpe?g|gif|bmp|webp|avif)$/i.test(filePath);
 }
 
+// Find image attachments for a failed test by scanning the test output dir.
+// Looks under {workingDir}/BromCom.Tests/bin/Debug/net8.0 for any image whose
+// filename contains the test method name (matches e.g. "TestName.jpg",
+// "TestName_screenshot.png", "TestName_failed.png").
+// Falls back to the conventional `{TestName}.jpg` guess if no match found, so
+// the UI always shows the expected attachment slot.
+async function findAttachmentsForTest(workingDirectory: string, testName: string): Promise<string[]> {
+  if (!workingDirectory || !testName) return [];
+  const sep = workingDirectory.endsWith('\\') || workingDirectory.endsWith('/') ? '' : '\\';
+  const attachmentsDir = `${workingDirectory}${sep}BromCom.Tests\\bin\\Debug\\net8.0`.replace(/\//g, '\\');
+  const fallback = `${attachmentsDir}\\${testName}.jpg`;
+
+  if (!window.desktop?.listDirectory) return [fallback];
+  try {
+    const entries = await window.desktop.listDirectory(attachmentsDir);
+    const testNameLower = testName.toLowerCase();
+    const matches = entries
+      .filter((e) => e.type === 'file')
+      .filter((e) => {
+        const nameLower = e.name.toLowerCase();
+        return isScreenshotAttachment(nameLower) && nameLower.includes(testNameLower);
+      })
+      .map((e) => e.path);
+    return matches.length > 0 ? matches : [fallback];
+  } catch {
+    return [fallback];
+  }
+}
+
 function extractDebugBreakpointsFromLogs(entries: TestRunLogEntry[]): Array<{ sourcePath: string; line: number }> {
   const breakpoints: Array<{ sourcePath: string; line: number }> = [];
   const seen = new Set<string>();
@@ -1044,10 +1073,6 @@ export function TestCaseDetail({
     ? `${debuggerCurrentFrame.sourcePath || debuggerCurrentFrame.sourceName || 'Unknown source'}:${debuggerCurrentFrame.line || 0}`
     : 'Not available';
 
-  const handleToggleLogStream = useCallback(() => {
-    setIsLogStreamPaused((prev) => !prev);
-  }, []);
-
   const getConsoleMessageCategory = (message: string) => {
     if (!message) return 'default';
     if (
@@ -1205,9 +1230,17 @@ export function TestCaseDetail({
     runLogViewportRef.current.scrollTop = runLogViewportRef.current.scrollHeight;
   }, [runLogEntries]);
 
+  // Hydrate from cache only once per test case load. Without this guard, the
+  // effect re-fires every time isRunBusy flips back to false (i.e. after a
+  // fresh test run completes), overwriting the just-set runAttachments with
+  // stale cached data — making the failure screenshot blink and disappear.
+  const hydratedFromCacheRef = useRef<string | null>(null);
   useEffect(() => {
     if (!testCase?.id) return;
     if (isRunBusy) return;
+    const cacheKey = String(testCase.id);
+    if (hydratedFromCacheRef.current === cacheKey) return;
+    hydratedFromCacheRef.current = cacheKey;
     const cached = readCachedLocalExecutionLog(testCase.id);
     if (!cached) return;
 
@@ -1305,12 +1338,13 @@ export function TestCaseDetail({
       setActiveRunId(result.runId);
       setRunStatus(result.status);
       
-      let attachments = Array.isArray(result.attachments) ? [...result.attachments] : [];
+      const attachments: string[] = Array.isArray(result.attachments) ? [...result.attachments] : [];
       if (result.status !== 'complete' && result.status !== 'cancelled') {
-        const separator = workingDirectory.endsWith('\\') || workingDirectory.endsWith('/') ? '' : '\\';
-        const fallbackAttachmentPath = `${workingDirectory}${separator}BromCom.Tests\\bin\\Debug\\net8.0\\${runMethodName.trim()}.jpg`.replace(/\//g, '\\');
-        if (!attachments.some((a) => a.toLowerCase() === fallbackAttachmentPath.toLowerCase())) {
-          attachments.push(fallbackAttachmentPath);
+        const found = await findAttachmentsForTest(workingDirectory, runMethodName.trim());
+        for (const p of found) {
+          if (!attachments.some((a) => a.toLowerCase() === p.toLowerCase())) {
+            attachments.push(p);
+          }
         }
       }
       setRunAttachments(attachments);
@@ -1373,12 +1407,13 @@ export function TestCaseDetail({
       setActiveRunId(result.runId);
       setRunStatus(result.status);
 
-      let attachments = Array.isArray(result.attachments) ? [...result.attachments] : [];
+      const attachments: string[] = Array.isArray(result.attachments) ? [...result.attachments] : [];
       if (result.status !== 'complete' && result.status !== 'cancelled') {
-        const separator = workingDirectory.endsWith('\\') || workingDirectory.endsWith('/') ? '' : '\\';
-        const fallbackAttachmentPath = `${workingDirectory}${separator}BromCom.Tests\\bin\\Debug\\net8.0\\${runMethodName.trim()}.jpg`.replace(/\//g, '\\');
-        if (!attachments.some((a) => a.toLowerCase() === fallbackAttachmentPath.toLowerCase())) {
-          attachments.push(fallbackAttachmentPath);
+        const found = await findAttachmentsForTest(workingDirectory, runMethodName.trim());
+        for (const p of found) {
+          if (!attachments.some((a) => a.toLowerCase() === p.toLowerCase())) {
+            attachments.push(p);
+          }
         }
       }
       setRunAttachments(attachments);

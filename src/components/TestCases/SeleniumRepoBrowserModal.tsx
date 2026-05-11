@@ -286,6 +286,25 @@ export function SeleniumRepoBrowserModal({
   const dragStateRef = useRef<{ handle: 'left' | 'right'; startX: number; startLeft: number; startMiddle: number; startRight: number; containerWidth: number } | null>(null);
   const splitPaneRef = useRef<HTMLDivElement | null>(null);
   const methodRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // Frozen banner state during action API calls — prevents button-label flicker
+  // while the parent is propagating the optimistic association/unassociation.
+  const bannerStateRef = useRef<{
+    isAssociatedFile: boolean;
+    associatedMethodName: string | null;
+    associatedClassName: string | null;
+    generatedMethodInThisFile: boolean;
+    generatedMethodName: string;
+    currentMethodName: string;
+    previewFilePath: string;
+  } | null>(null);
+  const [bannerFrozen, setBannerFrozen] = useState(false);
+  // Once parent finishes its API roundtrip (actionBusy returns to false),
+  // release the freeze on the next tick so banner re-syncs with live state.
+  useEffect(() => {
+    if (actionBusy || !bannerFrozen) return;
+    const timer = window.setTimeout(() => setBannerFrozen(false), 60);
+    return () => window.clearTimeout(timer);
+  }, [actionBusy, bannerFrozen]);
   const { addNotification } = useNotification();
 
   // Persist panel widths
@@ -352,6 +371,15 @@ export function SeleniumRepoBrowserModal({
     try {
       const content = await window.desktop.readTextFile(filePath);
       setPreviewFile({ path: filePath, content, loading: false, error: null });
+      // For .cs files, also extract test method names so the banner can detect
+      // whether the generated method is already present in this class.
+      if (filePath.toLowerCase().endsWith('.cs')) {
+        const names = extractTestMethodNames(content);
+        setFileTestNamesByPath((current) => ({
+          ...current,
+          [filePath]: { loading: false, names },
+        }));
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load file';
       setPreviewFile({ path: filePath, content: '', loading: false, error: message });
@@ -902,6 +930,26 @@ export function SeleniumRepoBrowserModal({
     });
   }, [currentMethodName, fileTestNamesByPath]);
 
+  // Auto-open the matching class file in PREVIEW when navigating from Test
+  // Details (manage-automation mode) and the test method is already known to
+  // exist somewhere in the repo. The user shouldn't have to manually click the
+  // file in the tree just to see code they've already associated.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const previewAutoOpenedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (mode !== 'manage-automation') return;
+    if (!currentMethodName) return;
+    if (previewFile?.path) return; // user already has something open
+    const matchingPath = Object.entries(fileTestNamesByPath).find(
+      ([, state]) => state.names.includes(currentMethodName),
+    )?.[0];
+    if (!matchingPath) return;
+    if (previewAutoOpenedRef.current === matchingPath) return;
+    previewAutoOpenedRef.current = matchingPath;
+    void loadFilePreview(matchingPath);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, currentMethodName, fileTestNamesByPath, previewFile?.path]);
+
   // When the user types a search term, auto-expand any class file whose method
   // names match. This makes search results visible without manual clicks.
   useEffect(() => {
@@ -1188,17 +1236,9 @@ export function SeleniumRepoBrowserModal({
                               : 'No tests found'}
                       </span>
                     </span>
-                    {mode === 'manage-automation' && !currentMethodExistsInFile && (
-                      <button
-                        type="button"
-                        className="repo-browser__action-btn"
-                        onClick={() => onWriteCode?.(entry.path)}
-                        title={generatedMethodName ? `Write ${generatedMethodName} into this class` : 'Write automated test code'}
-                        disabled={actionBusy || !generatedMethodName}
-                      >
-                        <IconCode size={15} />
-                      </button>
-                    )}
+                    {/* "Write code" button removed from tree — action now lives in the
+                        contextual banner inside the PREVIEW panel where it has more space
+                        and clearer labeling. */}
                   </div>
                 ) : (
                   <div
@@ -1240,28 +1280,8 @@ export function SeleniumRepoBrowserModal({
                         <span className="repo-browser__chevron repo-browser__chevron--placeholder" aria-hidden="true" />
                         <span className="material-symbols repo-browser__method-icon" aria-hidden="true">function</span>
                         <span className="repo-browser__label">{name}</span>
-                        {mode === 'manage-automation' && !associatedMethodName && generatedMethodName === name && (
-                          <button
-                            type="button"
-                            className="repo-browser__action-btn"
-                            onClick={() => onAddAssociation?.(entry.path, name)}
-                            title="Add automated test association"
-                            disabled={actionBusy}
-                          >
-                            <IconAddLink size={15} />
-                          </button>
-                        )}
-                        {mode === 'manage-automation' && associatedMethodName === name && associatedClassName === entryClassName && (
-                          <button
-                            type="button"
-                            className="repo-browser__action-btn repo-browser__action-btn--danger"
-                            onClick={() => onRemoveAssociation?.(entry.path, name)}
-                            title="Remove automated test association"
-                            disabled={actionBusy}
-                          >
-                            <IconLinkOff size={15} />
-                          </button>
-                        )}
+                        {/* Link / unlink icons removed from tree — actions now live in
+                            the contextual banner inside the PREVIEW panel. */}
                       </div>
                     ))
                   ) : mode === 'manage-automation' ? (
@@ -1320,10 +1340,13 @@ export function SeleniumRepoBrowserModal({
           </header>
 
           <div
-            className="repo-browser__split-pane"
+            className={`repo-browser__split-pane${mode === 'manage-automation' ? ' repo-browser__split-pane--no-git' : ''}`}
             ref={splitPaneRef}
             style={{
-              gridTemplateColumns: `${panelWidths.left}fr 2px ${panelWidths.middle}fr 2px ${panelWidths.right}fr`,
+              gridTemplateColumns:
+                mode === 'manage-automation'
+                  ? `${panelWidths.left}fr 2px ${panelWidths.middle + panelWidths.right}fr`
+                  : `${panelWidths.left}fr 2px ${panelWidths.middle}fr 2px ${panelWidths.right}fr`,
             }}
           >
             {/* Left Panel: Repo Manager */}
@@ -1436,27 +1459,9 @@ export function SeleniumRepoBrowserModal({
                       return renderEntries(repoPath);
                     })()}
                   </div>
-                  {mode === 'manage-automation' && (
-                    <div className="repo-browser__assign-bar">
-                      <div className="repo-browser__preview">
-                        <div className="repo-browser__preview-title">Automation Manager</div>
-                        <div className="repo-browser__preview-line">
-                          {associatedMethodName ? 'Azure method' : 'Generated method'}: {currentMethodName || 'Unavailable'}
-                        </div>
-                        <div className="repo-browser__preview-line">
-                          Associated method: {associatedMethodName || 'Not associated'}
-                        </div>
-                        <div className="repo-browser__preview-line">
-                          Associated class: {associatedClassName || 'Not associated'}
-                        </div>
-                        <div className="repo-browser__preview-line">
-                          {hasMatchingMethodAnywhere
-                            ? 'Showing related class and current test method.'
-                            : 'Current test script is not available. Pick a class and add code first.'}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* Bottom Automation Manager footer removed — its content has been
+                      promoted to a contextual banner inside the PREVIEW panel header
+                      and inline action chips next to each test method in the code. */}
                 </div>
               </section>
             </div>
@@ -1507,7 +1512,11 @@ export function SeleniumRepoBrowserModal({
                 {!previewFile ? (
                   <div className="repo-browser__preview-empty">
                     <IconCode size={32} />
-                    <p>Select a file from the repository to preview its content</p>
+                    <p>
+                      {mode === 'manage-automation'
+                        ? `Select a class file in the tree to view its code, then associate or write the method ${currentMethodName ? `'${currentMethodName}'` : ''} here.`
+                        : 'Select a file from the repository to preview its content'}
+                    </p>
                   </div>
                 ) : previewFile.loading ? (
                   <div className="repo-browser__preview-empty">Loading...</div>
@@ -1515,52 +1524,173 @@ export function SeleniumRepoBrowserModal({
                   <div className="repo-browser__preview-empty repo-browser__preview-empty--error">
                     {previewFile.error}
                   </div>
-                ) : (
-                  <pre className={`repo-browser__preview-code${wrapCode ? ' is-wrapped' : ''}`}>
-                    <code
-                      dangerouslySetInnerHTML={{
-                        __html: renderCodeWithLineNumbers(
-                          previewFile.path.toLowerCase().endsWith('.cs')
-                            ? highlightCSharp(previewFile.content)
-                            : escapeHtml(previewFile.content),
-                        ),
-                      }}
-                    />
-                  </pre>
-                )}
+                ) : (() => {
+                  const isCsFile = previewFile.path.toLowerCase().endsWith('.cs');
+                  const previewClassName = isCsFile ? getEntryClassName(previewFile.path.split(/[\\/]/).pop() || '') : '';
+                  const methodsInPreview = isCsFile ? (fileTestNamesByPath[previewFile.path]?.names ?? []) : [];
+                  const isAssociatedFile = mode === 'manage-automation' && associatedClassName === previewClassName;
+                  const generatedMethodInThisFile = Boolean(generatedMethodName && methodsInPreview.includes(generatedMethodName));
+
+                  return (
+                    <>
+                      {/* Contextual banner — compact, shown only in manage-automation mode.
+                          On click we freeze a snapshot via bannerFrozen state so the button
+                          label and method name stay stable until the API roundtrip ends
+                          (signaled by actionBusy going false). */}
+                      {mode === 'manage-automation' && currentMethodName && (() => {
+                        const liveState = {
+                          isAssociatedFile,
+                          associatedMethodName,
+                          associatedClassName,
+                          generatedMethodInThisFile,
+                          generatedMethodName,
+                          currentMethodName,
+                          previewFilePath: previewFile.path,
+                        };
+                        const isFrozen = bannerFrozen || actionBusy;
+                        const view = isFrozen && bannerStateRef.current ? bannerStateRef.current : liveState;
+                        // Helper that captures the snapshot at click time so the parent's
+                        // optimistic re-renders can't change what the banner shows.
+                        const freezeSnapshot = () => {
+                          bannerStateRef.current = liveState;
+                          setBannerFrozen(true);
+                        };
+
+                        return (
+                          <div className={`repo-browser__assoc-banner${view.isAssociatedFile ? ' is-associated' : ''}${isFrozen ? ' is-busy' : ''}`}>
+                            <div className="repo-browser__assoc-banner-info">
+                              {view.isAssociatedFile ? (
+                                <>
+                                  <span className="repo-browser__assoc-banner-status repo-browser__assoc-banner-status--linked">Associated</span>
+                                  <code className="repo-browser__assoc-banner-method" title={view.associatedMethodName ?? ''}>
+                                    {view.associatedMethodName}
+                                  </code>
+                                </>
+                              ) : view.associatedMethodName ? (
+                                <>
+                                  <span className="repo-browser__assoc-banner-status repo-browser__assoc-banner-status--linked">Linked elsewhere</span>
+                                  <code className="repo-browser__assoc-banner-method" title={`${view.associatedMethodName} in ${view.associatedClassName}`}>
+                                    {view.associatedClassName}.{view.associatedMethodName}
+                                  </code>
+                                </>
+                              ) : view.generatedMethodInThisFile ? (
+                                <>
+                                  <span className="repo-browser__assoc-banner-status repo-browser__assoc-banner-status--found">Method found</span>
+                                  <code className="repo-browser__assoc-banner-method" title={view.generatedMethodName ?? ''}>
+                                    {view.generatedMethodName}
+                                  </code>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="repo-browser__assoc-banner-status repo-browser__assoc-banner-status--missing">Not added</span>
+                                  <code className="repo-browser__assoc-banner-method" title={view.currentMethodName}>
+                                    {view.currentMethodName}
+                                  </code>
+                                </>
+                              )}
+                            </div>
+                            <div className="repo-browser__assoc-banner-actions">
+                              {view.isAssociatedFile && view.associatedMethodName ? (
+                                <button
+                                  type="button"
+                                  className="repo-browser__assoc-btn repo-browser__assoc-btn--danger"
+                                  onClick={() => {
+                                    if (!view.associatedMethodName) return;
+                                    freezeSnapshot();
+                                    onRemoveAssociation?.(view.previewFilePath, view.associatedMethodName);
+                                  }}
+                                  disabled={isFrozen}
+                                  title="Unassociate this test from the method"
+                                >
+                                  <IconLinkOff size={14} />
+                                  {isFrozen ? 'Working…' : 'Unassociate Test'}
+                                </button>
+                              ) : !view.associatedMethodName && view.generatedMethodInThisFile ? (
+                                <button
+                                  type="button"
+                                  className="repo-browser__assoc-btn repo-browser__assoc-btn--primary"
+                                  onClick={() => {
+                                    if (!view.generatedMethodName) return;
+                                    freezeSnapshot();
+                                    onAddAssociation?.(view.previewFilePath, view.generatedMethodName);
+                                  }}
+                                  disabled={isFrozen}
+                                  title="Associate this test with the method here"
+                                >
+                                  <IconAddLink size={14} />
+                                  {isFrozen ? 'Working…' : 'Associate Test'}
+                                </button>
+                              ) : !view.associatedMethodName && !view.generatedMethodInThisFile && view.generatedMethodName ? (
+                                <button
+                                  type="button"
+                                  className="repo-browser__assoc-btn repo-browser__assoc-btn--primary"
+                                  onClick={() => {
+                                    freezeSnapshot();
+                                    onWriteCode?.(view.previewFilePath);
+                                  }}
+                                  disabled={isFrozen || !view.generatedMethodName}
+                                  title={`Inject ${view.generatedMethodName} into this class and associate`}
+                                >
+                                  <IconCode size={14} />
+                                  {isFrozen ? 'Working…' : 'Add Test Code'}
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      <pre className={`repo-browser__preview-code${wrapCode ? ' is-wrapped' : ''}`}>
+                        <code
+                          dangerouslySetInnerHTML={{
+                            __html: renderCodeWithLineNumbers(
+                              isCsFile
+                                ? highlightCSharp(previewFile.content)
+                                : escapeHtml(previewFile.content),
+                            ),
+                          }}
+                        />
+                      </pre>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
-            {/* Resize handle: middle | right */}
-            <div
-              className="repo-browser__resize-handle"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize preview and git panels"
-              onMouseDown={handleResizeStart('right')}
-            />
-
-            {/* Right Panel: Git Manager */}
-            <div className="repo-browser__right-panel">
-              <GitManager
-                repoPath={repoPath}
-                unstagedFiles={gitStatus.unstagedFiles}
-                stagedFiles={gitStatus.stagedFiles}
-                branch={gitBranch.branch}
-                branches={gitBranch.branches}
-                aheadCount={gitStatus.aheadCount}
-                behindCount={gitStatus.behindCount}
-                isLoading={gitBranch.loading}
-                onStatusChange={() => {
-                  // Lightweight refresh — only re-fetch git status (changed files).
-                  // No need to reload the file tree or method names.
-                  void loadGitStatus(repoPath);
-                }}
-                onBranchChange={(branchValue) => {
-                  void handleBranchChange(branchValue);
-                }}
-              />
-            </div>
+            {/* Right Panel: Git Manager — only shown when browsing from Plan list.
+                Hidden when launched from Test Details (manage-automation mode) since
+                git operations aren't relevant to associating tests with methods. */}
+            {mode !== 'manage-automation' && (
+              <>
+                {/* Resize handle: middle | right */}
+                <div
+                  className="repo-browser__resize-handle"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize preview and git panels"
+                  onMouseDown={handleResizeStart('right')}
+                />
+                <div className="repo-browser__right-panel">
+                  <GitManager
+                    repoPath={repoPath}
+                    unstagedFiles={gitStatus.unstagedFiles}
+                    stagedFiles={gitStatus.stagedFiles}
+                    branch={gitBranch.branch}
+                    branches={gitBranch.branches}
+                    aheadCount={gitStatus.aheadCount}
+                    behindCount={gitStatus.behindCount}
+                    isLoading={gitBranch.loading}
+                    onStatusChange={() => {
+                      // Lightweight refresh — only re-fetch git status (changed files).
+                      // No need to reload the file tree or method names.
+                      void loadGitStatus(repoPath);
+                    }}
+                    onBranchChange={(branchValue) => {
+                      void handleBranchChange(branchValue);
+                    }}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </section>
       </div>

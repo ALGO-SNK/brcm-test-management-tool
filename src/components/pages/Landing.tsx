@@ -8,8 +8,6 @@ import type { WorkspaceSettingsValues } from './WorkspaceSettings';
 interface LandingProps {
   onSelectPlan: (plan: ADOTestPlan) => void;
   onCreateSuiteForPlan: (plan: ADOTestPlan) => void;
-  onBrowseSeleniumScripts?: () => void;
-  onOpenDbUpdater?: () => void;
   onHelpClick: () => void;
   onSettingsClick: () => void;
   workspaceSettings: WorkspaceSettingsValues;
@@ -18,8 +16,6 @@ interface LandingProps {
 export function Landing({
                           onSelectPlan,
                           onCreateSuiteForPlan,
-                          onBrowseSeleniumScripts,
-                          onOpenDbUpdater,
                           onHelpClick,
                           onSettingsClick,
                           workspaceSettings,
@@ -65,9 +61,6 @@ export function Landing({
   return (
       <MainLayout
         title={projectName}
-        onBrowseSeleniumScripts={onBrowseSeleniumScripts}
-        canBrowseSeleniumScripts={Boolean(workspaceSettings.seleniumRepoPath.trim())}
-        onOpenDbUpdater={onOpenDbUpdater}
         onHelpClick={onHelpClick}
         onSettingsClick={onSettingsClick}
       >

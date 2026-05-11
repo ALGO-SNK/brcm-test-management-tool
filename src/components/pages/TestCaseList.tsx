@@ -152,7 +152,6 @@ export function TestCaseList({
     ? suiteCaseCountBySuiteId[suite.id] ?? (typeof suite.testCaseCount === 'number' ? suite.testCaseCount : null)
     : null;
 
-  const planBreadcrumbLabel = plan.name.trim() || `Plan ${plan.id}`;
   const resolvedSuitePath = suitePath.length > 0
     ? suitePath
     : (suite ? [suite] : []);

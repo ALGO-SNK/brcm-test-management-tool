@@ -61,7 +61,6 @@ export function MainWorkspace({
   section,
   onSectionChange,
   workspaceSettings,
-  onSaveWorkspaceSettings,
   onSelectPlan,
   onCreateSuiteForPlan,
   onSettingsClick,

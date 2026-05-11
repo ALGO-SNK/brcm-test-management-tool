@@ -1,4 +1,15 @@
 /* ============================================================================
+   REPO BROWSER MODAL WIDTH OVERRIDE
+   Default settings-workbench is 980px max — override for repo-browser to 70vw
+   so the IDE-style 3-panel (or 2-panel in manage-automation mode) layout has
+   plenty of room.
+   ============================================================================ */
+.settings-workbench.repo-browser {
+  width: min(70vw, 100%);
+  max-width: none;
+}
+
+/* ============================================================================
    SPLIT PANE LAYOUT - REPO BROWSER (IDE-inspired, 3-panel)
    ============================================================================ */
 
@@ -259,6 +270,146 @@
 
 .repo-browser__preview-code .cs-type {
   color: #C9881D;
+}
+
+/* ============================================================================
+   ASSOCIATION BANNER (manage-automation mode)
+   ============================================================================ */
+
+.repo-browser__assoc-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--color-surface-subtle);
+  border-bottom: 1px solid var(--color-border-soft);
+  flex-shrink: 0;
+  height: 36px;
+  min-height: 36px;
+}
+
+.repo-browser__assoc-banner.is-associated {
+  background: rgba(76, 175, 80, 0.05);
+}
+
+/* Busy state — subtle pulse so user sees the API call is in flight */
+.repo-browser__assoc-banner.is-busy {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.repo-browser__assoc-banner.is-busy .repo-browser__assoc-banner-method {
+  opacity: 0.7;
+}
+
+.repo-browser__assoc-banner-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.repo-browser__assoc-banner-status {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+
+.repo-browser__assoc-banner-status--linked {
+  background: #2e7d32;
+  color: #fff;
+}
+
+.repo-browser__assoc-banner-status--found {
+  background: rgba(33, 150, 243, 0.15);
+  color: #1565c0;
+  border: 1px solid rgba(33, 150, 243, 0.4);
+}
+
+.repo-browser__assoc-banner-status--missing {
+  background: rgba(255, 152, 0, 0.12);
+  color: #e65100;
+  border: 1px solid rgba(255, 152, 0, 0.4);
+}
+
+.repo-browser__assoc-banner-method {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  color: var(--color-text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+  /* Override inherited <code> styling so the method name reads cleanly */
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+.repo-browser__assoc-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.repo-browser__assoc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-surface);
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.repo-browser__assoc-btn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.repo-browser__assoc-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.repo-browser__assoc-btn--primary {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.repo-browser__assoc-btn--primary:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.repo-browser__assoc-btn--danger {
+  background: rgba(244, 67, 54, 0.08);
+  color: #c62828;
+  border-color: rgba(244, 67, 54, 0.3);
+}
+
+.repo-browser__assoc-btn--danger:hover:not(:disabled) {
+  background: rgba(244, 67, 54, 0.15);
 }
 
 /* Highlight active preview file in tree */
