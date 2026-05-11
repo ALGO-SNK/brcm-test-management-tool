@@ -9,10 +9,13 @@ import {
   IconLinkOff,
   IconRefresh,
   IconSearch,
+  IconUnfoldLess,
+  IconUnfoldMore,
   IconX,
 } from '../Common/Icons';
 import { useNotification } from '../../context/useNotification';
 import { GitManager, type GitFile } from './GitManager';
+import { CodeEditor } from '../Common/CodeEditor';
 
 interface SeleniumRepoBrowserModalProps {
   repoPath: string;
@@ -64,104 +67,6 @@ function extractTestMethodNames(content: string): string[] {
   return matches.map((match) => match[1]).filter(Boolean);
 }
 
-const CSHARP_KEYWORDS = new Set([
-  'abstract', 'as', 'async', 'await', 'base', 'bool', 'break', 'byte', 'case', 'catch',
-  'char', 'checked', 'class', 'const', 'continue', 'decimal', 'default', 'delegate',
-  'do', 'double', 'else', 'enum', 'event', 'explicit', 'extern', 'false', 'finally',
-  'fixed', 'float', 'for', 'foreach', 'goto', 'if', 'implicit', 'in', 'int', 'interface',
-  'internal', 'is', 'lock', 'long', 'namespace', 'new', 'null', 'object', 'operator',
-  'out', 'override', 'params', 'private', 'protected', 'public', 'readonly', 'ref',
-  'return', 'sbyte', 'sealed', 'short', 'sizeof', 'stackalloc', 'static', 'string',
-  'struct', 'switch', 'this', 'throw', 'true', 'try', 'typeof', 'uint', 'ulong',
-  'unchecked', 'unsafe', 'ushort', 'using', 'var', 'virtual', 'void', 'volatile',
-  'while', 'yield', 'get', 'set', 'global', 'partial', 'where', 'add', 'remove',
-]);
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-function renderCodeWithLineNumbers(html: string): string {
-  const lines = html.split('\n');
-  // Tab width matches CSS tab-size: 4
-  const TAB_WIDTH = 4;
-  return lines
-    .map((line, idx) => {
-      // Detect leading whitespace to compute hanging indent for wrapped lines.
-      const leadingMatch = line.match(/^([ \t]*)/);
-      const leading = leadingMatch ? leadingMatch[1] : '';
-      const indentChars = leading.replace(/\t/g, ' '.repeat(TAB_WIDTH)).length;
-      // Add 2ch extra hang so wrapped continuations are visually distinct from real
-      // code at the same depth (IDE convention).
-      const hangIndent = indentChars + 2;
-      // Stored as CSS var — only consumed when .is-wrapped class is on
-      const indentStyle = ' style="--cs-indent:' + hangIndent + 'ch"';
-      return (
-        '<span class="cs-line"><span class="cs-line-number">' +
-        (idx + 1) +
-        '</span><span class="cs-line-content"' +
-        indentStyle +
-        '>' +
-        (line || ' ') +
-        '</span></span>'
-      );
-    })
-    .join('');
-}
-
-
-function highlightCSharp(code: string): string {
-  const placeholders: string[] = [];
-  const placeholder = (cls: string, text: string) => {
-    const idx = placeholders.length;
-    placeholders.push(`<span class="cs-${cls}">${escapeHtml(text)}</span>`);
-    return `__SENTINEL__${idx}__SENTINEL__`;
-  };
-
-  let working = code;
-  // Block comments
-  working = working.replace(/\/\*[\s\S]*?\*\//g, (m) => placeholder('comment', m));
-  // Line comments
-  working = working.replace(/\/\/[^\n]*/g, (m) => placeholder('comment', m));
-  // Strings (double-quoted, including verbatim @"...")
-  working = working.replace(/@"(?:[^"]|"")*"/g, (m) => placeholder('string', m));
-  working = working.replace(/"(?:\\.|[^"\\])*"/g, (m) => placeholder('string', m));
-  // Char literals
-  working = working.replace(/'(?:\\.|[^'\\])'/g, (m) => placeholder('string', m));
-  // Attributes [Test], [Category("x")]
-  working = working.replace(/\[[A-Za-z_][A-Za-z0-9_.]*(?:\([^\]]*\))?\]/g, (m) => placeholder('attribute', m));
-  // Numbers
-  working = working.replace(/\b\d+(?:\.\d+)?[fFdDmMlL]?\b/g, (m) => placeholder('number', m));
-
-  // Escape what's left
-  working = escapeHtml(working);
-
-  // Highlight keywords
-  working = working.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (m, word) => {
-    if (CSHARP_KEYWORDS.has(word)) {
-      return `<span class="cs-keyword">${word}</span>`;
-    }
-    return m;
-  });
-
-  // Highlight type names following `class`, `new`, `:` (inheritance)
-  working = working.replace(
-    /(<span class="cs-keyword">(?:class|new|interface|struct|enum)<\/span>\s+)([A-Za-z_][A-Za-z0-9_]*)/g,
-    (_m, prefix, name) => `${prefix}<span class="cs-type">${name}</span>`,
-  );
-
-  // Restore placeholders (loop to handle nested placeholders, e.g. string inside attribute)
-  let prev = '';
-  while (prev !== working) {
-    prev = working;
-    working = working.replace(/__SENTINEL__(\d+)__SENTINEL__/g, (_m, idx) => placeholders[Number(idx)] ?? '');
-  }
-
-  return working;
-}
 
 // Normalize git status strings from various sources (porcelain codes, words, etc.)
 // to our single-char codes: M=modified, A=added (includes untracked), D=deleted, U=unmerged
@@ -253,10 +158,15 @@ export function SeleniumRepoBrowserModal({
   const [searchTerm, setSearchTerm] = useState('');
   const [previewFile, setPreviewFile] = useState<{
     path: string;
-    content: string;
+    content: string;       // current (possibly edited) value
+    original: string;      // last-saved value — for dirty check + discard
     loading: boolean;
     error: string | null;
   } | null>(null);
+  // Edit/Save state
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const isDirty = Boolean(previewFile && previewFile.content !== previewFile.original);
   const [wrapCode, setWrapCode] = useState<boolean>(() => {
     try {
       return localStorage.getItem('repo-browser:wrap-code') === '1';
@@ -362,17 +272,23 @@ export function SeleniumRepoBrowserModal({
     };
   }, []);
 
-  const loadFilePreview = async (filePath: string) => {
+  const loadFilePreview = async (filePath: string, options: { force?: boolean } = {}) => {
     if (!window.desktop?.readTextFile) {
-      setPreviewFile({ path: filePath, content: '', loading: false, error: 'File reading not available' });
+      setPreviewFile({ path: filePath, content: '', original: '', loading: false, error: 'File reading not available' });
       return;
     }
-    setPreviewFile({ path: filePath, content: '', loading: true, error: null });
+    // Warn before discarding unsaved edits when switching files
+    if (!options.force && isDirty && previewFile && previewFile.path !== filePath) {
+      const ok = window.confirm(
+        `You have unsaved changes in "${previewFile.path.split(/[\\/]/).pop()}". Discard them and open the new file?`,
+      );
+      if (!ok) return;
+    }
+    setIsEditing(false);
+    setPreviewFile({ path: filePath, content: '', original: '', loading: true, error: null });
     try {
       const content = await window.desktop.readTextFile(filePath);
-      setPreviewFile({ path: filePath, content, loading: false, error: null });
-      // For .cs files, also extract test method names so the banner can detect
-      // whether the generated method is already present in this class.
+      setPreviewFile({ path: filePath, content, original: content, loading: false, error: null });
       if (filePath.toLowerCase().endsWith('.cs')) {
         const names = extractTestMethodNames(content);
         setFileTestNamesByPath((current) => ({
@@ -382,9 +298,57 @@ export function SeleniumRepoBrowserModal({
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load file';
-      setPreviewFile({ path: filePath, content: '', loading: false, error: message });
+      setPreviewFile({ path: filePath, content: '', original: '', loading: false, error: message });
     }
   };
+
+  const saveCurrentFile = async () => {
+    if (!previewFile || !isDirty) return;
+    if (!window.desktop?.writeTextFile) {
+      addNotification('error', 'File saving is not available. Restart the app to load latest changes.');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await window.desktop.writeTextFile(previewFile.path, previewFile.content);
+      // Mark clean: original now matches content
+      setPreviewFile((current) => (current ? { ...current, original: current.content } : current));
+      // Re-extract test method names since file content changed
+      if (previewFile.path.toLowerCase().endsWith('.cs')) {
+        const names = extractTestMethodNames(previewFile.content);
+        setFileTestNamesByPath((current) => ({
+          ...current,
+          [previewFile.path]: { loading: false, names },
+        }));
+      }
+      addNotification('success', `Saved ${previewFile.path.split(/[\\/]/).pop()}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save file';
+      addNotification('error', message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const discardEdits = () => {
+    if (!previewFile) return;
+    if (!isDirty) {
+      setIsEditing(false);
+      return;
+    }
+    const ok = window.confirm('Discard your unsaved edits?');
+    if (!ok) return;
+    setPreviewFile((current) => (current ? { ...current, content: current.original } : current));
+    setIsEditing(false);
+  };
+
+  // Mark window as dirty for the global close-handler
+  useEffect(() => {
+    window.desktop?.setUnsavedChanges?.('selenium-repo-edit', isDirty);
+    return () => {
+      window.desktop?.setUnsavedChanges?.('selenium-repo-edit', false);
+    };
+  }, [isDirty]);
 
   const rootNode = useMemo(() => nodesByPath[repoPath], [nodesByPath, repoPath]);
   const isClassFile = (entry: DesktopDirectoryEntry) => entry.type === 'file' && entry.name.toLowerCase().endsWith('.cs');
@@ -1343,9 +1307,12 @@ export function SeleniumRepoBrowserModal({
             className={`repo-browser__split-pane${mode === 'manage-automation' ? ' repo-browser__split-pane--no-git' : ''}`}
             ref={splitPaneRef}
             style={{
+              // In manage-automation mode, REPO panel gets the saved left + half of right's
+              // width so the header (REPO + search + 2 buttons) fits on one line. Middle
+              // (preview) gets the remaining space.
               gridTemplateColumns:
                 mode === 'manage-automation'
-                  ? `${panelWidths.left}fr 2px ${panelWidths.middle + panelWidths.right}fr`
+                  ? `${panelWidths.left + Math.floor(panelWidths.right / 2)}fr 2px ${panelWidths.middle + Math.ceil(panelWidths.right / 2)}fr`
                   : `${panelWidths.left}fr 2px ${panelWidths.middle}fr 2px ${panelWidths.right}fr`,
             }}
           >
@@ -1361,12 +1328,8 @@ export function SeleniumRepoBrowserModal({
                           ? 'Browse classes, write the generated test method, and manage the Azure test association from the tree.'
                           : 'Browse folders and files from the configured Selenium workspace or repository.'}
                       </p>
-                      {mode === 'manage-automation' && methodSearch.loading && (
-                        <p className="repo-browser__scan-status" aria-live="polite">
-                          <span className="repo-browser__scan-spinner" aria-hidden="true" />
-                          {`Searching repository for ${methodSearch.methodName}...`}
-                        </p>
-                      )}
+                      {/* Repo-scan status moved next to preview filename to avoid
+                          taking vertical space in the narrow REPO header. */}
                     </div>
                     <div className="repo-browser__header-actions">
                       <label className="repo-browser__search repo-browser__search--header" htmlFor="repo-browser-search">
@@ -1389,34 +1352,31 @@ export function SeleniumRepoBrowserModal({
                       >
                         <IconRefresh size={16} />
                       </button>
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
-                        onClick={() => {
-                          // Collapse everything except the repo root
-                          setExpandedPaths(new Set([repoPath]));
-                        }}
-                        title="Collapse all folders"
-                        aria-label="Collapse all folders"
-                      >
-                        <svg
-                          width={16}
-                          height={16}
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M3 7l3-3 3 3" />
-                          <path d="M3 12l3-3 3 3" />
-                          <path d="M11 5h2" />
-                          <path d="M11 9h2" />
-                          <path d="M11 13h2" />
-                        </svg>
-                      </button>
+                      {(() => {
+                        // Toggle behavior matching suite tree: if anything beyond root is
+                        // expanded, click collapses everything; otherwise expands all
+                        // currently-loaded top-level folders.
+                        const isAnythingExpanded = Array.from(expandedPaths).some((p) => p !== repoPath);
+                        return (
+                          <button
+                            type="button"
+                            className="btn btn--secondary btn--sm"
+                            onClick={() => {
+                              if (isAnythingExpanded) {
+                                setExpandedPaths(new Set([repoPath]));
+                              } else {
+                                // Expand all loaded directories (cannot expand unloaded ones)
+                                const allLoadedDirs = Object.keys(nodesByPath);
+                                setExpandedPaths(new Set([repoPath, ...allLoadedDirs]));
+                              }
+                            }}
+                            title={isAnythingExpanded ? 'Collapse all' : 'Expand all'}
+                            aria-label={isAnythingExpanded ? 'Collapse all folders' : 'Expand all folders'}
+                          >
+                            {isAnythingExpanded ? <IconUnfoldLess size={16} /> : <IconUnfoldMore size={16} />}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="repo-browser__panel">
@@ -1484,6 +1444,19 @@ export function SeleniumRepoBrowserModal({
                     {previewFile.path.split(/[\\/]/).pop()}
                   </span>
                 )}
+                {/* Scan status — only shown while looking for an associated method.
+                    Lives here (next to filename) instead of in the REPO header to keep
+                    that narrow header free for search/refresh/collapse controls. */}
+                {mode === 'manage-automation' && methodSearch.loading && (
+                  <span className="repo-browser__preview-scan-status" aria-live="polite" title={`Searching repository for ${methodSearch.methodName}`}>
+                    <span className="repo-browser__scan-spinner" aria-hidden="true" />
+                    Searching…
+                  </span>
+                )}
+                {/* Dirty indicator */}
+                {previewFile && isDirty && (
+                  <span className="repo-browser__preview-dirty" title="Unsaved changes" aria-label="Unsaved changes">●</span>
+                )}
                 {previewFile && (
                   <button
                     type="button"
@@ -1496,11 +1469,51 @@ export function SeleniumRepoBrowserModal({
                     ↩
                   </button>
                 )}
-                {previewFile && (
+                {/* Edit / Save / Discard controls */}
+                {previewFile && !previewFile.loading && !previewFile.error && !isEditing && (
+                  <button
+                    type="button"
+                    className="repo-browser__preview-action"
+                    onClick={() => setIsEditing(true)}
+                    title="Edit this file"
+                  >
+                    ✎ Edit
+                  </button>
+                )}
+                {previewFile && isEditing && (
+                  <>
+                    <button
+                      type="button"
+                      className="repo-browser__preview-action repo-browser__preview-action--primary"
+                      onClick={() => void saveCurrentFile()}
+                      disabled={!isDirty || isSaving}
+                      title="Save (Ctrl+S)"
+                    >
+                      {isSaving ? 'Saving…' : isDirty ? '✓ Save' : 'Saved'}
+                    </button>
+                    <button
+                      type="button"
+                      className="repo-browser__preview-action"
+                      onClick={discardEdits}
+                      disabled={isSaving}
+                      title={isDirty ? 'Discard edits' : 'Exit edit mode'}
+                    >
+                      {isDirty ? 'Discard' : 'Done'}
+                    </button>
+                  </>
+                )}
+                {previewFile && !isEditing && (
                   <button
                     type="button"
                     className="repo-browser__preview-close"
-                    onClick={() => setPreviewFile(null)}
+                    onClick={() => {
+                      if (isDirty) {
+                        const ok = window.confirm('You have unsaved changes. Close anyway?');
+                        if (!ok) return;
+                      }
+                      setIsEditing(false);
+                      setPreviewFile(null);
+                    }}
                     title="Close preview"
                     aria-label="Close preview"
                   >
@@ -1639,17 +1652,26 @@ export function SeleniumRepoBrowserModal({
                           </div>
                         );
                       })()}
-                      <pre className={`repo-browser__preview-code${wrapCode ? ' is-wrapped' : ''}`}>
-                        <code
-                          dangerouslySetInnerHTML={{
-                            __html: renderCodeWithLineNumbers(
-                              isCsFile
-                                ? highlightCSharp(previewFile.content)
-                                : escapeHtml(previewFile.content),
-                            ),
+                      <div className="repo-browser__preview-editor">
+                        <CodeEditor
+                          filePath={previewFile.path}
+                          value={previewFile.content}
+                          readOnly={!isEditing}
+                          wordWrap={wrapCode}
+                          theme="dark"
+                          onChange={(next) => {
+                            setPreviewFile((current) => (current ? { ...current, content: next } : current));
+                          }}
+                          onMount={(editor) => {
+                            // Ctrl/Cmd+S → save (only fires when editing)
+                            editor.addCommand(
+                              // eslint-disable-next-line no-bitwise
+                              (2048 /* KeyMod.CtrlCmd */) | (49 /* KeyCode.KeyS */),
+                              () => { void saveCurrentFile(); },
+                            );
                           }}
                         />
-                      </pre>
+                      </div>
                     </>
                   );
                 })()}

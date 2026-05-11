@@ -23,7 +23,8 @@ interface TestCaseListProps {
   createPlanSuiteRequest?: number;
 }
 
-const MIN_SIDEBAR = 220;
+// Min must match CSS .split-pane__sidebar { min-width } so drag and CSS agree
+const MIN_SIDEBAR = 240;
 const MAX_SIDEBAR_RATIO = 0.5;
 const DEFAULT_SIDEBAR = 300;
 

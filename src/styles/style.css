@@ -3523,7 +3523,7 @@ input[type="radio"] {
 }
 
 .split-pane__sidebar {
-    min-width: 320px;
+    min-width: 240px;
     width: var(--sidebar-width);
     border-right: 1px solid var(--color-border);
     background: var(--color-surface-raised);
@@ -3539,9 +3539,19 @@ input[type="radio"] {
     cursor: col-resize;
     width: 4px;
     transition: background-color var(--transition-fast);
-    background: 0 0;
+    background: var(--color-border);
     flex-shrink: 0;
     position: relative;
+}
+
+/* Wider invisible hit area (10px total) for easier grabbing without taking layout space */
+.split-pane__handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -3px;
+    right: -3px;
 }
 
 .split-pane__handle:hover,
@@ -14831,7 +14841,7 @@ input[type="radio"] {
 }
 
 .split-pane__sidebar {
-    min-width: 320px;
+    min-width: 240px;
     width: var(--sidebar-width);
     border-right: 1px solid var(--color-border);
     background: var(--color-surface-raised);
@@ -14847,9 +14857,19 @@ input[type="radio"] {
     cursor: col-resize;
     width: 4px;
     transition: background-color var(--transition-fast);
-    background: 0 0;
+    background: var(--color-border);
     flex-shrink: 0;
     position: relative;
+}
+
+/* Wider invisible hit area (10px total) for easier grabbing without taking layout space */
+.split-pane__handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -3px;
+    right: -3px;
 }
 
 .split-pane__handle:hover,

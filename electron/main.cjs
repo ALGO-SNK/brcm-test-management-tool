@@ -1499,8 +1499,9 @@ async function runDbUpdater(settingsInput, sender, options = {}) {
   for (const target of targets) {
     const dbPath = getDbUpdaterTargetPath(target);
     try {
-      await resetDbUpdaterDatabase(dbPath, sender, runId, target);
-
+      // === Phase 1: FETCH ===
+      // Fetch FIRST so we know we have the data before we clear the existing DB.
+      // If fetch fails, the existing local DB stays intact (no data loss).
       sendDbUpdaterProgress(sender, runId, {
         target: target.key,
         level: 'info',
@@ -1518,6 +1519,11 @@ async function runDbUpdater(settingsInput, sender, options = {}) {
         message: `Fetched ${rows.length} test cases from ${target.label}.`,
       });
 
+      // === Phase 2: CLEAR ===
+      // Only after a successful fetch do we wipe the existing DB.
+      await resetDbUpdaterDatabase(dbPath, sender, runId, target);
+
+      // === Phase 3: UPDATE ===
       sendDbUpdaterProgress(sender, runId, {
         target: target.key,
         level: 'info',

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Header } from '../layouts/Header';
 import { PlansList, type ConnectionStatus } from '../TestPlans/PlansList';
 import { DbUpdaterModal } from '../DbUpdater/DbUpdaterModal';
@@ -72,9 +72,20 @@ export function MainWorkspace({
   const projectName = workspaceSettings.projectName.trim() || 'Azure Test Plans';
   const connectionMeta = useMemo(() => getConnectionMeta(connectionStatus), [connectionStatus]);
   const seleniumRepoPath = workspaceSettings.seleniumRepoPath.trim();
-  const handleRefreshPlans = () => {
+  const handleRefreshPlans = useCallback(() => {
     setPlanRefreshToken((current) => current + 1);
-  };
+  }, []);
+
+  // useCallback critical here — PlansList's effect has these in its dep array.
+  // Without stable refs, the effect would refire every render, causing an API
+  // call loop (especially noticeable when clicking refresh).
+  const handlePlansLoaded = useCallback((plans: ADOTestPlan[]) => {
+    setPlanCount(plans.length);
+  }, []);
+
+  const handleConnectionStatusChange = useCallback((status: ConnectionStatus) => {
+    setConnectionStatus(status);
+  }, []);
 
   const plansView = (
     <section className="workspace-hub__plans-panel">
@@ -98,8 +109,8 @@ export function MainWorkspace({
           onSelectPlan={onSelectPlan}
           onCreateSuiteForPlan={onCreateSuiteForPlan}
           workspaceSettings={workspaceSettings}
-          onPlansLoaded={(plans) => setPlanCount(plans.length)}
-          onConnectionStatusChange={setConnectionStatus}
+          onPlansLoaded={handlePlansLoaded}
+          onConnectionStatusChange={handleConnectionStatusChange}
           onRefreshPlans={handleRefreshPlans}
           refreshToken={planRefreshToken}
         />

@@ -1,7 +1,7 @@
 {
   "name": "bcm-test-builder",
   "private": true,
-  "version": "2026.4.24",
+  "version": "2026.4.25",
   "author": "Bromcom",
   "description": "Bromcom Test Builder desktop app",
   "type": "module",
@@ -103,10 +103,12 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@monaco-editor/react": "^4.7.0",
     "@mui/material": "^9.0.0",
     "electron-squirrel-startup": "^1.0.1",
     "electron-updater": "^6.8.3",
     "materialize-css": "^1.0.0",
+    "monaco-editor": "^0.55.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "sqlite": "^5.1.1",

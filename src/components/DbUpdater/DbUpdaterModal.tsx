@@ -360,6 +360,10 @@ export function DbUpdaterModal({ workspaceSettings, onClose, embedded = false }:
   const [idleMessage, setIdleMessage] = useState(cachedState.idleMessage);
   const [selectedRow, setSelectedRow] = useState<{ targetKey: TargetKey; row: DesktopDbUpdaterRow } | null>(null);
   const [rowSearchByTarget, setRowSearchByTarget] = useState<Record<TargetKey, string>>({});
+  // Per-target controlled value for the "Go to page" jump input.
+  const [pageJumpInput, setPageJumpInput] = useState<Record<TargetKey, string>>({});
+  // Toast/transient state for "Path copied" feedback.
+  const [copiedPathKey, setCopiedPathKey] = useState<TargetKey | null>(null);
   const overviewLoadingRef = useRef(false);
   const overviewAutoLoadKeyRef = useRef<string | null>(null);
   const { addNotification } = useNotification();
@@ -550,9 +554,9 @@ export function DbUpdaterModal({ workspaceSettings, onClose, embedded = false }:
   const renderPlanSection = (mapping: WorkspaceDbMapping) => {
     const targetKey = mapping.id;
     const target = overview?.targets[targetKey];
-    const planTitle = getPlanTitle(target, mapping);
     const rowSearch = (rowSearchByTarget[targetKey] ?? '').trim().toLowerCase();
-    const filteredRows = (target?.rows ?? []).filter((row) => {
+    const allRows = target?.rows ?? [];
+    const filteredRows = allRows.filter((row) => {
       if (!rowSearch) return true;
       const haystack = [
         String(row.id),
@@ -581,10 +585,17 @@ export function DbUpdaterModal({ workspaceSettings, onClose, embedded = false }:
       <section className="settings-pane db-updater__pane">
         <div className="settings-panel db-updater__plan-card">
           <div className="settings-panel__head db-updater__plan-head">
-            <div>
-              <div className="settings-panel__title">{planTitle}</div>
-              <div className="settings-panel__sub">Plan {mapping.planId} / {target?.dbName ?? mapping.dbName}</div>
-            </div>
+            {/* Plan name removed (it's already shown in the page header above).
+                Replaced with a breadcrumb showing Plan ID → DB file → Table. */}
+            <nav className="db-updater__breadcrumb" aria-label="Database location">
+              <span className="db-updater__breadcrumb-item">Plan <strong>{mapping.planId}</strong></span>
+              <span className="db-updater__breadcrumb-sep" aria-hidden="true">/</span>
+              <span className="db-updater__breadcrumb-item">{target?.dbName ?? mapping.dbName}</span>
+              <span className="db-updater__breadcrumb-sep" aria-hidden="true">/</span>
+              <span className="db-updater__breadcrumb-item db-updater__breadcrumb-item--table">
+                {target?.tableExists ? 'TestCaseDao' : 'Table not found'}
+              </span>
+            </nav>
             <button
               type="button"
               className="btn btn--secondary btn--sm"
@@ -601,15 +612,59 @@ export function DbUpdaterModal({ workspaceSettings, onClose, embedded = false }:
               <span>Rows <strong>{target?.rowCount ?? 0}</strong></span>
               <span>Automated <strong>{target?.automatedCount ?? 0}</strong></span>
               <span>Local DB <strong>{target?.exists ? 'Available' : 'Missing'}</strong></span>
-              <span>Table <strong>{target?.tableExists ? 'TestCaseDao' : 'Not found'}</strong></span>
+              {/* "Table TestCaseDao" pill removed — same info now in the breadcrumb above. */}
             </div>
-            <div className="db-updater__path" title={target?.dbPath ?? ''}>
-              {target?.dbPath ?? 'Local DB path is not available yet.'}
+            <div className="db-updater__path-card" title={target?.dbPath ?? ''}>
+              <span className="db-updater__path-icon" aria-hidden="true">📁</span>
+              <span className="db-updater__path-text">
+                {target?.dbPath ?? 'Local DB path is not available yet.'}
+              </span>
+              {target?.dbPath && (
+                <button
+                  type="button"
+                  className="db-updater__path-btn"
+                  title={copiedPathKey === targetKey ? 'Copied!' : 'Copy path'}
+                  aria-label="Copy database path"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!target?.dbPath) return;
+                    try {
+                      void navigator.clipboard.writeText(target.dbPath);
+                      setCopiedPathKey(targetKey);
+                      window.setTimeout(() => {
+                        setCopiedPathKey((current) => (current === targetKey ? null : current));
+                      }, 1500);
+                    } catch { /* ignore */ }
+                  }}
+                >
+                  {copiedPathKey === targetKey ? '✓' : '⧉'}
+                </button>
+              )}
+              {target?.dbPath && window.desktop?.openPath && (
+                <button
+                  type="button"
+                  className="db-updater__path-btn"
+                  title="Open containing folder"
+                  aria-label="Open containing folder"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!target?.dbPath) return;
+                    // Open the parent folder of the .db file
+                    const lastSep = Math.max(target.dbPath.lastIndexOf('\\'), target.dbPath.lastIndexOf('/'));
+                    const parent = lastSep > 0 ? target.dbPath.substring(0, lastSep) : target.dbPath;
+                    void window.desktop?.openPath?.(parent);
+                  }}
+                >
+                  ↗
+                </button>
+              )}
             </div>
           </div>
-        </div>
 
-        <section className="settings-panel db-updater__data-panel">
+          {/* Merged: Local DB rows section is now part of the same card as the
+              plan header/stats/path — removes the duplicate card chrome and
+              gives the table more vertical room. */}
+          <div className="db-updater__merged-divider" aria-hidden="true" />
           <div className="settings-panel__head db-updater__data-head">
             <div>
               <div className="settings-panel__title">Local DB rows</div>
@@ -620,6 +675,7 @@ export function DbUpdaterModal({ workspaceSettings, onClose, embedded = false }:
                 Updating
               </span>
             )}
+            {/* Filter chips removed — counts already shown in the plan stats above. */}
             <div className="db-updater__table-controls">
               <input
                 type="search"
@@ -654,24 +710,36 @@ export function DbUpdaterModal({ workspaceSettings, onClose, embedded = false }:
           </div>
 
           {!overview && isOverviewLoading ? (
-            <div className="empty-state">
+            <div className="empty-state db-updater__empty">
+              <div className="db-updater__empty-icon" aria-hidden="true">⏳</div>
               <div className="empty-state__title">Loading Local DB rows</div>
-              <p className="empty-state__desc">Reading local SQLite data in the background.</p>
+              <p className="empty-state__desc">Reading local SQLite data in the background…</p>
             </div>
           ) : !target?.exists ? (
-            <div className="empty-state">
+            <div className="empty-state db-updater__empty">
+              <div className="db-updater__empty-icon" aria-hidden="true">🗄️</div>
               <div className="empty-state__title">Local DB file not found</div>
               <p className="empty-state__desc">Run Local DB Update to create and populate this local DB.</p>
             </div>
           ) : target.error ? (
-            <div className="empty-state">
+            <div className="empty-state db-updater__empty db-updater__empty--error">
+              <div className="db-updater__empty-icon" aria-hidden="true">⚠️</div>
               <div className="empty-state__title">Could not read Local DB</div>
               <p className="empty-state__desc">{target.error}</p>
             </div>
           ) : !target.tableExists || target.rows.length === 0 ? (
-            <div className="empty-state">
+            <div className="empty-state db-updater__empty">
+              <div className="db-updater__empty-icon" aria-hidden="true">📭</div>
               <div className="empty-state__title">No rows available</div>
               <p className="empty-state__desc">Run Local DB Update to load test cases into this plan DB.</p>
+            </div>
+          ) : filteredRows.length === 0 ? (
+            <div className="empty-state db-updater__empty">
+              <div className="db-updater__empty-icon" aria-hidden="true">🔍</div>
+              <div className="empty-state__title">No matching rows</div>
+              <p className="empty-state__desc">
+                No rows match "{rowSearch}". Try a different search term.
+              </p>
             </div>
           ) : (
             <div className="db-updater__table-wrap">
@@ -699,7 +767,22 @@ export function DbUpdaterModal({ workspaceSettings, onClose, embedded = false }:
                     >
                       <td>{row.id}</td>
                       <td>{row.title}</td>
-                      <td>{row.isAutomationMethod ? 'Yes' : 'No'}</td>
+                      <td>
+                        {row.isAutomationMethod ? (
+                          <span
+                            className="db-updater__row-chip db-updater__row-chip--auto"
+                            title={row.automatedTestName ? `Automated: ${row.automatedTestName}` : 'Automated test'}
+                          >
+                            <span className="db-updater__row-chip-dot" aria-hidden="true" />
+                            Automated
+                          </span>
+                        ) : (
+                          <span className="db-updater__row-chip db-updater__row-chip--manual" title="Manual test">
+                            <span className="db-updater__row-chip-dot" aria-hidden="true" />
+                            Manual
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -709,28 +792,69 @@ export function DbUpdaterModal({ workspaceSettings, onClose, embedded = false }:
 
           {filteredRows.length ? (
             <div className="db-updater__pagination">
-              <span>Page {currentPage} of {pageCount} / {pageSize} rows per page {rowSearch ? `· ${filteredRows.length} matched` : ''}</span>
-              <div>
+              <span className="db-updater__pagination-summary">
+                Showing <strong>{startIndex + 1}</strong>–<strong>{endIndex}</strong> of <strong>{filteredRows.length}</strong>
+                {rowSearch ? ' (filtered)' : ''}
+              </span>
+              <div className="db-updater__pagination-controls">
                 <button
                   type="button"
                   className="btn btn--secondary btn--sm"
                   onClick={() => updatePage(currentPage - 1)}
                   disabled={currentPage <= 1}
+                  aria-label="Previous page"
                 >
-                  Previous
+                  ◀ Prev
                 </button>
+                <span className="db-updater__pagination-page-label">
+                  Page <strong>{currentPage}</strong> of <strong>{pageCount}</strong>
+                </span>
                 <button
                   type="button"
                   className="btn btn--secondary btn--sm"
                   onClick={() => updatePage(currentPage + 1)}
                   disabled={currentPage >= pageCount}
+                  aria-label="Next page"
                 >
-                  Next
+                  Next ▶
                 </button>
+                {pageCount > 1 && (
+                  <label className="db-updater__pagination-jump">
+                    <span>Go to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={pageCount}
+                      className="db-updater__pagination-jump-input"
+                      value={pageJumpInput[targetKey] ?? ''}
+                      placeholder={String(currentPage)}
+                      aria-label={`Jump to page (1-${pageCount})`}
+                      onChange={(e) => {
+                        setPageJumpInput((current) => ({ ...current, [targetKey]: e.target.value }));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const target = Number(pageJumpInput[targetKey]);
+                          if (Number.isFinite(target) && target >= 1 && target <= pageCount) {
+                            updatePage(target);
+                            setPageJumpInput((current) => ({ ...current, [targetKey]: '' }));
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        const target = Number(pageJumpInput[targetKey]);
+                        if (Number.isFinite(target) && target >= 1 && target <= pageCount) {
+                          updatePage(target);
+                        }
+                        setPageJumpInput((current) => ({ ...current, [targetKey]: '' }));
+                      }}
+                    />
+                  </label>
+                )}
               </div>
             </div>
           ) : null}
-        </section>
+        </div>
       </section>
     );
   };
@@ -912,36 +1036,47 @@ export function DbUpdaterModal({ workspaceSettings, onClose, embedded = false }:
             )}
           </header>
 
-          <div className="settings-workbench__body">
-            <aside className="settings-nav" aria-label="Local DB updater sections">
-              <p className="settings-nav-label">Plans</p>
-              {dbMappings.map((mapping) => (
-                <button
-                  key={mapping.id}
-                  type="button"
-                  className={`settings-nav-item${section === mapping.id ? ' is-active' : ''}`}
-                  onClick={() => setSection(mapping.id)}
-                >
-                  <span className="settings-nav-item__title">{getPlanTitle(overview?.targets[mapping.id], mapping)}</span>
-                  <span className="settings-nav-item__sub">
-                    {overview?.targets[mapping.id]?.dbName ?? mapping.dbName}
-                    {!mapping.enabled ? ' / Disabled' : ''}
-                  </span>
-                </button>
-              ))}
-
-              <p className="settings-nav-label" style={{ marginTop: '20px' }}>Update</p>
+          <div className="settings-workbench__body db-updater__body--tabbed">
+            {/* Tabs replace the left sidebar — flatter layout, scales horizontally.
+                "Update All DBs" lives as a header-style action on the right since
+                it's a global operation, not a per-DB content view. */}
+            <div className="db-updater__tabs-bar" role="tablist" aria-label="Database tabs">
+              <div className="db-updater__tabs-scroll">
+                {dbMappings.map((mapping) => {
+                  const target = overview?.targets[mapping.id];
+                  const isActive = section === mapping.id;
+                  return (
+                    <button
+                      key={mapping.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      className={`db-updater__tab${isActive ? ' is-active' : ''}${!mapping.enabled ? ' is-disabled-state' : ''}`}
+                      onClick={() => setSection(mapping.id)}
+                      title={target?.dbName ?? mapping.dbName}
+                    >
+                      <span className="db-updater__tab-title">{getPlanTitle(target, mapping)}</span>
+                      <span className="db-updater__tab-sub">{target?.dbName ?? mapping.dbName}{!mapping.enabled ? ' · Disabled' : ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
               <button
                 type="button"
-                className={`settings-nav-item${section === 'refresh' ? ' is-active' : ''}`}
+                className={`db-updater__update-btn${section === 'refresh' ? ' is-active' : ''}${isRunning ? ' is-running' : ''}`}
                 onClick={() => setSection('refresh')}
+                title="Open Local DB Update view"
               >
-                <span className="settings-nav-item__title">Local DB Update</span>
-                <span className="settings-nav-item__sub">{isRunning ? 'Update running' : events.length ? 'Last log available' : 'Idle'}</span>
+                <span className="db-updater__update-btn-icon" aria-hidden="true">
+                  {isRunning ? <span className="db-updater__mini-spinner" /> : '⟲'}
+                </span>
+                <span>
+                  {isRunning ? 'Updating…' : 'Update All DBs'}
+                </span>
               </button>
-            </aside>
+            </div>
 
-            <div className="settings-content db-updater__content">
+            <div className="settings-content db-updater__content db-updater__content--tabbed">
               {sectionMapping && renderPlanSection(sectionMapping)}
               {section === 'refresh' && renderRefreshSection()}
             </div>

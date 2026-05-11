@@ -586,16 +586,28 @@ export function CaseTable({
         </div>
 
         <div className="cases-toolbar__filters">
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
-            onClick={() => { void handleRefreshCases(); }}
-            title="Refresh test cases"
-            aria-label="Refresh test cases"
-            disabled={!workspaceReady || loading || refreshing}
-          >
-            <IconRefresh size={16} />
-          </button>
+          {refreshing ? (
+            <span
+              className="btn btn--secondary btn--sm is-syncing"
+              role="status"
+              aria-live="polite"
+              title="Syncing latest test cases from Azure DevOps"
+            >
+              <IconRefresh size={16} />
+              Syncing…
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={() => { void handleRefreshCases(); }}
+              title="Refresh test cases"
+              aria-label="Refresh test cases"
+              disabled={!workspaceReady || loading}
+            >
+              <IconRefresh size={16} />
+            </button>
+          )}
 
           <button
             type="button"
@@ -610,11 +622,8 @@ export function CaseTable({
       </div>
 
       {warning && <div className="alert alert--warning mb-md">{warning}</div>}
-      {refreshing && (
-        <p className="plans-refresh-status" aria-live="polite">
-          Showing cached test cases while syncing latest updates.
-        </p>
-      )}
+      {/* "Showing cached..." paragraph removed — sync state is now shown
+          inline in the refresh button slot to avoid the table-shift flicker. */}
 
       <div className="data-table-wrapper">
         <table className="data-table cases-table">

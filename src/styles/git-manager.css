@@ -5,7 +5,7 @@
    plenty of room.
    ============================================================================ */
 .settings-workbench.repo-browser {
-  width: min(70vw, 100%);
+  width: min(90vw, 100%);
   max-width: none;
 }
 
@@ -110,6 +110,90 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Method-scan status next to filename (manage-automation mode) */
+.repo-browser__preview-scan-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  height: 20px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  flex-shrink: 0;
+  margin-left: -4px;
+}
+
+.repo-browser__preview-scan-status .repo-browser__scan-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: btn-syncing-spin 0.9s linear infinite;
+}
+
+/* Monaco editor host — fills the preview body */
+.repo-browser__preview-editor {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  position: relative;
+}
+
+/* Edit/Save/Discard action buttons in preview header */
+.repo-browser__preview-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 3px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.repo-browser__preview-action:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-primary-soft);
+}
+
+.repo-browser__preview-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.repo-browser__preview-action--primary {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.repo-browser__preview-action--primary:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+/* Unsaved-changes dot before action buttons */
+.repo-browser__preview-dirty {
+  color: #ff9800;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+  flex-shrink: 0;
+  user-select: none;
 }
 
 .repo-browser__preview-close,
@@ -299,6 +383,482 @@
   pointer-events: none;
 }
 
+/* ============================================================================
+   DB UPDATER — tabs layout (replaces left sidebar)
+   ============================================================================ */
+.db-updater__body--tabbed {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0;
+}
+
+.db-updater__tabs-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 0 16px;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  /* Pull the tab strip slightly closer to the page header above */
+  margin-top: -3px;
+  padding-bottom: 10px;
+}
+
+.db-updater__tabs-scroll {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.db-updater__tabs-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.db-updater__tabs-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+
+.db-updater__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 16px;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: 0;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  position: relative;
+  white-space: nowrap;
+  min-width: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.db-updater__tab:hover:not(.is-active) {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.db-updater__tab.is-active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary);
+  background: transparent;
+}
+
+.db-updater__tab.is-disabled-state {
+  opacity: 0.5;
+}
+
+.db-updater__tab-title {
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.db-updater__tab-sub {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+.db-updater__update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  margin: 8px 0;
+  align-self: center;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border-soft);
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.db-updater__update-btn:hover:not(.is-active) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-primary-soft);
+}
+
+.db-updater__update-btn.is-active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.db-updater__update-btn.is-running {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-color: var(--color-primary-soft);
+}
+
+.db-updater__update-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.db-updater__content--tabbed {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ============================================================================
+   DB UPDATER — breadcrumb in merged card header (replaces duplicate plan title)
+   ============================================================================ */
+.db-updater__breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.db-updater__breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.db-updater__breadcrumb-item strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.db-updater__breadcrumb-item--table {
+  color: var(--color-text);
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border-soft);
+}
+
+.db-updater__breadcrumb-sep {
+  color: var(--color-text-muted);
+  opacity: 0.5;
+}
+
+/* ============================================================================
+   DB UPDATER — merged card (plan header + Local DB rows in one panel)
+   ============================================================================ */
+
+/* Subtle divider between the plan-info area and the rows area inside the merged card */
+.db-updater__merged-divider {
+  height: 1px;
+  background: var(--color-border-soft);
+  margin: 12px -16px 0;  /* full-bleed across the card */
+}
+
+/* Give the table a bit more headroom now that we removed a card border. */
+.db-updater__plan-card .db-updater__table-wrap {
+  min-height: 360px;  /* roomy default — at 10 rows/page user sees full page comfortably */
+  max-height: calc(100vh - 360px);  /* leaves room for app header + tabs + plan header + pagination */
+}
+
+/* ============================================================================
+   DB UPDATER — visual upgrades (Tier 1.2/1.3 + Tier 2.7/2.9/2.10)
+   ============================================================================ */
+
+/* --- 1.3: File path card with copy/open buttons --- */
+.db-updater__path-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
+  color: var(--color-text);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.db-updater__path-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.db-updater__path-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.db-updater__path-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.db-updater__path-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+  border-color: var(--color-border-soft);
+}
+
+/* --- 1.2: Automation row chips (in table cells) --- */
+.db-updater__row-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid;
+}
+
+.db-updater__row-chip-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.db-updater__row-chip--auto {
+  color: #2e7d32;
+  background: rgba(76, 175, 80, 0.1);
+  border-color: rgba(76, 175, 80, 0.3);
+}
+
+.db-updater__row-chip--manual {
+  color: #757575;
+  background: rgba(158, 158, 158, 0.1);
+  border-color: rgba(158, 158, 158, 0.3);
+}
+
+/* --- 2.7: Filter chips (All / Automated / Manual) --- */
+.db-updater__filter-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 6px;
+  margin-right: 8px;
+}
+
+.db-updater__filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.db-updater__filter-chip:hover:not(.is-active) {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.db-updater__filter-chip.is-active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.db-updater__filter-chip--auto.is-active {
+  color: #2e7d32;
+}
+
+.db-updater__filter-chip--manual.is-active {
+  color: #424242;
+}
+
+.db-updater__filter-chip-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  background: var(--color-surface-hover);
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.db-updater__filter-chip.is-active .db-updater__filter-chip-count {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+/* --- 2.9: Empty state with icon --- */
+.db-updater__empty {
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.db-updater__empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.7;
+}
+
+.db-updater__empty--error .db-updater__empty-icon {
+  opacity: 1;
+}
+
+/* --- 2.10: Pagination upgrade --- */
+.db-updater__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border-soft);
+  flex-wrap: wrap;
+}
+
+.db-updater__pagination-summary {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.db-updater__pagination-summary strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.db-updater__pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.db-updater__pagination-page-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.db-updater__pagination-page-label strong {
+  color: var(--color-text);
+}
+
+.db-updater__pagination-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-left: 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--color-border-soft);
+}
+
+.db-updater__pagination-jump-input {
+  width: 56px;
+  height: 26px;
+  padding: 0 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.db-updater__pagination-jump-input:focus {
+  outline: 0;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-soft);
+}
+
+/* Remove number-input spinners for cleaner look */
+.db-updater__pagination-jump-input::-webkit-outer-spin-button,
+.db-updater__pagination-jump-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.db-updater__pagination-jump-input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ============================================================================
+   IN-BUTTON SYNCING INDICATOR (Plans list + Test case list)
+   Replaces the old below-toolbar "Showing cached..." paragraph that caused
+   table layout flicker. Lives in the refresh button slot.
+   ============================================================================ */
+.btn.is-syncing {
+  cursor: default;
+  opacity: 0.85;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn.is-syncing svg {
+  animation: btn-syncing-spin 1.2s linear infinite;
+}
+
+@keyframes btn-syncing-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 .repo-browser__assoc-banner.is-busy .repo-browser__assoc-banner-method {
   opacity: 0.7;
 }
@@ -410,6 +970,13 @@
 
 .repo-browser__assoc-btn--danger:hover:not(:disabled) {
   background: rgba(244, 67, 54, 0.15);
+}
+
+/* Remove the bg highlight on the associated class file + method row in the
+   tree (was distracting). Keep the text color/weight as the active indicator. */
+.repo-browser__split-pane .repo-browser__item.is-selected,
+.repo-browser__split-pane .repo-browser__method-row.is-selected {
+  background: transparent !important;
 }
 
 /* Highlight active preview file in tree */

@@ -14,7 +14,7 @@ const DEFAULT_FORM_DATA: CreateTestCaseDraftFormData = {
   title: '',
   status: 'Design',
   method: 'Selenium',
-  region: 'All Region',
+  region: 'All Regions',
   execProcess: '',
   pltpProcess: '',
   initialSteps: '',

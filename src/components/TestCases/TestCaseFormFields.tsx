@@ -148,7 +148,7 @@ export function TestCaseFormFields({
               className={`case-detail-edit-form__input${invalidFields.has('region') ? ' case-detail-edit-form__input--invalid' : ''}`}
               value={formData.region}
               onChange={(e) => handleChange('region', e.target.value)}
-              placeholder="e.g., All Region, US, EU"
+              placeholder="e.g., All Regions, US, EU"
               disabled={isLoading}
               aria-invalid={invalidFields.has('region')}
             />

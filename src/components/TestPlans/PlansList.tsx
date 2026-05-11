@@ -325,25 +325,34 @@ export function PlansList({
           />
         </div>
         <div className="cases-toolbar__filters">
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
-            onClick={onRefreshPlans}
-            title="Refresh plans"
-            disabled={!canRefresh}
-          >
-            <IconRefresh size={14} />
-            Refresh
-          </button>
+          {refreshing ? (
+            <span
+              className="btn btn--secondary btn--sm is-syncing"
+              role="status"
+              aria-live="polite"
+              title="Syncing latest plans from Azure DevOps"
+            >
+              <IconRefresh size={14} />
+              Syncing…
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={onRefreshPlans}
+              title="Refresh plans"
+              disabled={!canRefresh}
+            >
+              <IconRefresh size={14} />
+              Refresh
+            </button>
+          )}
         </div>
       </div>
 
       {warning && <div className="alert alert--warning mb-md">{warning}</div>}
-      {refreshing && (
-        <p className="text-sm text-muted mb-md" aria-live="polite">
-          Showing cached plans while syncing the latest updates.
-        </p>
-      )}
+      {/* "Showing cached..." paragraph removed — sync state is now shown
+          inline in the refresh button slot to avoid the table-shift flicker. */}
 
       <div className="data-table-wrapper">
         <table className="data-table plans-table">
