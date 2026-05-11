@@ -2249,6 +2249,7 @@ export function TestCaseDetail({
       {isAutomationManagerOpen && testCase && (
         <SeleniumRepoBrowserModal
           repoPath={seleniumRepoPath}
+          workspaceSettings={workspaceSettings}
           mode="manage-automation"
           generatedMethodName={generatedAutomationMethodName}
           associatedMethodName={associatedAutomationMethodName || null}

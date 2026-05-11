@@ -147,7 +147,7 @@ export function MainWorkspace({
         </section>
       );
     }
-    return <SeleniumRepoBrowserModal repoPath={seleniumRepoPath} onClose={() => onSectionChange('plans')} embedded />;
+    return <SeleniumRepoBrowserModal repoPath={seleniumRepoPath} onClose={() => onSectionChange('plans')} embedded workspaceSettings={workspaceSettings} />;
   })();
 
   return (

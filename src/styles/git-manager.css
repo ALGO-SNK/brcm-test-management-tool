@@ -230,7 +230,11 @@
 .repo-browser__preview-body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  /* Monaco's own scrollbar handles editor scrolling — keep the outer panel
+     non-scrolling so we don't render two stacked scrollbars. */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--color-surface);
 }
 
@@ -354,6 +358,159 @@
 
 .repo-browser__preview-code .cs-type {
   color: #C9881D;
+}
+
+/* ============================================================================
+   QUICK OPEN (Ctrl+P) — fuzzy file finder overlay
+   ============================================================================ */
+
+.quick-open-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  backdrop-filter: blur(2px);
+}
+
+.quick-open {
+  width: min(640px, 90vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.quick-open__input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-subtle);
+}
+
+.quick-open__caret {
+  color: var(--color-text-muted);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.quick-open__input-row input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-family: inherit;
+  padding: 2px 0;
+}
+
+.quick-open__input-row input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.quick-open__results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.quick-open__empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.quick-open__result {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.quick-open__result.is-active {
+  background: var(--color-primary-soft);
+}
+
+.quick-open__result-name {
+  font-size: 13px;
+  font-weight: 500;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+
+.quick-open__result-name mark {
+  background: transparent;
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.quick-open__result.is-active .quick-open__result-name mark {
+  color: var(--color-text-heading);
+}
+
+.quick-open__result-dir {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: right;
+}
+
+.quick-open__footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--color-border-soft);
+  background: var(--color-surface-subtle);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.quick-open__footer kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  margin-right: 4px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 3px;
+  background: var(--color-surface);
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font-size: 10px;
+}
+
+.quick-open__count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================================
@@ -1943,4 +2100,831 @@
     padding: 14px;
     gap: 14px;
   }
+}
+
+/* ===========================================================
+   Find in Files (Ctrl+Shift+F) overlay
+   Project-wide content search; styled to match Quick Open
+   =========================================================== */
+.find-in-files-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 8vh;
+}
+
+.find-in-files {
+  width: min(820px, 92vw);
+  max-height: 80vh;
+  background: var(--color-surface, #1e1e1e);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.find-in-files__header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border, #333);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.find-in-files__input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.find-in-files__caret {
+  color: var(--color-text-muted, #888);
+  font-size: 16px;
+}
+
+.find-in-files__input-row input {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--color-border, #333);
+  border-radius: 4px;
+  color: var(--color-text, #ddd);
+  font-size: 13px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.find-in-files__input-row input:focus {
+  border-color: var(--color-accent, #2196f3);
+}
+
+.find-in-files__options {
+  display: flex;
+  gap: 4px;
+}
+
+.find-in-files__opt {
+  background: transparent;
+  color: var(--color-text-muted, #888);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  min-width: 28px;
+}
+
+.find-in-files__opt:hover {
+  color: var(--color-text, #ddd);
+}
+
+.find-in-files__opt.is-on {
+  background: var(--color-accent, #2196f3);
+  color: #fff;
+  border-color: var(--color-accent, #2196f3);
+}
+
+.find-in-files__summary {
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  padding-left: 24px;
+}
+
+.find-in-files__error {
+  color: var(--color-danger, #e57373);
+}
+
+.find-in-files__results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.find-in-files__empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted, #888);
+  font-size: 12px;
+}
+
+.find-in-files__file-group {
+  margin-bottom: 2px;
+}
+
+.find-in-files__file-header {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  color: var(--color-text, #ddd);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.find-in-files__file-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.find-in-files__chevron {
+  color: var(--color-text-muted, #888);
+  font-size: 10px;
+  width: 12px;
+}
+
+.find-in-files__file-name {
+  font-weight: 500;
+}
+
+.find-in-files__file-dir {
+  color: var(--color-text-muted, #888);
+  font-size: 11px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.find-in-files__file-count {
+  background: var(--color-border, #333);
+  color: var(--color-text-muted, #aaa);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.find-in-files__matches {
+  display: flex;
+  flex-direction: column;
+}
+
+.find-in-files__match {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 12px 2px 32px;
+  color: var(--color-text, #ccc);
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11.5px;
+  cursor: pointer;
+  text-align: left;
+  white-space: pre;
+  overflow: hidden;
+}
+
+.find-in-files__match:hover {
+  background: rgba(33, 150, 243, 0.12);
+}
+
+.find-in-files__match-line {
+  color: var(--color-text-muted, #888);
+  min-width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.find-in-files__match-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.find-in-files__match-text mark {
+  background: rgba(255, 213, 0, 0.32);
+  color: inherit;
+  padding: 0;
+  font-weight: 600;
+}
+
+.find-in-files__footer {
+  padding: 6px 12px;
+  border-top: 1px solid var(--color-border, #333);
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  display: flex;
+  gap: 14px;
+}
+
+.find-in-files__footer kbd {
+  background: var(--color-border, #333);
+  color: var(--color-text, #ddd);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 10px;
+  margin-right: 3px;
+}
+
+/* ===========================================================
+   Tree right-click context menu (file ops)
+   =========================================================== */
+.tree-context-menu {
+  position: fixed;
+  z-index: 1200;
+  background: var(--color-surface, #1e1e1e);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  min-width: 180px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.tree-context-menu__item {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  color: var(--color-text, #ddd);
+  padding: 6px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-context-menu__item:hover {
+  background: var(--color-accent, #2196f3);
+  color: #fff;
+}
+
+.tree-context-menu__item--danger {
+  color: var(--color-danger, #e57373);
+}
+
+.tree-context-menu__item--danger:hover {
+  background: var(--color-danger, #e57373);
+  color: #fff;
+}
+
+.tree-context-menu__sep {
+  height: 1px;
+  background: var(--color-border, #333);
+  margin: 4px 0;
+}
+
+/* ===========================================================
+   Editor status bar (IDE-style strip below the Monaco editor)
+   =========================================================== */
+.preview-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 22px;
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--color-text-muted, #aaa);
+  background: var(--color-surface-2, #252526);
+  border-top: 1px solid var(--color-border, #333);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.preview-status-bar__group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.preview-status-bar__group--right {
+  justify-content: flex-end;
+}
+
+.preview-status-bar__item {
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-feature-settings: "tnum" 1;
+}
+
+.preview-status-bar__item--dirty {
+  color: var(--color-warning, #e0a64b);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Quick Open "recent" badge */
+.quick-open__result-badge {
+  margin-left: 8px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--color-border, #333);
+  color: var(--color-text-muted, #aaa);
+  flex-shrink: 0;
+}
+
+.quick-open__result.is-active .quick-open__result-badge {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+/* ===========================================================
+   Command Palette (Ctrl+Shift+P) — reuses .quick-open* shell
+   =========================================================== */
+.command-palette__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.command-palette__category {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--color-text-muted, #888);
+  background: var(--color-border, #333);
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.command-palette__label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-palette__shortcut {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--color-text-muted, #888);
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+
+.command-palette__row.is-active .command-palette__category,
+.command-palette__row.is-active .command-palette__shortcut {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.command-palette__row.is-active .command-palette__category {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.command-palette__row.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ===========================================================
+   Monaco breakpoint glyph (Phase 3a — renderer-only)
+   The dot is centered in the glyph margin. background-color is
+   set via the .monaco-bp-glyph class on the decoration.
+   =========================================================== */
+.monaco-editor .monaco-bp-glyph {
+  cursor: pointer;
+}
+.monaco-editor .monaco-bp-glyph::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #e51400;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 4px rgba(229, 20, 0, 0.5);
+}
+/* Click-affordance hover on the glyph margin so users discover breakpoints */
+.monaco-editor .margin-view-overlays .glyph-margin:hover {
+  background: rgba(229, 20, 0, 0.10);
+  cursor: pointer;
+}
+
+/* Status bar — breakpoint count chip */
+.preview-status-bar__item--bp {
+  color: #e57373;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ===========================================================
+   Debug session UI (Phase 3b)
+   =========================================================== */
+.debug-ribbon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--color-surface-2, #2a2d2e);
+  border-bottom: 1px solid var(--color-border, #333);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.debug-ribbon--starting { background: rgba(80, 110, 180, 0.20); }
+.debug-ribbon--running  { background: rgba(70, 140, 90, 0.20); }
+.debug-ribbon--paused   { background: rgba(200, 150, 60, 0.20); }
+.debug-ribbon--stopping { background: rgba(200, 90, 90, 0.20); }
+
+.debug-ribbon__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text, #ddd);
+}
+
+.debug-ribbon__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.debug-ribbon--starting .debug-ribbon__dot { color: #6a8fd8; animation: dbg-pulse 1s ease-in-out infinite; }
+.debug-ribbon--running .debug-ribbon__dot  { color: #4caf50; animation: dbg-pulse 1.4s ease-in-out infinite; }
+.debug-ribbon--paused .debug-ribbon__dot   { color: #e0a64b; }
+.debug-ribbon--stopping .debug-ribbon__dot { color: #e57373; animation: dbg-pulse 0.8s ease-in-out infinite; }
+@keyframes dbg-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.debug-ribbon__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Debug panel — call stack + variables, below the editor */
+.debug-panel {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 1px;
+  background: var(--color-border, #333);
+  border-top: 1px solid var(--color-border, #333);
+  max-height: 240px;
+  min-height: 120px;
+  flex-shrink: 0;
+}
+
+.debug-panel__col {
+  background: var(--color-surface, #1e1e1e);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.debug-panel__heading {
+  padding: 5px 10px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--color-text-muted, #888);
+  border-bottom: 1px solid var(--color-border, #333);
+  background: var(--color-surface-2, #252526);
+  flex-shrink: 0;
+}
+
+.debug-panel__list {
+  overflow-y: auto;
+  padding: 4px 0;
+  flex: 1;
+}
+
+.debug-panel__frame {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  background: transparent;
+  border: 0;
+  color: var(--color-text, #ddd);
+  padding: 4px 12px;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+.debug-panel__frame:hover { background: rgba(255, 255, 255, 0.05); }
+
+.debug-panel__frame-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.debug-panel__frame-loc {
+  font-size: 10.5px;
+  color: var(--color-text-muted, #888);
+}
+
+.debug-panel__scope { padding: 4px 12px 8px; }
+
+.debug-panel__scope-name {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--color-text-muted, #888);
+  margin-bottom: 4px;
+}
+
+.debug-panel__var {
+  display: flex;
+  gap: 6px;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11.5px;
+  padding: 1px 0;
+  align-items: baseline;
+}
+
+.debug-panel__var-name { color: var(--color-accent, #4fc3f7); flex-shrink: 0; }
+.debug-panel__var-eq   { color: var(--color-text-muted, #888); flex-shrink: 0; }
+.debug-panel__var-value {
+  color: var(--color-text, #ddd);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.debug-panel__empty {
+  padding: 12px;
+  font-size: 11.5px;
+  color: var(--color-text-muted, #888);
+  text-align: center;
+}
+
+/* Monaco execution pointer (yellow line + glyph) */
+.monaco-editor .margin-view-overlays .monaco-exec-glyph::before {
+  content: "▶";
+  display: block;
+  color: #ffcc00;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.7);
+}
+
+.monaco-editor .view-overlays .monaco-exec-line {
+  background: rgba(255, 204, 0, 0.18);
+  border: 1px solid rgba(255, 204, 0, 0.35);
+  box-sizing: border-box;
+}
+
+/* btn--danger for the Stop button if not already styled elsewhere */
+.btn--danger {
+  background: #c62828;
+  color: #fff;
+  border-color: #b71c1c;
+}
+.btn--danger:hover { background: #b71c1c; }
+.btn--danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ===========================================================
+   Phase 3c — Variable tree expansion + Breakpoints popover
+   =========================================================== */
+
+/* Variable row: expandable when variablesReference > 0 */
+.debug-panel__var.is-expandable { cursor: pointer; }
+.debug-panel__var.is-expandable:hover { background: rgba(255, 255, 255, 0.04); }
+
+.debug-panel__var-chevron {
+  display: inline-block;
+  width: 12px;
+  color: var(--color-text-muted, #888);
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
+.debug-panel__var-state {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  padding: 2px 0;
+}
+.debug-panel__var-state--error { color: #e57373; }
+
+/* Status-bar BP chip becomes a button */
+.preview-status-bar__item--clickable {
+  background: transparent;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  padding: 0 4px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.preview-status-bar__item--clickable:hover { background: rgba(255, 255, 255, 0.08); }
+
+/* Breakpoints popover */
+.breakpoints-popover-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1150;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0 16px 50px;
+}
+
+.breakpoints-popover {
+  width: min(420px, 90vw);
+  max-height: 60vh;
+  background: var(--color-surface, #1e1e1e);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.breakpoints-popover__header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border, #333);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--color-text, #ddd);
+  background: var(--color-surface-2, #252526);
+  font-weight: 600;
+}
+
+.breakpoints-popover__header-actions { display: flex; gap: 6px; }
+
+.breakpoints-popover__list {
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.breakpoints-popover__group { padding: 4px 0; }
+
+.breakpoints-popover__group-head {
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--color-text, #ddd);
+  font-weight: 600;
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breakpoints-popover__file-name { flex-shrink: 0; }
+.breakpoints-popover__file-dir {
+  color: var(--color-text-muted, #888);
+  font-weight: 400;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breakpoints-popover__row {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 6px;
+}
+.breakpoints-popover__row:hover { background: rgba(255, 255, 255, 0.04); }
+
+.breakpoints-popover__jump {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  color: var(--color-text, #ccc);
+  padding: 4px 0;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.breakpoints-popover__dot { color: #e51400; }
+
+.breakpoints-popover__remove {
+  background: transparent;
+  border: 0;
+  color: var(--color-text-muted, #888);
+  font-size: 12px;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.breakpoints-popover__remove:hover { color: #e57373; background: rgba(229, 115, 115, 0.12); }
+
+.breakpoints-popover__empty {
+  padding: 20px 16px;
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ===========================================================
+   Autosave indicator in the preview toolbar
+   =========================================================== */
+.repo-browser__autosave {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  transition: opacity 0.25s ease;
+}
+.repo-browser__autosave--pending {
+  background: rgba(255, 213, 0, 0.18);
+  color: #d2b400;
+}
+.repo-browser__autosave--saving {
+  background: rgba(80, 140, 200, 0.20);
+  color: #6aa8df;
+}
+.repo-browser__autosave--saved {
+  background: rgba(80, 180, 100, 0.18);
+  color: #5fbc70;
+}
+.repo-browser__autosave--error {
+  background: rgba(220, 70, 70, 0.20);
+  color: #e57373;
+}
+
+/* Make the Debug action button distinct from the wrap toggle */
+.repo-browser__preview-action.is-active {
+  background: rgba(220, 60, 60, 0.20);
+  color: #ff8a80;
+  border-color: rgba(220, 60, 60, 0.45);
+}
+
+/* Inline icon alignment for the Debug button + debug ribbon buttons */
+.repo-browser__preview-action-icon {
+  font-size: 16px;
+  vertical-align: -3px;
+  margin-right: 4px;
+}
+.debug-ribbon__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.debug-ribbon__btn .material-symbols {
+  font-size: 16px;
+}
+
+/* ===========================================================
+   Monaco scrollbars — match the app's global scrollbar style
+   (thin, pill-shaped, border-strong on hover → primary)
+   Monaco draws its own slider divs, so the global ::-webkit-scrollbar
+   rules in style.css don't apply. These overrides target Monaco's
+   internal classes via the renderer's wrapper.
+   =========================================================== */
+.monaco-editor .scrollbar > .slider {
+  background: var(--color-border-strong) !important;
+  border-radius: 999px !important;
+  border: 2px solid transparent !important;
+  background-clip: padding-box !important;
+  transition: background 0.15s ease;
+}
+.monaco-editor .scrollbar > .slider:hover,
+.monaco-editor .scrollbar > .slider.active {
+  background: var(--color-primary, #4fc3f7) !important;
+  background-clip: padding-box !important;
+}
+
+/* Track stays transparent to match the rest of the app */
+.monaco-editor .scrollbar {
+  background: transparent !important;
+}
+
+/* Slim down the scrollbars to 10px to match the app's global width */
+.monaco-editor .scrollbar.vertical { width: 10px !important; }
+.monaco-editor .scrollbar.horizontal { height: 10px !important; }
+.monaco-editor .scrollbar.vertical > .slider { width: 10px !important; }
+.monaco-editor .scrollbar.horizontal > .slider { height: 10px !important; }
+
+/* Hide the arrow-up / arrow-down scrollbar buttons (we don't use them) */
+.monaco-editor .scrollbar > .scra { display: none !important; }
+
+/* Remove the dark "shadow" Monaco draws at the top of the editor when
+   scrolled — it clashes with our themed background. */
+.monaco-editor .scroll-decoration { box-shadow: none !important; }
+
+/* Minimap slider matches too */
+.monaco-editor .minimap-slider {
+  background: var(--color-border-strong) !important;
+  opacity: 0.4;
+}
+.monaco-editor .minimap-slider:hover,
+.monaco-editor .minimap-slider.active {
+  background: var(--color-primary, #4fc3f7) !important;
+  opacity: 0.6;
 }

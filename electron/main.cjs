@@ -195,6 +195,7 @@ function createWindow() {
     dirtySourcesByContentsId.delete(mainWindowContentsId);
     pendingCloseRequestContentsIds.delete(mainWindowContentsId);
     confirmedCloseContentsIds.delete(mainWindowContentsId);
+    try { stopRepoWatcher(); } catch { /* ignore */ }
     mainWindow = null;
   });
 }
@@ -4015,6 +4016,156 @@ ipcMain.handle('desktop:find-test-method', (_event, rootPath, methodName) => {
   return findTestMethodInDirectory(rootPath, methodName);
 });
 
+// ----------------------------------------------------------------------------
+// Find in Files (project-wide content search)
+// Recursive scan with safety limits. Skips system/build folders and binary
+// file extensions. Cancellable via requestId — only the latest request's
+// results are returned; earlier ones short-circuit and resolve empty.
+// ----------------------------------------------------------------------------
+const SEARCH_SKIP_DIRS = new Set([
+  'bin', 'obj', 'node_modules', 'packages',
+  'dist', 'build', 'out', '.cache',
+  'testresults', '.testresults',
+  '.git', '.vs', '.vscode', '.idea', '.svn', '.hg', '.next',
+]);
+
+// Allowlist of "searchable" extensions. Anything outside this list is skipped.
+const SEARCH_TEXT_EXTENSIONS = new Set([
+  '.cs', '.csproj', '.sln', '.config', '.runsettings', '.json', '.xml',
+  '.md', '.txt', '.yml', '.yaml', '.ts', '.tsx', '.js', '.jsx',
+  '.html', '.css', '.scss', '.sql', '.bat', '.ps1', '.sh', '.py',
+  '.env', '.gitignore', '.gitattributes', '.editorconfig',
+]);
+
+const MAX_SEARCH_FILE_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_SEARCH_TOTAL_MATCHES = 500;
+const MAX_SEARCH_MATCHES_PER_FILE = 50;
+const MAX_SEARCH_DEPTH = 20;
+
+let currentSearchRequestId = 0;
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function searchInFiles(targetPath, options) {
+  const normalizedPath = normalizeDirectoryPath(targetPath);
+  const query = String(options?.query ?? '');
+  if (!query.trim()) return { matches: [], totalMatches: 0, truncated: false };
+
+  // Bump the request id; if it changes before we finish, bail out.
+  currentSearchRequestId += 1;
+  const myRequestId = currentSearchRequestId;
+
+  const caseSensitive = Boolean(options?.caseSensitive);
+  const isRegex = Boolean(options?.isRegex);
+  const wholeWord = Boolean(options?.wholeWord);
+
+  let regex;
+  try {
+    const pattern = isRegex ? query : escapeRegex(query);
+    const wrapped = wholeWord ? `(?<![A-Za-z0-9_])(?:${pattern})(?![A-Za-z0-9_])` : pattern;
+    regex = new RegExp(wrapped, caseSensitive ? 'g' : 'gi');
+  } catch (error) {
+    return { matches: [], totalMatches: 0, truncated: false, error: error.message };
+  }
+
+  const fsp = require('node:fs/promises');
+  const path = require('node:path');
+  const matches = [];
+  let totalMatches = 0;
+  let truncated = false;
+
+  async function visit(dir, depth) {
+    if (myRequestId !== currentSearchRequestId) return; // canceled
+    if (depth > MAX_SEARCH_DEPTH) return;
+    if (totalMatches >= MAX_SEARCH_TOTAL_MATCHES) {
+      truncated = true;
+      return;
+    }
+    let entries;
+    try {
+      entries = await fsp.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (myRequestId !== currentSearchRequestId) return;
+      if (totalMatches >= MAX_SEARCH_TOTAL_MATCHES) {
+        truncated = true;
+        return;
+      }
+      const name = entry.name;
+      const lowerName = name.toLowerCase();
+      if (SEARCH_SKIP_DIRS.has(lowerName) || name.startsWith('.')) {
+        // .git, .vscode, etc. — but also user-dotfiles. We allow named .env etc by extension allowlist below.
+        if (entry.isDirectory()) continue;
+        // For files starting with '.', skip unless extension is in allowlist
+        const dotExt = '.' + lowerName.split('.').pop();
+        if (!SEARCH_TEXT_EXTENSIONS.has(dotExt)) continue;
+      }
+      const fullPath = path.join(dir, name);
+      if (entry.isDirectory()) {
+        await visit(fullPath, depth + 1);
+      } else if (entry.isFile()) {
+        const ext = path.extname(lowerName);
+        if (!SEARCH_TEXT_EXTENSIONS.has(ext) && !lowerName.startsWith('.')) continue;
+        let stat;
+        try { stat = await fsp.stat(fullPath); } catch { continue; }
+        if (stat.size > MAX_SEARCH_FILE_BYTES) continue;
+        let content;
+        try { content = await fsp.readFile(fullPath, 'utf8'); } catch { continue; }
+        // Heuristic: skip likely-binary content (lots of null bytes)
+        if (content.indexOf(String.fromCharCode(0)) !== -1) continue;
+        const fileMatches = [];
+        const lines = content.split(/\r?\n/);
+        for (let lineIdx = 0; lineIdx < lines.length; lineIdx += 1) {
+          if (fileMatches.length >= MAX_SEARCH_MATCHES_PER_FILE) {
+            truncated = true;
+            break;
+          }
+          const line = lines[lineIdx];
+          regex.lastIndex = 0;
+          let m;
+          while ((m = regex.exec(line)) !== null) {
+            fileMatches.push({
+              line: lineIdx + 1,
+              column: m.index + 1,
+              matchLength: m[0].length,
+              lineText: line.length > 400 ? line.slice(0, 400) + '…' : line,
+            });
+            totalMatches += 1;
+            if (totalMatches >= MAX_SEARCH_TOTAL_MATCHES) {
+              truncated = true;
+              break;
+            }
+            if (fileMatches.length >= MAX_SEARCH_MATCHES_PER_FILE) break;
+            // Prevent infinite loops on zero-length matches
+            if (m.index === regex.lastIndex) regex.lastIndex += 1;
+          }
+        }
+        if (fileMatches.length > 0) {
+          matches.push({ path: fullPath, matches: fileMatches });
+        }
+      }
+    }
+  }
+
+  try {
+    await visit(normalizedPath, 0);
+  } catch {
+    // swallow — partial results are still useful
+  }
+  if (myRequestId !== currentSearchRequestId) {
+    return { matches: [], totalMatches: 0, truncated: false, canceled: true };
+  }
+  return { matches, totalMatches, truncated };
+}
+
+ipcMain.handle('desktop:search-in-files', (_event, rootPath, options) => {
+  return searchInFiles(rootPath, options);
+});
+
 ipcMain.handle('desktop:get-git-branch', (_event, targetPath) => {
   return readGitBranch(targetPath);
 });
@@ -4115,6 +4266,163 @@ ipcMain.handle('desktop:write-text-file', (_event, targetPath, content) => {
   fs.writeFileSync(normalizedPath, content, 'utf8');
 });
 
+// ---------------------------------------------------------------------------
+// Repo filesystem watcher — emits debounced change events to the renderer so
+// the tree + git status auto-refresh when files change on disk (git pull,
+// external editor, etc). Uses Node's built-in recursive fs.watch (supported
+// natively on Windows and macOS, our target Electron desktop platforms).
+// ---------------------------------------------------------------------------
+const WATCH_IGNORED_DIRS = new Set([
+  'bin', 'obj', 'node_modules', 'packages',
+  'dist', 'build', 'out', '.cache',
+  'testresults', '.testresults',
+  '.git', '.vs', '.vscode', '.idea', '.svn', '.hg', '.next',
+]);
+let activeRepoWatcher = null; // { path, watcher, debouncePerDir: Map, gitDebounceTimer }
+
+function stopRepoWatcher() {
+  if (!activeRepoWatcher) return;
+  try { activeRepoWatcher.watcher.close(); } catch { /* ignore */ }
+  for (const t of activeRepoWatcher.debouncePerDir.values()) clearTimeout(t);
+  if (activeRepoWatcher.gitDebounceTimer) clearTimeout(activeRepoWatcher.gitDebounceTimer);
+  activeRepoWatcher = null;
+}
+
+function startRepoWatcher(rootPath) {
+  stopRepoWatcher();
+  const normalizedRoot = normalizeDirectoryPath(rootPath);
+  const debouncePerDir = new Map();
+  const state = { path: normalizedRoot, debouncePerDir, gitDebounceTimer: null, watcher: null };
+
+  const send = (channel, payload) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, payload);
+    }
+  };
+
+  const shouldIgnore = (relPath) => {
+    if (!relPath) return false;
+    const parts = relPath.split(/[\\/]/);
+    return parts.some((seg) => WATCH_IGNORED_DIRS.has(seg.toLowerCase()));
+  };
+
+  let watcher;
+  try {
+    watcher = fs.watch(normalizedRoot, { recursive: true }, (_eventType, filename) => {
+      if (!filename) return;
+      if (shouldIgnore(filename)) return;
+      const absChanged = path.join(normalizedRoot, filename);
+      // Affected directory: parent of changed entry (or self if it's a dir change).
+      let affectedDir;
+      try {
+        const st = fs.statSync(absChanged);
+        affectedDir = st.isDirectory() ? absChanged : path.dirname(absChanged);
+      } catch {
+        // Path was deleted — use the parent dir.
+        affectedDir = path.dirname(absChanged);
+      }
+      // Debounce per affected directory (200ms) to coalesce bursts.
+      const existing = debouncePerDir.get(affectedDir);
+      if (existing) clearTimeout(existing);
+      debouncePerDir.set(
+        affectedDir,
+        setTimeout(() => {
+          debouncePerDir.delete(affectedDir);
+          send('desktop:fs-changed', { rootPath: normalizedRoot, dirPath: affectedDir });
+        }, 200),
+      );
+      // Coalesced git-status nudge (500ms).
+      if (state.gitDebounceTimer) clearTimeout(state.gitDebounceTimer);
+      state.gitDebounceTimer = setTimeout(() => {
+        state.gitDebounceTimer = null;
+        send('desktop:git-changed', { rootPath: normalizedRoot });
+      }, 500);
+    });
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) };
+  }
+  state.watcher = watcher;
+  activeRepoWatcher = state;
+  return { ok: true, path: normalizedRoot };
+}
+
+ipcMain.handle('desktop:watch-repo', (_event, rootPath) => {
+  return startRepoWatcher(rootPath);
+});
+
+ipcMain.handle('desktop:unwatch-repo', () => {
+  stopRepoWatcher();
+  return { ok: true };
+});
+
+// ---------------------------------------------------------------------------
+// File operations for the repo browser tree (create / rename / delete).
+// All paths are validated to live under the supplied repo root so a stray
+// IPC call can't touch arbitrary disk locations.
+// ---------------------------------------------------------------------------
+function assertPathInsideRoot(targetPath, rootPath) {
+  const normalizedTarget = path.resolve(targetPath);
+  const normalizedRoot = path.resolve(rootPath);
+  const rel = path.relative(normalizedRoot, normalizedTarget);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw new Error('Target path is outside the repository root.');
+  }
+  return { target: normalizedTarget, root: normalizedRoot };
+}
+
+ipcMain.handle('desktop:create-file', (_event, rootPath, targetPath, initialContent) => {
+  const { target } = assertPathInsideRoot(targetPath, rootPath);
+  if (fs.existsSync(target)) {
+    return { ok: false, error: 'A file already exists at that path.' };
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, typeof initialContent === 'string' ? initialContent : '', 'utf8');
+  return { ok: true, path: target };
+});
+
+ipcMain.handle('desktop:create-folder', (_event, rootPath, targetPath) => {
+  const { target } = assertPathInsideRoot(targetPath, rootPath);
+  if (fs.existsSync(target)) {
+    return { ok: false, error: 'A file or folder already exists at that path.' };
+  }
+  fs.mkdirSync(target, { recursive: true });
+  return { ok: true, path: target };
+});
+
+ipcMain.handle('desktop:rename-path', (_event, rootPath, fromPath, toPath) => {
+  const { target: from } = assertPathInsideRoot(fromPath, rootPath);
+  const { target: to } = assertPathInsideRoot(toPath, rootPath);
+  if (!fs.existsSync(from)) {
+    return { ok: false, error: 'Source path no longer exists.' };
+  }
+  if (fs.existsSync(to) && from.toLowerCase() !== to.toLowerCase()) {
+    // Allow case-only rename on case-insensitive filesystems
+    return { ok: false, error: 'Destination already exists.' };
+  }
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  fs.renameSync(from, to);
+  return { ok: true, path: to };
+});
+
+ipcMain.handle('desktop:delete-path', async (_event, rootPath, targetPath) => {
+  const { target } = assertPathInsideRoot(targetPath, rootPath);
+  if (!fs.existsSync(target)) {
+    return { ok: false, error: 'Path no longer exists.' };
+  }
+  // Send to OS trash so users can recover; falls back to permanent delete.
+  try {
+    await shell.trashItem(target);
+    return { ok: true, trashed: true };
+  } catch (err) {
+    try {
+      fs.rmSync(target, { recursive: true, force: true });
+      return { ok: true, trashed: false };
+    } catch (err2) {
+      return { ok: false, error: err2.message || String(err2) };
+    }
+  }
+});
+
 ipcMain.handle('desktop:open-path', (_event, targetPath) => {
   const normalizedPath = normalizeFilePath(targetPath);
   const result = shell.openPath(normalizedPath);
@@ -4150,6 +4458,35 @@ ipcMain.handle('desktop:debugger-step-out', (_event, runId) => {
 
 ipcMain.handle('desktop:debugger-pause', (_event, runId) => {
   return runDebuggerCommand(runId, 'pause');
+});
+
+// Fetch children of a structured variable (DAP variablesReference > 0).
+// Returns a flat list of { name, value, type, variablesReference } so the UI
+// can lazily expand objects/arrays/locals in the Variables tree.
+ipcMain.handle('desktop:debugger-variables', async (_event, runId, variablesReference) => {
+  const ref = Number(variablesReference);
+  if (!Number.isFinite(ref) || ref <= 0) {
+    return { ok: false, variables: [], error: 'A positive variablesReference is required.' };
+  }
+  try {
+    const { session } = getDebugSessionOrThrow(runId);
+    if (session.pendingAttach) await session.pendingAttach;
+    const client = session.client;
+    if (!client || typeof client.variables !== 'function') {
+      return { ok: false, variables: [], error: 'Debugger does not expose variables.' };
+    }
+    const response = await client.variables(ref, { start: 0, count: 200 });
+    const raw = Array.isArray(response?.body?.variables) ? response.body.variables : [];
+    const variables = raw.map((v) => ({
+      name: String(v.name ?? ''),
+      value: String(v.value ?? ''),
+      type: typeof v.type === 'string' ? v.type : undefined,
+      variablesReference: typeof v.variablesReference === 'number' ? v.variablesReference : 0,
+    }));
+    return { ok: true, variables };
+  } catch (err) {
+    return { ok: false, variables: [], error: err.message || String(err) };
+  }
 });
 
 ipcMain.handle('desktop:stop-dotnet-test', (_event, runId) => {

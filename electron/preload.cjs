@@ -39,6 +39,39 @@ contextBridge.exposeInMainWorld('desktop', {
   listDirectory(targetPath) {
     return ipcRenderer.invoke('desktop:list-directory', targetPath);
   },
+  searchInFiles(rootPath, options) {
+    return ipcRenderer.invoke('desktop:search-in-files', rootPath, options);
+  },
+  createFile(rootPath, targetPath, initialContent) {
+    return ipcRenderer.invoke('desktop:create-file', rootPath, targetPath, initialContent);
+  },
+  createFolder(rootPath, targetPath) {
+    return ipcRenderer.invoke('desktop:create-folder', rootPath, targetPath);
+  },
+  renamePath(rootPath, fromPath, toPath) {
+    return ipcRenderer.invoke('desktop:rename-path', rootPath, fromPath, toPath);
+  },
+  deletePath(rootPath, targetPath) {
+    return ipcRenderer.invoke('desktop:delete-path', rootPath, targetPath);
+  },
+  watchRepo(rootPath) {
+    return ipcRenderer.invoke('desktop:watch-repo', rootPath);
+  },
+  unwatchRepo() {
+    return ipcRenderer.invoke('desktop:unwatch-repo');
+  },
+  onRepoFsChanged(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => { callback(payload); };
+    ipcRenderer.on('desktop:fs-changed', listener);
+    return () => ipcRenderer.removeListener('desktop:fs-changed', listener);
+  },
+  onRepoGitChanged(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => { callback(payload); };
+    ipcRenderer.on('desktop:git-changed', listener);
+    return () => ipcRenderer.removeListener('desktop:git-changed', listener);
+  },
   findTestMethod(rootPath, methodName) {
     return ipcRenderer.invoke('desktop:find-test-method', rootPath, methodName);
   },
@@ -142,6 +175,9 @@ contextBridge.exposeInMainWorld('desktop', {
   },
   debuggerPause(runId) {
     return ipcRenderer.invoke('desktop:debugger-pause', runId);
+  },
+  debuggerVariables(runId, variablesReference) {
+    return ipcRenderer.invoke('desktop:debugger-variables', runId, variablesReference);
   },
   stopDotnetTest(runId) {
     return ipcRenderer.invoke('desktop:stop-dotnet-test', runId);

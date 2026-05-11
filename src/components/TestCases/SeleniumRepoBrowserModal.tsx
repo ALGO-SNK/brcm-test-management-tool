@@ -15,7 +15,12 @@ import {
 } from '../Common/Icons';
 import { useNotification } from '../../context/useNotification';
 import { GitManager, type GitFile } from './GitManager';
-import { CodeEditor } from '../Common/CodeEditor';
+import { CodeEditor, detectLanguage } from '../Common/CodeEditor';
+import { QuickOpen, type FileItem } from './QuickOpen';
+import { FindInFiles } from './FindInFiles';
+import { CommandPalette, type PaletteCommand } from './CommandPalette';
+import { DebugVariableRow } from './DebugVariableRow';
+import type { editor as MonacoEditorNS } from 'monaco-editor';
 
 interface SeleniumRepoBrowserModalProps {
   repoPath: string;
@@ -30,6 +35,8 @@ interface SeleniumRepoBrowserModalProps {
   onRemoveAssociation?: (filePath: string, methodName: string) => void;
   actionBusy?: boolean;
   refreshToken?: number;
+  /** Optional — when provided, enables the in-browser debug commands (Phase 3b). */
+  workspaceSettings?: import('../pages/WorkspaceSettings').WorkspaceSettingsValues;
 }
 
 type NodeState = {
@@ -126,6 +133,7 @@ export function SeleniumRepoBrowserModal({
   onRemoveAssociation,
   actionBusy = false,
   refreshToken = 0,
+  workspaceSettings,
 }: SeleniumRepoBrowserModalProps) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set([repoPath]));
   const [nodesByPath, setNodesByPath] = useState<Record<string, NodeState>>({});
@@ -164,9 +172,175 @@ export function SeleniumRepoBrowserModal({
     error: string | null;
   } | null>(null);
   // Edit/Save state
-  const [isEditing, setIsEditing] = useState(false);
+  // Always editable — no read-only state. Kept as state so existing references
+  // continue to compile, but the UI never flips it back to false.
+  const [isEditing, setIsEditing] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  // Auto-save status surfaced in the status bar (transient "Saved" indicator).
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const autoSavedFlashTimerRef = useRef<number | null>(null);
   const isDirty = Boolean(previewFile && previewFile.content !== previewFile.original);
+  // Quick Open (Ctrl+P) state
+  const [isQuickOpenOpen, setIsQuickOpenOpen] = useState(false);
+  const [quickOpenIndex, setQuickOpenIndex] = useState<FileItem[]>([]);
+  const [isIndexing, setIsIndexing] = useState(false);
+  const indexedRefRoot = useRef<string | null>(null);
+  // Find in Files (Ctrl+Shift+F) state
+  const [isFindInFilesOpen, setIsFindInFilesOpen] = useState(false);
+  // Command palette (Ctrl+Shift+P) state
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  // Recently-opened files for Quick Open (scoped per repo, persisted in localStorage)
+  const recentFilesKey = `repo-browser:recent-files:${repoPath}`;
+  const [recentFiles, setRecentFiles] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`repo-browser:recent-files:${repoPath}`);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  // Reload recents when repoPath changes (e.g. modal opens for a different repo)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`repo-browser:recent-files:${repoPath}`);
+      setRecentFiles(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch {
+      setRecentFiles([]);
+    }
+  }, [repoPath]);
+  const pushRecentFile = (filePath: string) => {
+    setRecentFiles((prev) => {
+      const next = [filePath, ...prev.filter((p) => p !== filePath)].slice(0, 20);
+      try {
+        localStorage.setItem(recentFilesKey, JSON.stringify(next));
+      } catch {
+        /* ignore quota errors */
+      }
+      return next;
+    });
+  };
+  // Tree context menu (right-click on file/folder row)
+  const [treeContextMenu, setTreeContextMenu] = useState<
+    | {
+        x: number;
+        y: number;
+        entry: DesktopDirectoryEntry | null; // null = repo root
+        parentDir: string; // dir whose entries we'll refresh
+      }
+    | null
+  >(null);
+  // Monaco editor ref + pending jump (used when opening from a Find result)
+  const monacoEditorRef = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
+  const pendingJumpRef = useRef<{ path: string; line: number; column: number } | null>(null);
+  // Cursor position for the editor status bar.
+  const [cursorPos, setCursorPos] = useState<{ line: number; column: number }>({ line: 1, column: 1 });
+  // Refs so the global F9 handler always sees fresh values without re-binding.
+  const cursorPosRef = useRef(cursorPos);
+  useEffect(() => { cursorPosRef.current = cursorPos; }, [cursorPos]);
+  const previewFilePathRef = useRef<string | null>(null);
+  const toggleBreakpointRef = useRef<((path: string, line: number) => void) | null>(null);
+  // Refs for debug commands so F-key hotkeys always see fresh handlers/state.
+  // Declared here (without depending on debug-state values) so the keydown
+  // handler set up below the breakpoint block can read them. The sync effect
+  // that mirrors debugStatus into the ref lives further down, after the
+  // useState declaration of debugStatus (to avoid a TDZ on the dep array).
+  const debugStatusRef = useRef<'idle' | 'starting' | 'running' | 'paused' | 'stopping'>('idle');
+  const debugHandlersRef = useRef<{
+    start: () => Promise<void>;
+    stop: () => Promise<void>;
+    cont: () => Promise<void>;
+    over: () => Promise<void>;
+    inFn: () => Promise<void>;
+    out: () => Promise<void>;
+  } | null>(null);
+  // ---------- Breakpoints (Phase 3a) ----------
+  // Per-repo, per-file 1-based line numbers. Persisted in localStorage so they
+  // survive file switches, modal reopens, and app restarts.
+  const breakpointsKey = `repo-browser:breakpoints:${repoPath}`;
+  const [breakpointsByFile, setBreakpointsByFile] = useState<Record<string, number[]>>(() => {
+    try {
+      const raw = localStorage.getItem(`repo-browser:breakpoints:${repoPath}`);
+      return raw ? (JSON.parse(raw) as Record<string, number[]>) : {};
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`repo-browser:breakpoints:${repoPath}`);
+      setBreakpointsByFile(raw ? (JSON.parse(raw) as Record<string, number[]>) : {});
+    } catch {
+      setBreakpointsByFile({});
+    }
+  }, [repoPath]);
+  const persistBreakpoints = (next: Record<string, number[]>) => {
+    try {
+      localStorage.setItem(breakpointsKey, JSON.stringify(next));
+    } catch {
+      /* quota — ignore */
+    }
+  };
+  const toggleBreakpoint = (filePath: string, line: number) => {
+    setBreakpointsByFile((current) => {
+      const existing = current[filePath] ?? [];
+      const hasIt = existing.includes(line);
+      const updated = hasIt
+        ? existing.filter((l) => l !== line)
+        : [...existing, line].sort((a, b) => a - b);
+      const next = { ...current };
+      if (updated.length === 0) delete next[filePath];
+      else next[filePath] = updated;
+      persistBreakpoints(next);
+      return next;
+    });
+  };
+  const clearAllBreakpoints = () => {
+    setBreakpointsByFile({});
+    persistBreakpoints({});
+  };
+  // Keep refs current so the F9 keydown handler (registered once) sees fresh state.
+  useEffect(() => {
+    previewFilePathRef.current = previewFile?.path ?? null;
+  }, [previewFile]);
+  useEffect(() => {
+    toggleBreakpointRef.current = toggleBreakpoint;
+    debugHandlersRef.current = {
+      start: startDebugRun,
+      stop: stopDebugRun,
+      cont: debuggerContinue,
+      over: debuggerStepOver,
+      inFn: debuggerStepIn,
+      out: debuggerStepOut,
+    };
+  });
+  const currentFileBreakpoints = useMemo(
+    () => (previewFile ? breakpointsByFile[previewFile.path] ?? [] : []),
+    [previewFile, breakpointsByFile],
+  );
+  const totalBreakpointCount = useMemo(
+    () => Object.values(breakpointsByFile).reduce((sum, arr) => sum + arr.length, 0),
+    [breakpointsByFile],
+  );
+
+  // Breakpoints popover (Phase 3c) — opened by clicking the BP chip in the status bar.
+  const [isBreakpointsPopoverOpen, setIsBreakpointsPopoverOpen] = useState(false);
+
+  // ---------- Debug session state (Phase 3b) ----------
+  const [debugRunId, setDebugRunId] = useState<string | null>(null);
+  const [debugStatus, setDebugStatus] = useState<'idle' | 'starting' | 'running' | 'paused' | 'stopping'>('idle');
+  const [debugStopDetails, setDebugStopDetails] = useState<DesktopDebuggerStopDetails | null>(null);
+  const [debugThreadId, setDebugThreadId] = useState<number | null>(null);
+  // Mirror debugStatus into the ref so F-key hotkeys (registered once globally) see fresh state.
+  useEffect(() => { debugStatusRef.current = debugStatus; }, [debugStatus]);
+  // Where the debugger is currently paused (drives the editor pointer + auto-open).
+  const debugExecutionLine =
+    debugStatus === 'paused' && debugStopDetails && previewFile
+      && debugStopDetails.sourcePath
+      && debugStopDetails.sourcePath.replace(/\\/g, '/').toLowerCase() === previewFile.path.replace(/\\/g, '/').toLowerCase()
+      ? debugStopDetails.line ?? null
+      : null;
+  const isDebugActive = debugStatus !== 'idle';
   const [wrapCode, setWrapCode] = useState<boolean>(() => {
     try {
       return localStorage.getItem('repo-browser:wrap-code') === '1';
@@ -289,6 +463,7 @@ export function SeleniumRepoBrowserModal({
     try {
       const content = await window.desktop.readTextFile(filePath);
       setPreviewFile({ path: filePath, content, original: content, loading: false, error: null });
+      pushRecentFile(filePath);
       if (filePath.toLowerCase().endsWith('.cs')) {
         const names = extractTestMethodNames(content);
         setFileTestNamesByPath((current) => ({
@@ -321,13 +496,174 @@ export function SeleniumRepoBrowserModal({
           [previewFile.path]: { loading: false, names },
         }));
       }
-      addNotification('success', `Saved ${previewFile.path.split(/[\\/]/).pop()}`);
+      // Don't spam notifications on every autosave — keep it silent.
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save file';
       addNotification('error', message);
+      throw error;
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // ---------- Auto-save (debounced) ----------
+  // 800ms after the user stops typing, flush dirty content to disk silently.
+  // Status surfaces in the toolbar pill: Editing → Saving → Saved → (fades).
+  useEffect(() => {
+    if (!previewFile || previewFile.loading || previewFile.error) return;
+    if (!isDirty) return;
+    setAutoSaveStatus('pending');
+    if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      setAutoSaveStatus('saving');
+      void (async () => {
+        try {
+          await saveCurrentFile();
+          setAutoSaveStatus('saved');
+          if (autoSavedFlashTimerRef.current) window.clearTimeout(autoSavedFlashTimerRef.current);
+          autoSavedFlashTimerRef.current = window.setTimeout(() => setAutoSaveStatus('idle'), 1400);
+        } catch {
+          setAutoSaveStatus('error');
+        }
+      })();
+    }, 800);
+    return () => {
+      if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewFile?.content, previewFile?.path, isDirty]);
+
+  // ---------- File ops (create / rename / delete) ----------
+  // Refresh the directory listing for a given parent path so the tree reflects the FS.
+  const refreshDirectory = (dirPath: string) => {
+    void loadPath(dirPath, true);
+  };
+
+  const handleCreateFile = async (parentDir: string) => {
+    if (!window.desktop?.createFile) {
+      addNotification('error', 'File creation is unavailable in this build.');
+      return;
+    }
+    const name = window.prompt('New file name (e.g. MyTest.cs):');
+    if (!name) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const sep = parentDir.includes('\\') ? '\\' : '/';
+    const target = `${parentDir}${parentDir.endsWith(sep) ? '' : sep}${trimmed}`;
+    const res = await window.desktop.createFile(repoPath, target, '');
+    if (!res.ok) {
+      addNotification('error', res.error || 'Could not create file.');
+      return;
+    }
+    refreshDirectory(parentDir);
+    addNotification('success', `Created ${trimmed}`);
+    if (res.path) void loadFilePreview(res.path);
+  };
+
+  const handleCreateFolder = async (parentDir: string) => {
+    if (!window.desktop?.createFolder) {
+      addNotification('error', 'Folder creation is unavailable in this build.');
+      return;
+    }
+    const name = window.prompt('New folder name:');
+    if (!name) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const sep = parentDir.includes('\\') ? '\\' : '/';
+    const target = `${parentDir}${parentDir.endsWith(sep) ? '' : sep}${trimmed}`;
+    const res = await window.desktop.createFolder(repoPath, target);
+    if (!res.ok) {
+      addNotification('error', res.error || 'Could not create folder.');
+      return;
+    }
+    refreshDirectory(parentDir);
+    addNotification('success', `Created folder ${trimmed}`);
+  };
+
+  const handleRename = async (entry: DesktopDirectoryEntry, parentDir: string) => {
+    if (!window.desktop?.renamePath) {
+      addNotification('error', 'Rename is unavailable in this build.');
+      return;
+    }
+    if (previewFile?.path === entry.path && isDirty) {
+      addNotification('error', 'Save or discard your edits before renaming this file.');
+      return;
+    }
+    const newName = window.prompt('Rename to:', entry.name);
+    if (!newName) return;
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === entry.name) return;
+    const sep = entry.path.includes('\\') ? '\\' : '/';
+    const lastSep = entry.path.lastIndexOf(sep);
+    const newPath = entry.path.slice(0, lastSep + 1) + trimmed;
+    const res = await window.desktop.renamePath(repoPath, entry.path, newPath);
+    if (!res.ok) {
+      addNotification('error', res.error || 'Could not rename.');
+      return;
+    }
+    refreshDirectory(parentDir);
+    addNotification('success', `Renamed to ${trimmed}`);
+    // If the renamed file is currently previewed, reopen it at its new path.
+    if (previewFile?.path === entry.path && res.path) {
+      void loadFilePreview(res.path, { force: true });
+    }
+  };
+
+  const handleDelete = async (entry: DesktopDirectoryEntry, parentDir: string) => {
+    if (!window.desktop?.deletePath) {
+      addNotification('error', 'Delete is unavailable in this build.');
+      return;
+    }
+    const ok = window.confirm(
+      `Move "${entry.name}" to the system trash?\n\nYou can restore it from the Recycle Bin / Trash if needed.`,
+    );
+    if (!ok) return;
+    if (previewFile?.path === entry.path && isDirty) {
+      const force = window.confirm(
+        'This file has unsaved edits. Delete it anyway and discard the edits?',
+      );
+      if (!force) return;
+    }
+    const res = await window.desktop.deletePath(repoPath, entry.path);
+    if (!res.ok) {
+      addNotification('error', res.error || 'Could not delete.');
+      return;
+    }
+    refreshDirectory(parentDir);
+    addNotification('success', res.trashed ? `Moved ${entry.name} to trash` : `Deleted ${entry.name}`);
+    // If we just deleted the previewed file, clear preview.
+    if (previewFile?.path === entry.path) {
+      setPreviewFile(null);
+      setIsEditing(false);
+    }
+  };
+
+  // Close the context menu when clicking elsewhere or pressing Escape.
+  useEffect(() => {
+    if (!treeContextMenu) return;
+    const close = () => setTreeContextMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [treeContextMenu]);
+
+  const openTreeContextMenu = (
+    e: React.MouseEvent,
+    entry: DesktopDirectoryEntry | null,
+    parentDir: string,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setTreeContextMenu({ x: e.clientX, y: e.clientY, entry, parentDir });
   };
 
   const discardEdits = () => {
@@ -342,6 +678,233 @@ export function SeleniumRepoBrowserModal({
     setIsEditing(false);
   };
 
+  // Apply a pending jump (from Find in Files) once the file content has loaded
+  useEffect(() => {
+    const pending = pendingJumpRef.current;
+    if (!pending || !previewFile || previewFile.loading || previewFile.error) return;
+    if (pending.path !== previewFile.path) return;
+    const editor = monacoEditorRef.current;
+    if (!editor) return; // will be applied on mount instead
+    editor.revealLineInCenter(pending.line);
+    editor.setPosition({ lineNumber: pending.line, column: pending.column });
+    editor.focus();
+    pendingJumpRef.current = null;
+  }, [previewFile]);
+
+  // ---------- Debug run helpers (Phase 3b) ----------
+  // Convert the in-memory breakpoint map → the IPC-friendly array shape.
+  const collectDebugBreakpoints = (): { sourcePath: string; line: number }[] => {
+    const out: { sourcePath: string; line: number }[] = [];
+    for (const [sourcePath, lines] of Object.entries(breakpointsByFile)) {
+      for (const line of lines) out.push({ sourcePath, line });
+    }
+    return out;
+  };
+
+  // Find the test method enclosing or nearest above a given line in a .cs file.
+  // Naive: scans the names already discovered for the file (fileTestNamesByPath)
+  // and returns the first match; if cursor is not on a test method, fall back
+  // to the first test method in the file.
+  const findTestMethodForDebug = (): string | null => {
+    if (!previewFile) return null;
+    const names = fileTestNamesByPath[previewFile.path]?.names ?? [];
+    if (names.length === 0) return null;
+    // Best-effort: locate the test method whose definition starts on or before the cursor line.
+    const lines = previewFile.content.split('\n');
+    let lastMatch: string | null = null;
+    for (let i = 0; i < lines.length; i += 1) {
+      for (const name of names) {
+        const re = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\s*\\(`);
+        if (re.test(lines[i])) {
+          if (i + 1 <= cursorPos.line) lastMatch = name;
+        }
+      }
+    }
+    return lastMatch ?? names[0];
+  };
+
+  const startDebugRun = async () => {
+    if (!workspaceSettings) {
+      addNotification('error', 'Configure workspace settings (PAT, project path, working directory) to use debug.');
+      return;
+    }
+    if (!window.desktop?.debugDotnetTest) {
+      addNotification('error', 'Debug runner is unavailable in this build.');
+      return;
+    }
+    if (isDebugActive) {
+      addNotification('warning', 'A debug session is already running.');
+      return;
+    }
+    const workingDirectory = workspaceSettings.testRunWorkingDirectory?.trim() || repoPath;
+    const projectPath = workspaceSettings.testRunProjectPath?.trim();
+    if (!projectPath) {
+      addNotification('error', 'Set the test project path in Settings > Workspace.');
+      return;
+    }
+    const methodName = findTestMethodForDebug();
+    if (!methodName) {
+      addNotification('error', 'No test method found in this file to debug. Open a .cs file with [Test] methods first.');
+      return;
+    }
+    setDebugStatus('starting');
+    setDebugStopDetails(null);
+    setDebugThreadId(null);
+    try {
+      const result = await window.desktop.debugDotnetTest({
+        workingDirectory,
+        projectPath,
+        runSettingsPath: workspaceSettings.testRunSettingsPath?.trim() || undefined,
+        testFilter: `Name=${methodName}`,
+        logger: workspaceSettings.testRunLogger?.trim() || 'console;verbosity=detailed',
+        patToken: workspaceSettings.patToken,
+        passPatAsEnv: workspaceSettings.testRunUsePatAsEnv !== false,
+        breakOnExceptions: true,
+        debugBreakpoints: collectDebugBreakpoints(),
+      });
+      setDebugRunId(result.runId);
+      addNotification('info', `Debug started for ${methodName}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start debug session.';
+      addNotification('error', message);
+      setDebugStatus('idle');
+    }
+  };
+
+  const stopDebugRun = async () => {
+    if (!debugRunId || !window.desktop?.stopDotnetTest) return;
+    setDebugStatus('stopping');
+    try {
+      await window.desktop.stopDotnetTest(debugRunId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to stop debug session.';
+      addNotification('error', message);
+    }
+  };
+
+  const debuggerContinue = async () => {
+    if (!debugRunId || !window.desktop?.debuggerContinue) return;
+    await window.desktop.debuggerContinue(debugRunId);
+  };
+  const debuggerStepOver = async () => {
+    if (!debugRunId || !window.desktop?.debuggerNext) return;
+    await window.desktop.debuggerNext(debugRunId);
+  };
+  const debuggerStepIn = async () => {
+    if (!debugRunId || !window.desktop?.debuggerStepIn) return;
+    await window.desktop.debuggerStepIn(debugRunId);
+  };
+  const debuggerStepOut = async () => {
+    if (!debugRunId || !window.desktop?.debuggerStepOut) return;
+    await window.desktop.debuggerStepOut(debugRunId);
+  };
+
+  // Subscribe to test-run progress events for our active debug run.
+  useEffect(() => {
+    if (!window.desktop?.onTestRunProgress) return undefined;
+    return window.desktop.onTestRunProgress((progress) => {
+      if (debugRunId && progress.runId !== debugRunId) return;
+      if (!debugRunId && progress.mode === 'debug') {
+        // First event for a debug run we just kicked off
+        setDebugRunId(progress.runId);
+      }
+      const ev = progress.debuggerEvent;
+      if (ev?.event === 'stopped') {
+        setDebugStatus('paused');
+        setDebugThreadId(typeof ev.threadId === 'number' ? ev.threadId : null);
+        setDebugStopDetails(ev.details ?? null);
+      } else if (ev?.event === 'continued') {
+        setDebugStatus('running');
+        setDebugStopDetails(null);
+      } else if (ev?.event === 'terminated' || ev?.event === 'exited') {
+        setDebugStatus('idle');
+        setDebugStopDetails(null);
+        setDebugThreadId(null);
+        setDebugRunId(null);
+      }
+      if (progress.status === 'complete' || progress.status === 'failed' || progress.status === 'cancelled') {
+        setDebugStatus('idle');
+        setDebugStopDetails(null);
+        setDebugThreadId(null);
+        setDebugRunId(null);
+      } else if (progress.mode === 'debug' && progress.status === 'running' && !ev) {
+        setDebugStatus((cur) => (cur === 'starting' || cur === 'idle' ? 'running' : cur));
+      }
+    });
+  }, [debugRunId]);
+
+  // When the debugger stops, auto-open the source file at the stopped line.
+  useEffect(() => {
+    if (debugStatus !== 'paused' || !debugStopDetails?.sourcePath) return;
+    const target = debugStopDetails.sourcePath;
+    const targetLower = target.replace(/\\/g, '/').toLowerCase();
+    const currentLower = previewFile?.path.replace(/\\/g, '/').toLowerCase();
+    if (currentLower === targetLower) {
+      // Same file already open — just reveal the line via pendingJumpRef.
+      if (debugStopDetails.line && monacoEditorRef.current) {
+        monacoEditorRef.current.revealLineInCenter(debugStopDetails.line);
+        monacoEditorRef.current.setPosition({ lineNumber: debugStopDetails.line, column: debugStopDetails.column ?? 1 });
+      }
+      return;
+    }
+    pendingJumpRef.current = {
+      path: target,
+      line: debugStopDetails.line ?? 1,
+      column: debugStopDetails.column ?? 1,
+    };
+    void loadFilePreview(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debugStatus, debugStopDetails]);
+
+  // ---------- External filesystem watcher ----------
+  // When the modal is open with a repoPath, watch the tree so external changes
+  // (git pull, external editor, etc.) auto-refresh the affected directory and
+  // git status. Debounced in the main process; we also coalesce repeated
+  // events for the same dir on the renderer side to avoid thrashing.
+  useEffect(() => {
+    if (!repoPath || !window.desktop?.watchRepo) return;
+    let cancelled = false;
+    const pendingDirRefresh = new Set<string>();
+    let flushTimer: number | null = null;
+    const scheduleFlush = () => {
+      if (flushTimer !== null) return;
+      flushTimer = window.setTimeout(() => {
+        flushTimer = null;
+        const dirs = Array.from(pendingDirRefresh);
+        pendingDirRefresh.clear();
+        // Only refresh dirs we've already loaded — no need to fetch unseen ones.
+        dirs.forEach((dir) => {
+          if (nodesByPath[dir]) {
+            void loadPath(dir, true);
+          }
+        });
+      }, 250);
+    };
+
+    void window.desktop.watchRepo(repoPath);
+
+    const offFs = window.desktop.onRepoFsChanged?.((payload) => {
+      if (cancelled) return;
+      if (payload.rootPath !== repoPath) return;
+      pendingDirRefresh.add(payload.dirPath);
+      scheduleFlush();
+    });
+    const offGit = window.desktop.onRepoGitChanged?.((payload) => {
+      if (cancelled) return;
+      if (payload.rootPath !== repoPath) return;
+      void loadGitStatus(repoPath);
+    });
+
+    return () => {
+      cancelled = true;
+      if (flushTimer !== null) window.clearTimeout(flushTimer);
+      offFs?.();
+      offGit?.();
+      void window.desktop?.unwatchRepo?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoPath]);
+
   // Mark window as dirty for the global close-handler
   useEffect(() => {
     window.desktop?.setUnsavedChanges?.('selenium-repo-edit', isDirty);
@@ -349,6 +912,116 @@ export function SeleniumRepoBrowserModal({
       window.desktop?.setUnsavedChanges?.('selenium-repo-edit', false);
     };
   }, [isDirty]);
+
+  // Quick Open: build a flat index of all files under the repo on first open.
+  // Walks recursively but skips hidden/system folders. Uses existing listDirectory IPC.
+  const buildQuickOpenIndex = async () => {
+    if (!window.desktop?.listDirectory || !repoPath) return;
+    if (indexedRefRoot.current === repoPath) return; // already indexed this root
+    setIsIndexing(true);
+    const SKIP_NAMES = new Set([
+      'bin', 'obj', 'node_modules', 'packages',
+      'dist', 'build', 'out', '.cache',
+      'testresults', '.testresults',
+      '.git', '.vs', '.vscode', '.idea', '.svn', '.hg', '.next',
+    ]);
+    const collected: FileItem[] = [];
+    // Cap to avoid runaway scans on huge repos
+    const MAX_FILES = 5000;
+    const MAX_DEPTH = 15;
+    const visit = async (dir: string, depth: number): Promise<void> => {
+      if (collected.length >= MAX_FILES || depth > MAX_DEPTH) return;
+      let entries: DesktopDirectoryEntry[] = [];
+      try {
+        entries = await window.desktop!.listDirectory!(dir);
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const lower = entry.name.toLowerCase();
+        if (SKIP_NAMES.has(lower) || entry.name.startsWith('.')) continue;
+        if (entry.type === 'file') {
+          if (collected.length >= MAX_FILES) return;
+          // Display dir relative to repo root for readability
+          const rel = entry.path.startsWith(repoPath)
+            ? entry.path.substring(repoPath.length).replace(/^[\\/]+/, '')
+            : entry.path;
+          const lastSep = Math.max(rel.lastIndexOf('/'), rel.lastIndexOf('\\'));
+          collected.push({
+            path: entry.path,
+            name: entry.name,
+            dirPath: lastSep >= 0 ? rel.substring(0, lastSep) : '',
+          });
+        } else if (entry.type === 'directory') {
+          await visit(entry.path, depth + 1);
+        }
+      }
+    };
+    try {
+      await visit(repoPath, 0);
+      // Sort alphabetically by filename — base order for empty-query state
+      collected.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+      setQuickOpenIndex(collected);
+      indexedRefRoot.current = repoPath;
+    } finally {
+      setIsIndexing(false);
+    }
+  };
+
+  // Ctrl+P / Cmd+P → open Quick Open
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P') && !e.shiftKey && !e.altKey) {
+        // Don't steal from a print dialog inside an iframe etc.
+        e.preventDefault();
+        setIsQuickOpenOpen(true);
+        void buildQuickOpenIndex();
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'f' || e.key === 'F') && !e.altKey) {
+        e.preventDefault();
+        setIsFindInFilesOpen(true);
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'p' || e.key === 'P') && !e.altKey) {
+        e.preventDefault();
+        setIsCommandPaletteOpen(true);
+      } else if (e.key === 'F9' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        // F9 toggles breakpoint at the editor's current cursor line (refs so we don't re-bind).
+        const path = previewFilePathRef.current;
+        if (path && toggleBreakpointRef.current) {
+          e.preventDefault();
+          toggleBreakpointRef.current(path, cursorPosRef.current.line);
+        }
+      } else if (e.key === 'F5' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        // F5 = Continue (when paused) or Start Debug (when idle). Shift+F5 = Stop.
+        const handlers = debugHandlersRef.current;
+        if (!handlers) return;
+        if (e.shiftKey) {
+          if (debugStatusRef.current !== 'idle') {
+            e.preventDefault();
+            void handlers.stop();
+          }
+        } else if (debugStatusRef.current === 'paused') {
+          e.preventDefault();
+          void handlers.cont();
+        } else if (debugStatusRef.current === 'idle') {
+          e.preventDefault();
+          void handlers.start();
+        }
+      } else if (e.key === 'F10' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        if (debugStatusRef.current === 'paused' && debugHandlersRef.current) {
+          e.preventDefault();
+          void debugHandlersRef.current.over();
+        }
+      } else if (e.key === 'F11' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (debugStatusRef.current === 'paused' && debugHandlersRef.current) {
+          e.preventDefault();
+          if (e.shiftKey) void debugHandlersRef.current.out();
+          else void debugHandlersRef.current.inFn();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoPath]);
 
   const rootNode = useMemo(() => nodesByPath[repoPath], [nodesByPath, repoPath]);
   const isClassFile = (entry: DesktopDirectoryEntry) => entry.type === 'file' && entry.name.toLowerCase().endsWith('.cs');
@@ -915,8 +1588,11 @@ export function SeleniumRepoBrowserModal({
   }, [mode, currentMethodName, fileTestNamesByPath, previewFile?.path]);
 
   // When the user types a search term, auto-expand any class file whose method
-  // names match. This makes search results visible without manual clicks.
+  // names match. Only active in manage-automation mode where the user is hunting
+  // for a specific method; in browse mode (from Plan list) we keep the tree
+  // calm and let the user expand class files explicitly.
   useEffect(() => {
+    if (mode !== 'manage-automation') return;
     const term = searchTerm.trim().toLowerCase();
     if (term.length === 0) return;
     const filesToExpand: string[] = [];
@@ -944,7 +1620,7 @@ export function SeleniumRepoBrowserModal({
       });
       return changed ? next : current;
     });
-  }, [searchTerm, fileTestNamesByPath, repoPath]);
+  }, [mode, searchTerm, fileTestNamesByPath, repoPath]);
 
   // Auto-load all unloaded directories during search so the strict filter has
   // complete data to evaluate. Avoids "false matches" of unloaded folders.
@@ -1154,6 +1830,7 @@ export function SeleniumRepoBrowserModal({
                     type="button"
                     className="repo-browser__item"
                     onClick={() => toggleNode(entry.path)}
+                    onContextMenu={(e) => openTreeContextMenu(e, entry, targetPath)}
                   >
                     <span className={`repo-browser__chevron${isExpanded ? ' is-expanded' : ''}`} aria-hidden="true">
                       <IconChevronRight size={14} />
@@ -1165,6 +1842,7 @@ export function SeleniumRepoBrowserModal({
                   <div
                     className={`repo-browser__item repo-browser__item--file is-clickable${isAssociatedClass ? ' is-selected' : ''}${previewFile?.path === entry.path ? ' is-preview-active' : ''}`}
                     onClick={() => void loadFilePreview(entry.path)}
+                    onContextMenu={(e) => openTreeContextMenu(e, entry, targetPath)}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
@@ -1209,6 +1887,7 @@ export function SeleniumRepoBrowserModal({
                     className={`repo-browser__item repo-browser__item--file is-clickable${previewFile?.path === entry.path ? ' is-preview-active' : ''}`}
                     title={entry.path}
                     onClick={() => void loadFilePreview(entry.path)}
+                    onContextMenu={(e) => openTreeContextMenu(e, entry, targetPath)}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
@@ -1346,6 +2025,27 @@ export function SeleniumRepoBrowserModal({
                         type="button"
                         className="btn btn--secondary btn--sm"
                         onClick={() => {
+                          setIsQuickOpenOpen(true);
+                          void buildQuickOpenIndex();
+                        }}
+                        title="Go to File (Ctrl+P)"
+                        aria-label="Go to File"
+                      >
+                        <span className="material-symbols" aria-hidden="true">description</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setIsFindInFilesOpen(true)}
+                        title="Find in Files (Ctrl+Shift+F)"
+                        aria-label="Find in Files"
+                      >
+                        <span className="material-symbols" aria-hidden="true">manage_search</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => {
                           void reloadRepository();
                         }}
                         title="Refresh repo browser"
@@ -1379,7 +2079,16 @@ export function SeleniumRepoBrowserModal({
                       })()}
                     </div>
                   </div>
-                  <div className="repo-browser__panel">
+                  <div
+                    className="repo-browser__panel"
+                    onContextMenu={(e) => {
+                      // Right-click on tree whitespace (not on a row) → create at repo root.
+                      if ((e.target as HTMLElement).closest('.repo-browser__item, .repo-browser__method-row')) {
+                        return;
+                      }
+                      openTreeContextMenu(e, null, repoPath);
+                    }}
+                  >
                     {rootNode?.loading && rootNode.entries.length === 0 ? (
                       <div className="repo-browser__state">Loading repository contents...</div>
                     ) : null}
@@ -1453,9 +2162,22 @@ export function SeleniumRepoBrowserModal({
                     Searching…
                   </span>
                 )}
-                {/* Dirty indicator */}
-                {previewFile && isDirty && (
-                  <span className="repo-browser__preview-dirty" title="Unsaved changes" aria-label="Unsaved changes">●</span>
+                {/* Inline autosave indicator */}
+                {previewFile && autoSaveStatus !== 'idle' && (
+                  <span
+                    className={`repo-browser__autosave repo-browser__autosave--${autoSaveStatus}`}
+                    title={
+                      autoSaveStatus === 'pending' ? 'Changes will save shortly'
+                      : autoSaveStatus === 'saving' ? 'Saving…'
+                      : autoSaveStatus === 'saved' ? 'All changes saved'
+                      : 'Save failed — see notification'
+                    }
+                  >
+                    {autoSaveStatus === 'pending' && '● Editing'}
+                    {autoSaveStatus === 'saving' && 'Saving…'}
+                    {autoSaveStatus === 'saved' && '✓ Saved'}
+                    {autoSaveStatus === 'error' && '⚠ Save failed'}
+                  </span>
                 )}
                 {previewFile && (
                   <button
@@ -1469,49 +2191,31 @@ export function SeleniumRepoBrowserModal({
                     ↩
                   </button>
                 )}
-                {/* Edit / Save / Discard controls */}
-                {previewFile && !previewFile.loading && !previewFile.error && !isEditing && (
+                {/* Debug launch button — only shown when idle. While a debug session
+                    is active, the debug ribbon below already exposes Continue/Step/Stop,
+                    so we hide this to avoid a duplicate Stop control. */}
+                {previewFile && workspaceSettings && mode !== 'manage-automation' && !isDebugActive && (
                   <button
                     type="button"
                     className="repo-browser__preview-action"
-                    onClick={() => setIsEditing(true)}
-                    title="Edit this file"
+                    onClick={() => { void startDebugRun(); }}
+                    title="Debug test at cursor (F5)"
                   >
-                    ✎ Edit
+                    <span className="material-symbols repo-browser__preview-action-icon" aria-hidden="true">
+                      bug_report
+                    </span>
+                    Debug
                   </button>
                 )}
-                {previewFile && isEditing && (
-                  <>
-                    <button
-                      type="button"
-                      className="repo-browser__preview-action repo-browser__preview-action--primary"
-                      onClick={() => void saveCurrentFile()}
-                      disabled={!isDirty || isSaving}
-                      title="Save (Ctrl+S)"
-                    >
-                      {isSaving ? 'Saving…' : isDirty ? '✓ Save' : 'Saved'}
-                    </button>
-                    <button
-                      type="button"
-                      className="repo-browser__preview-action"
-                      onClick={discardEdits}
-                      disabled={isSaving}
-                      title={isDirty ? 'Discard edits' : 'Exit edit mode'}
-                    >
-                      {isDirty ? 'Discard' : 'Done'}
-                    </button>
-                  </>
-                )}
-                {previewFile && !isEditing && (
+                {previewFile && (
                   <button
                     type="button"
                     className="repo-browser__preview-close"
                     onClick={() => {
                       if (isDirty) {
-                        const ok = window.confirm('You have unsaved changes. Close anyway?');
+                        const ok = window.confirm('There may be unsaved changes still queued for autosave. Close anyway?');
                         if (!ok) return;
                       }
-                      setIsEditing(false);
                       setPreviewFile(null);
                     }}
                     title="Close preview"
@@ -1652,25 +2356,206 @@ export function SeleniumRepoBrowserModal({
                           </div>
                         );
                       })()}
+                      {isDebugActive && (
+                        <div className={`debug-ribbon debug-ribbon--${debugStatus}`} role="region" aria-label="Debug session">
+                          <div className="debug-ribbon__status">
+                            <span className="debug-ribbon__dot" aria-hidden="true" />
+                            <span className="debug-ribbon__label">
+                              {debugStatus === 'starting' && 'Starting debug session…'}
+                              {debugStatus === 'running' && 'Running'}
+                              {debugStatus === 'paused' && (
+                                <>
+                                  Paused: {debugStopDetails?.reason || 'breakpoint'}
+                                  {debugStopDetails?.sourceName && debugStopDetails.line && (
+                                    <> · {debugStopDetails.sourceName}:{debugStopDetails.line}</>
+                                  )}
+                                </>
+                              )}
+                              {debugStatus === 'stopping' && 'Stopping…'}
+                            </span>
+                          </div>
+                          <div className="debug-ribbon__actions">
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm debug-ribbon__btn"
+                              onClick={() => { void debuggerContinue(); }}
+                              disabled={debugStatus !== 'paused'}
+                              title="Continue (F5)"
+                            >
+                              <span className="material-symbols" aria-hidden="true">play_arrow</span>
+                              Continue
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm debug-ribbon__btn"
+                              onClick={() => { void debuggerStepOver(); }}
+                              disabled={debugStatus !== 'paused'}
+                              title="Step Over (F10)"
+                            >
+                              <span className="material-symbols" aria-hidden="true">step_over</span>
+                              Step Over
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm debug-ribbon__btn"
+                              onClick={() => { void debuggerStepIn(); }}
+                              disabled={debugStatus !== 'paused'}
+                              title="Step Into (F11)"
+                            >
+                              <span className="material-symbols" aria-hidden="true">step_into</span>
+                              Step In
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm debug-ribbon__btn"
+                              onClick={() => { void debuggerStepOut(); }}
+                              disabled={debugStatus !== 'paused'}
+                              title="Step Out (Shift+F11)"
+                            >
+                              <span className="material-symbols" aria-hidden="true">step_out</span>
+                              Step Out
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--danger btn--sm debug-ribbon__btn"
+                              onClick={() => { void stopDebugRun(); }}
+                              disabled={debugStatus === 'stopping' || debugStatus === 'idle'}
+                              title="Stop debug session (Shift+F5)"
+                            >
+                              <span className="material-symbols" aria-hidden="true">stop_circle</span>
+                              Stop
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <div className="repo-browser__preview-editor">
                         <CodeEditor
                           filePath={previewFile.path}
                           value={previewFile.content}
                           readOnly={!isEditing}
                           wordWrap={wrapCode}
-                          theme="dark"
+                          onCursorChange={setCursorPos}
+                          breakpoints={currentFileBreakpoints}
+                          onToggleBreakpoint={(line) => toggleBreakpoint(previewFile.path, line)}
+                          executionLine={debugExecutionLine}
                           onChange={(next) => {
                             setPreviewFile((current) => (current ? { ...current, content: next } : current));
                           }}
                           onMount={(editor) => {
+                            monacoEditorRef.current = editor;
                             // Ctrl/Cmd+S → save (only fires when editing)
                             editor.addCommand(
                               // eslint-disable-next-line no-bitwise
                               (2048 /* KeyMod.CtrlCmd */) | (49 /* KeyCode.KeyS */),
                               () => { void saveCurrentFile(); },
                             );
+                            // Apply any pending jump that landed before mount
+                            const pending = pendingJumpRef.current;
+                            if (pending && previewFile && pending.path === previewFile.path) {
+                              editor.revealLineInCenter(pending.line);
+                              editor.setPosition({ lineNumber: pending.line, column: pending.column });
+                              editor.focus();
+                              pendingJumpRef.current = null;
+                            }
                           }}
                         />
+                      </div>
+                      {debugStatus === 'paused' && debugStopDetails && (
+                        <div className="debug-panel" role="region" aria-label="Debugger state">
+                          <div className="debug-panel__col">
+                            <div className="debug-panel__heading">Call Stack</div>
+                            <div className="debug-panel__list">
+                              {(debugStopDetails.callStack ?? []).slice(0, 20).map((frame) => (
+                                <button
+                                  key={frame.id}
+                                  type="button"
+                                  className="debug-panel__frame"
+                                  title={frame.sourcePath ?? frame.name}
+                                  onClick={() => {
+                                    if (frame.sourcePath) {
+                                      pendingJumpRef.current = {
+                                        path: frame.sourcePath,
+                                        line: frame.line || 1,
+                                        column: frame.column || 1,
+                                      };
+                                      void loadFilePreview(frame.sourcePath);
+                                    }
+                                  }}
+                                >
+                                  <span className="debug-panel__frame-name">{frame.name}</span>
+                                  {frame.sourceName && (
+                                    <span className="debug-panel__frame-loc">{frame.sourceName}:{frame.line}</span>
+                                  )}
+                                </button>
+                              ))}
+                              {(!debugStopDetails.callStack || debugStopDetails.callStack.length === 0) && (
+                                <div className="debug-panel__empty">No frames available</div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="debug-panel__col">
+                            <div className="debug-panel__heading">Variables</div>
+                            <div className="debug-panel__list">
+                              {(debugStopDetails.scopes ?? []).map((scope) => (
+                                <div key={scope.name} className="debug-panel__scope">
+                                  <div className="debug-panel__scope-name">{scope.name}</div>
+                                  {scope.variables.slice(0, 50).map((v, idx) => (
+                                    <DebugVariableRow
+                                      key={`${scope.name}:${v.name}:${idx}`}
+                                      runId={debugRunId}
+                                      variable={v}
+                                      depth={0}
+                                    />
+                                  ))}
+                                  {scope.variables.length > 50 && (
+                                    <div className="debug-panel__empty">…and {scope.variables.length - 50} more</div>
+                                  )}
+                                </div>
+                              ))}
+                              {(!debugStopDetails.scopes || debugStopDetails.scopes.length === 0) && (
+                                <div className="debug-panel__empty">No variables available</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {/* Editor status bar — language, line count, cursor pos, dirty state */}
+                      <div className="preview-status-bar" role="status" aria-live="polite">
+                        <span className="preview-status-bar__group">
+                          <span className="preview-status-bar__item" title="Language">
+                            {detectLanguage(previewFile.path)}
+                          </span>
+                          <span className="preview-status-bar__item" title="Line count">
+                            {previewFile.content.split('\n').length} lines
+                          </span>
+                          {/\r\n/.test(previewFile.content) ? (
+                            <span className="preview-status-bar__item" title="Line endings">
+                              CRLF
+                            </span>
+                          ) : (
+                            <span className="preview-status-bar__item" title="Line endings">
+                              LF
+                            </span>
+                          )}
+                        </span>
+                        <span className="preview-status-bar__group preview-status-bar__group--right">
+                          {totalBreakpointCount > 0 && (
+                            <button
+                              type="button"
+                              className="preview-status-bar__item preview-status-bar__item--bp preview-status-bar__item--clickable"
+                              onClick={() => setIsBreakpointsPopoverOpen((v) => !v)}
+                              title={`${totalBreakpointCount} breakpoint(s) across the repo — click to list`}
+                            >
+                              ● {currentFileBreakpoints.length}/{totalBreakpointCount} BP
+                            </button>
+                          )}
+                          <span className="preview-status-bar__item" title="Cursor position">
+                            Ln {cursorPos.line}, Col {cursorPos.column}
+                          </span>
+                          <span className="preview-status-bar__item" title="Auto-save is on">
+                            Auto-save
+                          </span>
+                        </span>
                       </div>
                     </>
                   );
@@ -1716,6 +2601,360 @@ export function SeleniumRepoBrowserModal({
           </div>
         </section>
       </div>
+
+      {/* Quick Open (Ctrl+P) — overlay rendered above all panels */}
+      <QuickOpen
+        isOpen={isQuickOpenOpen}
+        onClose={() => setIsQuickOpenOpen(false)}
+        files={isIndexing && quickOpenIndex.length === 0 ? [] : quickOpenIndex}
+        recentPaths={recentFiles}
+        onSelect={(path) => {
+          void loadFilePreview(path);
+        }}
+      />
+
+      {/* Breakpoints popover (Phase 3c) — opened from the status-bar BP chip */}
+      {isBreakpointsPopoverOpen && (
+        <div
+          className="breakpoints-popover-overlay"
+          role="dialog"
+          aria-label="Breakpoints"
+          onClick={() => setIsBreakpointsPopoverOpen(false)}
+        >
+          <div className="breakpoints-popover" onClick={(e) => e.stopPropagation()}>
+            <div className="breakpoints-popover__header">
+              <span>Breakpoints ({totalBreakpointCount})</span>
+              <div className="breakpoints-popover__header-actions">
+                {totalBreakpointCount > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      const ok = window.confirm('Remove all breakpoints?');
+                      if (ok) clearAllBreakpoints();
+                    }}
+                  >
+                    Remove All
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={() => setIsBreakpointsPopoverOpen(false)}
+                  aria-label="Close breakpoints list"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="breakpoints-popover__list">
+              {totalBreakpointCount === 0 ? (
+                <div className="breakpoints-popover__empty">
+                  No breakpoints set. Click the gutter in the editor or press F9 to add one.
+                </div>
+              ) : (
+                Object.entries(breakpointsByFile).map(([filePath, lines]) => {
+                  const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
+                  const dirPath = filePath.slice(0, filePath.length - fileName.length);
+                  return (
+                    <div key={filePath} className="breakpoints-popover__group">
+                      <div className="breakpoints-popover__group-head" title={filePath}>
+                        <span className="breakpoints-popover__file-name">{fileName}</span>
+                        <span className="breakpoints-popover__file-dir">{dirPath}</span>
+                      </div>
+                      {lines.map((line) => (
+                        <div key={`${filePath}:${line}`} className="breakpoints-popover__row">
+                          <button
+                            type="button"
+                            className="breakpoints-popover__jump"
+                            onClick={() => {
+                              pendingJumpRef.current = { path: filePath, line, column: 1 };
+                              if (previewFile?.path === filePath && monacoEditorRef.current) {
+                                monacoEditorRef.current.revealLineInCenter(line);
+                                monacoEditorRef.current.setPosition({ lineNumber: line, column: 1 });
+                                monacoEditorRef.current.focus();
+                                pendingJumpRef.current = null;
+                              } else {
+                                void loadFilePreview(filePath);
+                              }
+                              setIsBreakpointsPopoverOpen(false);
+                            }}
+                          >
+                            <span className="breakpoints-popover__dot" aria-hidden="true">●</span>
+                            <span className="breakpoints-popover__line">Line {line}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="breakpoints-popover__remove"
+                            title="Remove this breakpoint"
+                            onClick={() => toggleBreakpoint(filePath, line)}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tree right-click context menu (file ops) */}
+      {treeContextMenu && (
+        <div
+          className="tree-context-menu"
+          style={{ top: treeContextMenu.y, left: treeContextMenu.x }}
+          role="menu"
+          onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {(() => {
+            const { entry, parentDir } = treeContextMenu;
+            const isFolder = !entry || entry.type === 'directory';
+            const createIn = isFolder ? (entry ? entry.path : parentDir) : parentDir;
+            return (
+              <>
+                <button
+                  type="button"
+                  className="tree-context-menu__item"
+                  onClick={() => {
+                    setTreeContextMenu(null);
+                    void handleCreateFile(createIn);
+                  }}
+                >
+                  New File…
+                </button>
+                <button
+                  type="button"
+                  className="tree-context-menu__item"
+                  onClick={() => {
+                    setTreeContextMenu(null);
+                    void handleCreateFolder(createIn);
+                  }}
+                >
+                  New Folder…
+                </button>
+                {entry && (
+                  <>
+                    <div className="tree-context-menu__sep" />
+                    <button
+                      type="button"
+                      className="tree-context-menu__item"
+                      onClick={() => {
+                        setTreeContextMenu(null);
+                        void handleRename(entry, parentDir);
+                      }}
+                    >
+                      Rename…
+                    </button>
+                    <button
+                      type="button"
+                      className="tree-context-menu__item tree-context-menu__item--danger"
+                      onClick={() => {
+                        setTreeContextMenu(null);
+                        void handleDelete(entry, parentDir);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Command palette (Ctrl+Shift+P) — searchable list of all actions */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        commands={((): PaletteCommand[] => {
+          const hasPreview = Boolean(previewFile);
+          const previewParent = previewFile
+            ? previewFile.path.slice(0, Math.max(previewFile.path.lastIndexOf('\\'), previewFile.path.lastIndexOf('/')))
+            : repoPath;
+          return [
+            {
+              id: 'file.goto',
+              category: 'File',
+              label: 'Go to File…',
+              shortcut: 'Ctrl+P',
+              run: () => {
+                setIsQuickOpenOpen(true);
+                void buildQuickOpenIndex();
+              },
+            },
+            {
+              id: 'search.findInFiles',
+              category: 'Search',
+              label: 'Find in Files…',
+              shortcut: 'Ctrl+Shift+F',
+              run: () => setIsFindInFilesOpen(true),
+            },
+            {
+              id: 'file.newFile',
+              category: 'File',
+              label: hasPreview ? 'New File in current folder…' : 'New File at repo root…',
+              run: () => { void handleCreateFile(previewParent || repoPath); },
+            },
+            {
+              id: 'file.newFolder',
+              category: 'File',
+              label: hasPreview ? 'New Folder in current folder…' : 'New Folder at repo root…',
+              run: () => { void handleCreateFolder(previewParent || repoPath); },
+            },
+            {
+              id: 'file.save',
+              category: 'File',
+              label: 'Save File Now (also autosaved)',
+              shortcut: 'Ctrl+S',
+              disabled: !isDirty,
+              run: () => { void saveCurrentFile(); },
+            },
+            {
+              id: 'file.reload',
+              category: 'File',
+              label: 'Reload File from Disk',
+              disabled: !previewFile,
+              run: () => { if (previewFile) void loadFilePreview(previewFile.path, { force: true }); },
+            },
+            {
+              id: 'editor.toggleWrap',
+              category: 'Editor',
+              label: wrapCode ? 'Disable Word Wrap' : 'Enable Word Wrap',
+              run: () => {
+                setWrapCode((v) => {
+                  const next = !v;
+                  try { localStorage.setItem('repo-browser:wrap-code', next ? '1' : '0'); } catch { /* ignore */ }
+                  return next;
+                });
+              },
+            },
+            {
+              id: 'view.expandAll',
+              category: 'View',
+              label: 'Expand All Loaded Folders',
+              run: () => {
+                const allLoadedDirs = Object.keys(nodesByPath);
+                setExpandedPaths(new Set([repoPath, ...allLoadedDirs]));
+              },
+            },
+            {
+              id: 'view.collapseAll',
+              category: 'View',
+              label: 'Collapse All Folders',
+              run: () => setExpandedPaths(new Set([repoPath])),
+            },
+            {
+              id: 'debug.toggleBreakpoint',
+              category: 'Debug',
+              label: 'Toggle Breakpoint at Current Line',
+              shortcut: 'F9',
+              disabled: !previewFile,
+              run: () => { if (previewFile) toggleBreakpoint(previewFile.path, cursorPos.line); },
+            },
+            {
+              id: 'debug.clearAllBreakpoints',
+              category: 'Debug',
+              label: `Remove All Breakpoints${totalBreakpointCount ? ` (${totalBreakpointCount})` : ''}`,
+              disabled: totalBreakpointCount === 0,
+              run: () => clearAllBreakpoints(),
+            },
+            {
+              id: 'debug.showBreakpoints',
+              category: 'Debug',
+              label: `Show All Breakpoints${totalBreakpointCount ? ` (${totalBreakpointCount})` : ''}`,
+              disabled: totalBreakpointCount === 0,
+              run: () => setIsBreakpointsPopoverOpen(true),
+            },
+            {
+              id: 'debug.run',
+              category: 'Debug',
+              label: 'Debug Test at Cursor',
+              shortcut: 'F5',
+              disabled: !workspaceSettings || !previewFile || isDebugActive,
+              run: () => { void startDebugRun(); },
+            },
+            {
+              id: 'debug.continue',
+              category: 'Debug',
+              label: 'Continue',
+              shortcut: 'F5',
+              disabled: debugStatus !== 'paused',
+              run: () => { void debuggerContinue(); },
+            },
+            {
+              id: 'debug.stepOver',
+              category: 'Debug',
+              label: 'Step Over',
+              shortcut: 'F10',
+              disabled: debugStatus !== 'paused',
+              run: () => { void debuggerStepOver(); },
+            },
+            {
+              id: 'debug.stepIn',
+              category: 'Debug',
+              label: 'Step Into',
+              shortcut: 'F11',
+              disabled: debugStatus !== 'paused',
+              run: () => { void debuggerStepIn(); },
+            },
+            {
+              id: 'debug.stepOut',
+              category: 'Debug',
+              label: 'Step Out',
+              shortcut: 'Shift+F11',
+              disabled: debugStatus !== 'paused',
+              run: () => { void debuggerStepOut(); },
+            },
+            {
+              id: 'debug.stop',
+              category: 'Debug',
+              label: 'Stop Debug Session',
+              shortcut: 'Shift+F5',
+              disabled: !isDebugActive,
+              run: () => { void stopDebugRun(); },
+            },
+            {
+              id: 'repo.refresh',
+              category: 'Repo',
+              label: 'Refresh Repo Browser',
+              run: () => { void reloadRepository(); },
+            },
+            {
+              id: 'repo.refreshGit',
+              category: 'Repo',
+              label: 'Refresh Git Status',
+              run: () => { void loadGitStatus(repoPath); },
+            },
+          ];
+        })()}
+      />
+
+      {/* Find in Files (Ctrl+Shift+F) — project-wide content search */}
+      <FindInFiles
+        isOpen={isFindInFilesOpen}
+        onClose={() => setIsFindInFilesOpen(false)}
+        rootPath={repoPath}
+        onOpenMatch={(filePath, line, column) => {
+          pendingJumpRef.current = { path: filePath, line, column };
+          if (previewFile?.path === filePath && monacoEditorRef.current) {
+            // Same file already open — jump immediately
+            monacoEditorRef.current.revealLineInCenter(line);
+            monacoEditorRef.current.setPosition({ lineNumber: line, column });
+            monacoEditorRef.current.focus();
+            pendingJumpRef.current = null;
+          } else {
+            void loadFilePreview(filePath);
+          }
+          setIsFindInFilesOpen(false);
+        }}
+      />
+
       {pendingBranchSwitch && (() => {
         // Dedupe files by case-insensitive path (fixes git's occasional double-reporting)
         const seen = new Set<string>();

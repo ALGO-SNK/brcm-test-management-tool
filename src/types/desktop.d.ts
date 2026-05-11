@@ -58,6 +58,26 @@ declare global {
     scannedFiles: number;
   }
 
+  interface DesktopSearchMatch {
+    line: number;
+    column: number;
+    matchLength: number;
+    lineText: string;
+  }
+
+  interface DesktopSearchFileResult {
+    path: string;
+    matches: DesktopSearchMatch[];
+  }
+
+  interface DesktopSearchResult {
+    matches: DesktopSearchFileResult[];
+    totalMatches: number;
+    truncated: boolean;
+    canceled?: boolean;
+    error?: string;
+  }
+
   type DesktopDbUpdaterTarget = string;
   type DesktopDbUpdaterLevel = 'info' | 'success' | 'error';
   type DesktopDbUpdaterStatus = 'running' | 'complete' | 'failed' | 'partial';
@@ -268,6 +288,36 @@ declare global {
     respondToWindowClose?: (shouldClose: boolean) => void;
     selectDirectory?: (options?: { title?: string; defaultPath?: string }) => Promise<string | null>;
     listDirectory?: (targetPath: string) => Promise<DesktopDirectoryEntry[]>;
+    searchInFiles?: (
+      rootPath: string,
+      options: { query: string; caseSensitive?: boolean; isRegex?: boolean; wholeWord?: boolean },
+    ) => Promise<DesktopSearchResult>;
+    createFile?: (
+      rootPath: string,
+      targetPath: string,
+      initialContent?: string,
+    ) => Promise<{ ok: boolean; path?: string; error?: string }>;
+    createFolder?: (
+      rootPath: string,
+      targetPath: string,
+    ) => Promise<{ ok: boolean; path?: string; error?: string }>;
+    renamePath?: (
+      rootPath: string,
+      fromPath: string,
+      toPath: string,
+    ) => Promise<{ ok: boolean; path?: string; error?: string }>;
+    deletePath?: (
+      rootPath: string,
+      targetPath: string,
+    ) => Promise<{ ok: boolean; trashed?: boolean; error?: string }>;
+    watchRepo?: (rootPath: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
+    unwatchRepo?: () => Promise<{ ok: boolean }>;
+    onRepoFsChanged?: (
+      callback: (payload: { rootPath: string; dirPath: string }) => void,
+    ) => () => void;
+    onRepoGitChanged?: (
+      callback: (payload: { rootPath: string }) => void,
+    ) => () => void;
     findTestMethod?: (rootPath: string, methodName: string) => Promise<DesktopMethodSearchResult>;
     getGitBranch?: (targetPath: string) => Promise<DesktopGitBranchInfo>;
     getGitStatus?: (targetPath: string) => Promise<DesktopGitStatus>;
@@ -367,6 +417,10 @@ declare global {
     debuggerNext?: (runId: string) => Promise<{ ok: boolean }>;
     debuggerStepIn?: (runId: string) => Promise<{ ok: boolean }>;
     debuggerStepOut?: (runId: string) => Promise<{ ok: boolean }>;
+    debuggerVariables?: (
+      runId: string,
+      variablesReference: number,
+    ) => Promise<{ ok: boolean; variables: DesktopDebuggerVariable[]; error?: string }>;
     debuggerPause?: (runId: string) => Promise<{ ok: boolean }>;
     stopDotnetTest?: (runId: string) => Promise<{ ok: boolean }>;
     onTestRunProgress?: (callback: (progress: DesktopTestRunProgress) => void) => (() => void);
