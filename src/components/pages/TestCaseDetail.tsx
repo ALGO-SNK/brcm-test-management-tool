@@ -1064,6 +1064,7 @@ export function TestCaseDetail({
     : runDisabledReason;
   const canReopenRunModal = runLogEntries.length > 0 || isRunBusy;
   const isDebugModeActive = DEBUGGER_UI_ENABLED && runMode === 'debug';
+  const canRerunLocallyFromModal = !isRunBusy && !isDebugModeActive && runStatus === 'failed' && canRunTest;
   const displayRunModeLabel: TestExecutionMode = isDebugModeActive ? 'debug' : 'run';
   const hasActiveDebugSession = isDebugModeActive && isRunBusy && Boolean(activeRunId);
   const debuggerScopes = Array.isArray(debuggerStopDetails?.scopes) ? debuggerStopDetails.scopes : [];
@@ -2533,6 +2534,16 @@ export function TestCaseDetail({
                       {isRunBusy && !isDebugModeActive ? (
                         <button type="button" className="btn btn--danger btn--sm" onClick={() => { void handleStopRun(); }}>
                           Stop run
+                        </button>
+                      ) : null}
+                      {canRerunLocallyFromModal ? (
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => { void handleRunCurrentTest(); }}
+                          title={`Rerun ${runMethodName}`}
+                        >
+                          Rerun locally
                         </button>
                       ) : null}
                     </div>
