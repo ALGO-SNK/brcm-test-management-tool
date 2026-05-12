@@ -108,6 +108,10 @@ export function CaseTable({
   const [isDeleting, setIsDeleting] = useState(false);
   const [openRowActionCaseId, setOpenRowActionCaseId] = useState<number | null>(null);
   const [rowActionMenuPlacement, setRowActionMenuPlacement] = useState<'down' | 'up'>('down');
+  // Pixel coordinates for the open menu. Used to render it as position:fixed so
+  // it escapes any clipping ancestor (`.data-table-wrapper { overflow: auto }`),
+  // which previously hid the menu when the table contained only one/two rows.
+  const [rowActionMenuCoords, setRowActionMenuCoords] = useState<{ top: number; left: number } | null>(null);
   const [rowCloneDraft, setRowCloneDraft] = useState<CreateTestCaseDraft | null>(null);
   const [rowCloneSourceCase, setRowCloneSourceCase] = useState<CloneSourceMeta | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
@@ -403,28 +407,43 @@ export function CaseTable({
     setSortOrder(field === 'order' ? 'asc' : 'desc');
   };
 
-  const getRowActionMenuPlacement = (triggerButton: HTMLElement): 'down' | 'up' => {
-    const fallbackBoundary = {
-      top: 0,
-      bottom: window.innerHeight,
-    };
-    const boundary = triggerButton.closest('.data-table-wrapper')?.getBoundingClientRect() ?? fallbackBoundary;
+  // Computes both the placement (up/down) and the absolute viewport coords
+  // for the action menu. Coords are used to render the menu as `position: fixed`
+  // so it escapes any clipping ancestor (e.g. `.data-table-wrapper { overflow:auto }`),
+  // which previously hid it when the table had only one/two rows.
+  const computeRowActionMenuLayout = (
+    triggerButton: HTMLElement,
+  ): { placement: 'down' | 'up'; coords: { top: number; left: number } } => {
     const triggerRect = triggerButton.getBoundingClientRect();
     const estimatedMenuHeight = 170;
-    const spaceBelow = boundary.bottom - triggerRect.bottom;
-    const spaceAbove = triggerRect.top - boundary.top;
-    return spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow ? 'up' : 'down';
+    const estimatedMenuWidth = 240;
+    const spaceBelow = window.innerHeight - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+    const placement: 'down' | 'up' =
+      spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow ? 'up' : 'down';
+    // Align the menu's right edge with the trigger's right edge.
+    let left = triggerRect.right - estimatedMenuWidth;
+    if (left < 8) left = 8; // keep within viewport with a little margin
+    const top = placement === 'down'
+      ? triggerRect.bottom + 6
+      : triggerRect.top - estimatedMenuHeight - 6;
+    return { placement, coords: { top, left } };
   };
 
   const toggleRowActionMenu = (testCaseId: number, triggerButton: HTMLButtonElement) => {
-    setOpenRowActionCaseId((current) => {
-      if (current === testCaseId) {
-        setRowActionMenuPlacement('down');
-        return null;
-      }
-      setRowActionMenuPlacement(getRowActionMenuPlacement(triggerButton));
-      return testCaseId;
-    });
+    if (openRowActionCaseId === testCaseId) {
+      // Toggle closed
+      setOpenRowActionCaseId(null);
+      setRowActionMenuPlacement('down');
+      setRowActionMenuCoords(null);
+      return;
+    }
+    // Compute coords FIRST, then open — guarantees the menu's first render
+    // sees valid coordinates (avoids a flicker at 0,0).
+    const { placement, coords } = computeRowActionMenuLayout(triggerButton);
+    setRowActionMenuPlacement(placement);
+    setRowActionMenuCoords(coords);
+    setOpenRowActionCaseId(testCaseId);
   };
 
   const effectiveCreateDraft = rowCloneDraft ?? initialCreateDraft;
@@ -759,7 +778,14 @@ export function CaseTable({
                           <IconMoreHoriz size={16} />
                         </button>
                         {openRowActionCaseId === testCase.id && (
-                          <div className="action-menu cases-table__action-menu" role="menu">
+                          <div
+                            className="action-menu cases-table__action-menu cases-table__action-menu--fixed"
+                            role="menu"
+                            style={rowActionMenuCoords ? {
+                              top: rowActionMenuCoords.top,
+                              left: rowActionMenuCoords.left,
+                            } : undefined}
+                          >
                             <button
                               type="button"
                               role="menuitem"

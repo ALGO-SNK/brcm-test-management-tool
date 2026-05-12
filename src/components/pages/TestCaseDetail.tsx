@@ -2458,7 +2458,11 @@ export function TestCaseDetail({
                             </div>
                           );
                         })}
-                        {runScreenshotAttachments.length > 0 && (
+                        {/* Hide screenshots when the run passed — they're only
+                            useful for diagnosing failures. Still shown when the
+                            run is still in progress (status === 'running') so
+                            in-flight screenshots remain visible. */}
+                        {runScreenshotAttachments.length > 0 && runStatus !== 'complete' && (
                           <div className="test-run__console-attachments" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
                             {runScreenshotAttachments.map((attachmentPath) => {
                               return (

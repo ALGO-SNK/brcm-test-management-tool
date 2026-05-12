@@ -3112,11 +3112,12 @@ input[type="radio"] {
 
 .toast-container,
 .toast-stack {
-    right: var(--space-4);
-    top: var(--space-4);
+    left: var(--space-4);
+    bottom: var(--space-4);
     z-index: 9999;
     pointer-events: none;
-    flex-direction: column;
+    /* Stack newest on top while staying anchored to the bottom edge */
+    flex-direction: column-reverse;
     gap: 12px;
     display: flex;
     position: fixed;
@@ -3298,7 +3299,8 @@ input[type="radio"] {
 
     .toast-container,
     .toast-stack {
-        top: 12px;
+        top: auto;
+        bottom: 12px;
         left: 12px;
         right: 12px;
     }
@@ -5405,6 +5407,19 @@ input[type="radio"] {
 .cases-table__action-menu {
     right: 0;
     min-width: 240px;
+}
+
+/* The row-action menu is positioned via JS-computed top/left so it escapes
+   the `.data-table-wrapper { overflow: auto }` clipping. Fixed positioning
+   detaches it from any flow ancestor — coords come from the trigger's
+   getBoundingClientRect() in computeRowActionMenuLayout. !important needed
+   to override .action-menu (position:absolute) and .cases-table__row-menu--up
+   .action-menu (bottom: calc(100% + 6px)) which would otherwise fight us. */
+.cases-table__action-menu--fixed {
+    position: fixed !important;
+    right: auto !important;
+    bottom: auto !important;
+    z-index: 9000;
 }
 
 .cases-table__row-menu--up .action-menu {
@@ -14444,11 +14459,12 @@ input[type="radio"] {
 
 .toast-container,
 .toast-stack {
-    right: var(--space-4);
-    top: var(--space-4);
+    left: var(--space-4);
+    bottom: var(--space-4);
     z-index: 9999;
     pointer-events: none;
-    flex-direction: column;
+    /* Stack newest on top while staying anchored to the bottom edge */
+    flex-direction: column-reverse;
     gap: 12px;
     display: flex;
     position: fixed;
@@ -14630,7 +14646,8 @@ input[type="radio"] {
 
     .toast-container,
     .toast-stack {
-        top: 12px;
+        top: auto;
+        bottom: 12px;
         left: 12px;
         right: 12px;
     }
