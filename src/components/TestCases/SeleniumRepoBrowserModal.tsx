@@ -326,6 +326,63 @@ export function SeleniumRepoBrowserModal({
   // Breakpoints popover (Phase 3c) — opened by clicking the BP chip in the status bar.
   const [isBreakpointsPopoverOpen, setIsBreakpointsPopoverOpen] = useState(false);
 
+  // ---------- Multi-tab editor ----------
+  // Each tab caches the path + last-seen content/original so switching tabs
+  // doesn't lose unsaved (in-flight autosave) edits. The ACTIVE tab's state
+  // is mirrored into `previewFile` so all existing flows (banner, debug,
+  // breakpoints, autosave) continue to read from `previewFile.*`.
+  type TabState = { path: string; content: string; original: string };
+  const [openTabs, setOpenTabs] = useState<TabState[]>([]);
+  // Stash any in-flight content of the currently-active tab when switching.
+  const stashActiveTabContent = () => {
+    if (!previewFile) return;
+    setOpenTabs((tabs) => tabs.map((t) =>
+      t.path === previewFile.path
+        ? { ...t, content: previewFile.content, original: previewFile.original }
+        : t,
+    ));
+  };
+  const closeTab = (path: string) => {
+    setOpenTabs((tabs) => {
+      const next = tabs.filter((t) => t.path !== path);
+      // If the closed tab was the active one, switch to the neighbor.
+      if (previewFile?.path === path) {
+        if (next.length === 0) {
+          setPreviewFile(null);
+        } else {
+          // Pick the tab to the left if possible, else the first remaining.
+          const closedIdx = tabs.findIndex((t) => t.path === path);
+          const target = next[Math.max(0, Math.min(closedIdx - 1, next.length - 1))];
+          setPreviewFile({
+            path: target.path,
+            content: target.content,
+            original: target.original,
+            loading: false,
+            error: null,
+          });
+        }
+      }
+      return next;
+    });
+  };
+  const switchToTab = (path: string) => {
+    if (previewFile?.path === path) return;
+    stashActiveTabContent();
+    const target = openTabs.find((t) => t.path === path);
+    if (target) {
+      setPreviewFile({
+        path: target.path,
+        content: target.content,
+        original: target.original,
+        loading: false,
+        error: null,
+      });
+    } else {
+      // Not in tabs yet — load fresh.
+      void loadFilePreview(path);
+    }
+  };
+
   // ---------- Debug session state (Phase 3b) ----------
   const [debugRunId, setDebugRunId] = useState<string | null>(null);
   const [debugStatus, setDebugStatus] = useState<'idle' | 'starting' | 'running' | 'paused' | 'stopping'>('idle');
@@ -451,19 +508,50 @@ export function SeleniumRepoBrowserModal({
       setPreviewFile({ path: filePath, content: '', original: '', loading: false, error: 'File reading not available' });
       return;
     }
-    // Warn before discarding unsaved edits when switching files
-    if (!options.force && isDirty && previewFile && previewFile.path !== filePath) {
-      const ok = window.confirm(
-        `You have unsaved changes in "${previewFile.path.split(/[\\/]/).pop()}". Discard them and open the new file?`,
-      );
-      if (!ok) return;
+    // Multi-tab: if this file is already open in a tab, just switch — don't reload.
+    if (!options.force && previewFile?.path !== filePath) {
+      const existingTab = openTabs.find((t) => t.path === filePath);
+      if (existingTab) {
+        // Stash current tab's content before switching
+        if (previewFile) {
+          setOpenTabs((tabs) => tabs.map((t) =>
+            t.path === previewFile.path
+              ? { ...t, content: previewFile.content, original: previewFile.original }
+              : t,
+          ));
+        }
+        setPreviewFile({
+          path: existingTab.path,
+          content: existingTab.content,
+          original: existingTab.original,
+          loading: false,
+          error: null,
+        });
+        return;
+      }
     }
-    setIsEditing(false);
+    // Stash outgoing tab content (autosave handles disk persistence; this
+    // preserves any in-flight edits in memory so switching back is seamless).
+    if (previewFile && previewFile.path !== filePath) {
+      setOpenTabs((tabs) => tabs.map((t) =>
+        t.path === previewFile.path
+          ? { ...t, content: previewFile.content, original: previewFile.original }
+          : t,
+      ));
+    }
     setPreviewFile({ path: filePath, content: '', original: '', loading: true, error: null });
     try {
       const content = await window.desktop.readTextFile(filePath);
       setPreviewFile({ path: filePath, content, original: content, loading: false, error: null });
       pushRecentFile(filePath);
+      // Ensure this file is in the open-tabs list (or refresh its cached content).
+      setOpenTabs((tabs) => {
+        const idx = tabs.findIndex((t) => t.path === filePath);
+        if (idx === -1) return [...tabs, { path: filePath, content, original: content }];
+        const copy = tabs.slice();
+        copy[idx] = { path: filePath, content, original: content };
+        return copy;
+      });
       if (filePath.toLowerCase().endsWith('.cs')) {
         const names = extractTestMethodNames(content);
         setFileTestNamesByPath((current) => ({
@@ -604,6 +692,10 @@ export function SeleniumRepoBrowserModal({
     }
     refreshDirectory(parentDir);
     addNotification('success', `Renamed to ${trimmed}`);
+    // Update the open tab list for the renamed path so it stays in the strip.
+    if (res.path) {
+      setOpenTabs((tabs) => tabs.map((t) => (t.path === entry.path ? { ...t, path: res.path! } : t)));
+    }
     // If the renamed file is currently previewed, reopen it at its new path.
     if (previewFile?.path === entry.path && res.path) {
       void loadFilePreview(res.path, { force: true });
@@ -632,8 +724,10 @@ export function SeleniumRepoBrowserModal({
     }
     refreshDirectory(parentDir);
     addNotification('success', res.trashed ? `Moved ${entry.name} to trash` : `Deleted ${entry.name}`);
-    // If we just deleted the previewed file, clear preview.
-    if (previewFile?.path === entry.path) {
+    // If the deleted file was open in any tab, close it (also handles preview).
+    if (openTabs.some((t) => t.path === entry.path)) {
+      closeTab(entry.path);
+    } else if (previewFile?.path === entry.path) {
       setPreviewFile(null);
       setIsEditing(false);
     }
@@ -678,18 +772,44 @@ export function SeleniumRepoBrowserModal({
     setIsEditing(false);
   };
 
-  // Apply a pending jump (from Find in Files) once the file content has loaded
+  // Apply a pending jump (from Find in Files / auto-open) once the file
+  // content has loaded. If the pending jump's line is `1` (the placeholder
+  // used by auto-open in manage-automation mode) AND we know the target
+  // method name, re-resolve to the actual method-definition line by scanning
+  // the loaded content.
   useEffect(() => {
     const pending = pendingJumpRef.current;
     if (!pending || !previewFile || previewFile.loading || previewFile.error) return;
     if (pending.path !== previewFile.path) return;
+
+    // Resolve placeholder-line → real method line for manage-automation auto-open.
+    // Read the method name directly from props to avoid TDZ on the derived
+    // `currentMethodName` const (which is declared further down in the body).
+    const methodName = associatedMethodName || generatedMethodName;
+    let targetLine = pending.line;
+    let targetColumn = pending.column;
+    if (mode === 'manage-automation' && methodName && targetLine === 1) {
+      const lines = previewFile.content.split('\n');
+      // Match `<methodName>(` with optional whitespace; bare word boundary on the left.
+      const safeName = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`\\b${safeName}\\s*\\(`);
+      for (let i = 0; i < lines.length; i += 1) {
+        if (re.test(lines[i])) {
+          targetLine = i + 1;
+          const col = lines[i].search(re);
+          if (col >= 0) targetColumn = col + 1;
+          break;
+        }
+      }
+    }
+
     const editor = monacoEditorRef.current;
     if (!editor) return; // will be applied on mount instead
-    editor.revealLineInCenter(pending.line);
-    editor.setPosition({ lineNumber: pending.line, column: pending.column });
+    editor.revealLineInCenter(targetLine);
+    editor.setPosition({ lineNumber: targetLine, column: targetColumn });
     editor.focus();
     pendingJumpRef.current = null;
-  }, [previewFile]);
+  }, [previewFile, mode, associatedMethodName, generatedMethodName]);
 
   // ---------- Debug run helpers (Phase 3b) ----------
   // Convert the in-memory breakpoint map → the IPC-friendly array shape.
@@ -1176,9 +1296,9 @@ export function SeleniumRepoBrowserModal({
         setExpandedPaths((current) => {
           const next = new Set(current);
           ancestorPaths.forEach((ancestorPath) => {
-            next.add(ancestorPath);
+            if (!userCollapsedRef.current.has(ancestorPath)) next.add(ancestorPath);
           });
-          next.add(matchingFilePath);
+          if (!userCollapsedRef.current.has(matchingFilePath)) next.add(matchingFilePath);
           return next;
         });
         return;
@@ -1272,9 +1392,9 @@ export function SeleniumRepoBrowserModal({
     setExpandedPaths((current) => {
       const next = new Set(current);
       getAncestorDirectoryPaths(repoPath, matchingFilePath).forEach((ancestorPath) => {
-        next.add(ancestorPath);
+        if (!userCollapsedRef.current.has(ancestorPath)) next.add(ancestorPath);
       });
-      next.add(matchingFilePath);
+      if (!userCollapsedRef.current.has(matchingFilePath)) next.add(matchingFilePath);
       return next;
     });
   };
@@ -1356,10 +1476,53 @@ export function SeleniumRepoBrowserModal({
     }
   };
 
+  // Recursively load every (non-hidden) directory under the repo root and add
+  // it to expandedPaths so the entire tree opens — even subdirs that the user
+  // has never clicked into. Called by Expand-All in toolbar / command palette.
+  const expandAllRecursively = async () => {
+    if (!window.desktop?.listDirectory) return;
+    userCollapsedRef.current.clear();
+    const visited = new Set<string>();
+    const allDirs: string[] = [];
+    const queue: string[] = [repoPath];
+    // BFS with a soft cap to avoid runaway loads on huge repos.
+    const MAX = 500;
+    while (queue.length > 0 && visited.size < MAX) {
+      const dir = queue.shift();
+      if (!dir || visited.has(dir)) continue;
+      visited.add(dir);
+      allDirs.push(dir);
+      try {
+        // Reuse the cached listing if present; otherwise hit disk.
+        let entries = nodesByPath[dir]?.entries;
+        if (!entries || entries.length === 0) {
+          entries = await window.desktop.listDirectory(dir);
+          if (entries) {
+            setNodesByPath((current) => ({
+              ...current,
+              [dir]: { entries: entries ?? [], loading: false, error: null },
+            }));
+          }
+        }
+        (entries ?? []).forEach((entry) => {
+          if (entry.type !== 'directory') return;
+          const lower = entry.name.toLowerCase();
+          // Skip system / build folders so we don't blow open node_modules etc.
+          if (HIDDEN_NAMES.has(lower) || entry.name.startsWith('.')) return;
+          queue.push(entry.path);
+        });
+      } catch {
+        // Ignore individual folder failures; continue the walk.
+      }
+    }
+    setExpandedPaths(new Set(allDirs));
+  };
+
   const reloadRepository = async () => {
     setNodesByPath({});
     setFileTestNamesByPath({});
     setExpandedPaths(new Set([repoPath]));
+    userCollapsedRef.current.clear();
     await Promise.all([
       loadPath(repoPath, true),
       loadGitBranch(repoPath),
@@ -1561,6 +1724,8 @@ export function SeleniumRepoBrowserModal({
       if (current.has(matchingPath)) {
         return current;
       }
+      // Honor explicit user-collapse so we don't silently re-expand it.
+      if (userCollapsedRef.current.has(matchingPath)) return current;
       const next = new Set(current);
       next.add(matchingPath);
       return next;
@@ -1583,6 +1748,10 @@ export function SeleniumRepoBrowserModal({
     if (!matchingPath) return;
     if (previewAutoOpenedRef.current === matchingPath) return;
     previewAutoOpenedRef.current = matchingPath;
+    // Pre-stash a jump so the file opens with the cursor on the matching method.
+    // The line will be resolved against the LOADED content via a follow-up effect
+    // below — here we just reserve the slot with line:1 as a fallback.
+    pendingJumpRef.current = { path: matchingPath, line: 1, column: 1 };
     void loadFilePreview(matchingPath);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, currentMethodName, fileTestNamesByPath, previewFile?.path]);
@@ -1606,13 +1775,13 @@ export function SeleniumRepoBrowserModal({
       const next = new Set(current);
       let changed = false;
       filesToExpand.forEach((p) => {
-        if (!next.has(p)) {
+        if (!next.has(p) && !userCollapsedRef.current.has(p)) {
           next.add(p);
           changed = true;
         }
         // Also expand all ancestor directories
         getAncestorDirectoryPaths(repoPath, p).forEach((ancestor) => {
-          if (!next.has(ancestor)) {
+          if (!next.has(ancestor) && !userCollapsedRef.current.has(ancestor)) {
             next.add(ancestor);
             changed = true;
           }
@@ -1660,7 +1829,7 @@ export function SeleniumRepoBrowserModal({
       const next = new Set(current);
       let changed = false;
       dirsToExpand.forEach((p) => {
-        if (!next.has(p)) {
+        if (!next.has(p) && !userCollapsedRef.current.has(p)) {
           next.add(p);
           changed = true;
         }
@@ -1701,13 +1870,19 @@ export function SeleniumRepoBrowserModal({
     };
   }, [embedded, onClose]);
 
+  // Tracks paths the user has explicitly collapsed. Auto-expand effects (search,
+  // method discovery, etc.) honor this set so they never re-open something the
+  // user just clicked closed — eliminates the "click does nothing" feel.
+  const userCollapsedRef = useRef<Set<string>>(new Set());
   const toggleNode = (targetPath: string) => {
     setExpandedPaths((current) => {
       const next = new Set(current);
       if (next.has(targetPath)) {
         next.delete(targetPath);
+        userCollapsedRef.current.add(targetPath);
       } else {
         next.add(targetPath);
+        userCollapsedRef.current.delete(targetPath);
       }
       return next;
     });
@@ -2011,16 +2186,6 @@ export function SeleniumRepoBrowserModal({
                           taking vertical space in the narrow REPO header. */}
                     </div>
                     <div className="repo-browser__header-actions">
-                      <label className="repo-browser__search repo-browser__search--header" htmlFor="repo-browser-search">
-                        <IconSearch size={15} />
-                        <input
-                          id="repo-browser-search"
-                          type="text"
-                          value={searchTerm}
-                          onChange={(event) => setSearchTerm(event.target.value)}
-                          placeholder="Search files"
-                        />
-                      </label>
                       <button
                         type="button"
                         className="btn btn--secondary btn--sm"
@@ -2062,12 +2227,16 @@ export function SeleniumRepoBrowserModal({
                             type="button"
                             className="btn btn--secondary btn--sm"
                             onClick={() => {
+                              // User explicit Expand-All / Collapse-All resets the
+                              // "user collapsed" memory so auto-expand can run again.
+                              userCollapsedRef.current.clear();
                               if (isAnythingExpanded) {
                                 setExpandedPaths(new Set([repoPath]));
                               } else {
-                                // Expand all loaded directories (cannot expand unloaded ones)
-                                const allLoadedDirs = Object.keys(nodesByPath);
-                                setExpandedPaths(new Set([repoPath, ...allLoadedDirs]));
+                                // Recursively load + expand every dir under the root,
+                                // not just already-loaded ones. Honors the hidden-folder
+                                // skip list (node_modules, bin, obj, .git, …).
+                                void expandAllRecursively();
                               }
                             }}
                             title={isAnythingExpanded ? 'Collapse all' : 'Expand all'}
@@ -2078,6 +2247,33 @@ export function SeleniumRepoBrowserModal({
                         );
                       })()}
                     </div>
+                  </div>
+                  {/* Search row — full width, sits between the action header and
+                      the file tree. Has a clear (✕) button when input is non-empty. */}
+                  <div className="repo-browser__search-wrap">
+                    <label className="repo-browser__search repo-browser__search--row" htmlFor="repo-browser-search">
+                      <IconSearch size={14} />
+                      <input
+                        id="repo-browser-search"
+                        type="text"
+                        value={searchTerm}
+                        onChange={(event) => setSearchTerm(event.target.value)}
+                        placeholder="Search files…"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      {searchTerm && (
+                        <button
+                          type="button"
+                          className="repo-browser__search-clear"
+                          onClick={() => setSearchTerm('')}
+                          title="Clear search"
+                          aria-label="Clear search"
+                        >
+                          <IconX size={12} />
+                        </button>
+                      )}
+                    </label>
                   </div>
                   <div
                     className="repo-browser__panel"
@@ -2147,93 +2343,209 @@ export function SeleniumRepoBrowserModal({
             {/* Middle Panel: Code Preview */}
             <div className="repo-browser__middle-panel">
               <div className="repo-browser__preview-header">
-                <span className="repo-browser__preview-label">PREVIEW</span>
-                {previewFile && (
-                  <span className="repo-browser__preview-filename" title={previewFile.path}>
-                    {previewFile.path.split(/[\\/]/).pop()}
-                  </span>
-                )}
-                {/* Scan status — only shown while looking for an associated method.
-                    Lives here (next to filename) instead of in the REPO header to keep
-                    that narrow header free for search/refresh/collapse controls. */}
-                {mode === 'manage-automation' && methodSearch.loading && (
-                  <span className="repo-browser__preview-scan-status" aria-live="polite" title={`Searching repository for ${methodSearch.methodName}`}>
-                    <span className="repo-browser__scan-spinner" aria-hidden="true" />
-                    Searching…
-                  </span>
-                )}
-                {/* Inline autosave indicator */}
-                {previewFile && autoSaveStatus !== 'idle' && (
-                  <span
-                    className={`repo-browser__autosave repo-browser__autosave--${autoSaveStatus}`}
-                    title={
-                      autoSaveStatus === 'pending' ? 'Changes will save shortly'
-                      : autoSaveStatus === 'saving' ? 'Saving…'
-                      : autoSaveStatus === 'saved' ? 'All changes saved'
-                      : 'Save failed — see notification'
-                    }
-                  >
-                    {autoSaveStatus === 'pending' && '● Editing'}
-                    {autoSaveStatus === 'saving' && 'Saving…'}
-                    {autoSaveStatus === 'saved' && '✓ Saved'}
-                    {autoSaveStatus === 'error' && '⚠ Save failed'}
-                  </span>
-                )}
-                {previewFile && (
-                  <button
-                    type="button"
-                    className={`repo-browser__preview-toggle${wrapCode ? ' is-active' : ''}`}
-                    onClick={() => setWrapCode((w) => !w)}
-                    title={wrapCode ? 'Disable word wrap' : 'Enable word wrap'}
-                    aria-label="Toggle word wrap"
-                    aria-pressed={wrapCode}
-                  >
-                    ↩
-                  </button>
-                )}
-                {/* Debug launch button — only shown when idle. While a debug session
-                    is active, the debug ribbon below already exposes Continue/Step/Stop,
-                    so we hide this to avoid a duplicate Stop control. */}
-                {previewFile && workspaceSettings && mode !== 'manage-automation' && !isDebugActive && (
-                  <button
-                    type="button"
-                    className="repo-browser__preview-action"
-                    onClick={() => { void startDebugRun(); }}
-                    title="Debug test at cursor (F5)"
-                  >
-                    <span className="material-symbols repo-browser__preview-action-icon" aria-hidden="true">
-                      bug_report
+                {/* Left: section label + scan status */}
+                <div className="repo-browser__preview-header-left">
+                  <span className="repo-browser__preview-label">CODE</span>
+                  {previewFile && openTabs.length === 0 && (
+                    <span className="repo-browser__preview-filename" title={previewFile.path}>
+                      {previewFile.path.split(/[\\/]/).pop()}
                     </span>
-                    Debug
-                  </button>
-                )}
-                {previewFile && (
-                  <button
-                    type="button"
-                    className="repo-browser__preview-close"
-                    onClick={() => {
-                      if (isDirty) {
-                        const ok = window.confirm('There may be unsaved changes still queued for autosave. Close anyway?');
-                        if (!ok) return;
+                  )}
+                  {mode === 'manage-automation' && methodSearch.loading && (
+                    <span className="repo-browser__preview-scan-status" aria-live="polite" title={`Searching repository for ${methodSearch.methodName}`}>
+                      <span className="repo-browser__scan-spinner" aria-hidden="true" />
+                      Searching…
+                    </span>
+                  )}
+                </div>
+
+                {/* Center: autosave chip — flex-fills the space so the action group hugs the right edge */}
+                <div className="repo-browser__preview-header-center">
+                  {previewFile && autoSaveStatus !== 'idle' && (
+                    <span
+                      className={`repo-browser__autosave repo-browser__autosave--${autoSaveStatus}`}
+                      title={
+                        autoSaveStatus === 'pending' ? 'Changes will save shortly'
+                        : autoSaveStatus === 'saving' ? 'Saving…'
+                        : autoSaveStatus === 'saved' ? 'All changes saved'
+                        : 'Save failed — see notification'
                       }
-                      setPreviewFile(null);
-                    }}
-                    title="Close preview"
-                    aria-label="Close preview"
-                  >
-                    <IconX size={14} />
-                  </button>
-                )}
+                    >
+                      {autoSaveStatus === 'pending' && '● Editing'}
+                      {autoSaveStatus === 'saving' && 'Saving…'}
+                      {autoSaveStatus === 'saved' && '✓ Saved'}
+                      {autoSaveStatus === 'error' && '⚠ Save failed'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Right: icon-button action group, all consistent size/style */}
+                <div className="repo-browser__preview-header-actions">
+                  {previewFile && (
+                    <button
+                      type="button"
+                      className={`btn btn--secondary btn--sm${wrapCode ? ' is-active' : ''}`}
+                      onClick={() => setWrapCode((w) => !w)}
+                      title={wrapCode ? 'Disable word wrap' : 'Enable word wrap'}
+                      aria-label="Toggle word wrap"
+                      aria-pressed={wrapCode}
+                    >
+                      <span className="material-symbols" aria-hidden="true">wrap_text</span>
+                    </button>
+                  )}
+                  {/* Debug launch — icon-only for visual consistency with the other header buttons.
+                      Hidden while a session is active so the ribbon below is the sole control surface. */}
+                  {previewFile && workspaceSettings && mode !== 'manage-automation' && !isDebugActive && (
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => { void startDebugRun(); }}
+                      title="Debug test at cursor (F5)"
+                      aria-label="Start debug session"
+                    >
+                      <span className="material-symbols" aria-hidden="true">bug_report</span>
+                    </button>
+                  )}
+                  {previewFile && (
+                    <>
+                      <span className="repo-browser__preview-header-divider" aria-hidden="true" />
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => {
+                          if (isDirty) {
+                            const ok = window.confirm('There may be unsaved changes still queued for autosave. Close anyway?');
+                            if (!ok) return;
+                          }
+                          setPreviewFile(null);
+                        }}
+                        title="Close preview"
+                        aria-label="Close preview"
+                      >
+                        <IconX size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
+              {/* Tab strip — one tab per open file. Click to switch, ✕ to close. */}
+              {openTabs.length > 0 && (
+                <div className="repo-browser__tabs" role="tablist" aria-label="Open files">
+                  {openTabs.map((tab) => {
+                    const isActive = previewFile?.path === tab.path;
+                    const fileName = tab.path.split(/[\\/]/).pop() || tab.path;
+                    const tabIsDirty = isActive
+                      ? isDirty
+                      : tab.content !== tab.original;
+                    return (
+                      <div
+                        key={tab.path}
+                        className={`repo-browser__tab${isActive ? ' is-active' : ''}`}
+                        role="tab"
+                        aria-selected={isActive}
+                        title={tab.path}
+                        onClick={() => switchToTab(tab.path)}
+                      >
+                        <span className="repo-browser__tab-name">{fileName}</span>
+                        {tabIsDirty && <span className="repo-browser__tab-dirty" aria-hidden="true">●</span>}
+                        <button
+                          type="button"
+                          className="repo-browser__tab-close"
+                          aria-label={`Close ${fileName}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closeTab(tab.path);
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div className="repo-browser__preview-body">
                 {!previewFile ? (
                   <div className="repo-browser__preview-empty">
-                    <IconCode size={32} />
-                    <p>
-                      {mode === 'manage-automation'
-                        ? `Select a class file in the tree to view its code, then associate or write the method ${currentMethodName ? `'${currentMethodName}'` : ''} here.`
-                        : 'Select a file from the repository to preview its content'}
-                    </p>
+                    {mode === 'manage-automation' ? (
+                      <>
+                        <IconCode size={32} />
+                        <p>
+                          Select a class file in the tree to view its code, then associate or write the method{' '}
+                          {currentMethodName ? `'${currentMethodName}'` : ''} here.
+                        </p>
+                      </>
+                    ) : (
+                      // JetBrains-style "shortcuts cheat-sheet" empty state — invites
+                      // the user to discover the IDE features even before opening a file.
+                      <ul className="repo-browser__shortcut-list" aria-label="Available commands">
+                        <li>
+                          <button
+                            type="button"
+                            className="repo-browser__shortcut"
+                            onClick={() => {
+                              setIsQuickOpenOpen(true);
+                              void buildQuickOpenIndex();
+                            }}
+                          >
+                            <span className="repo-browser__shortcut-label">Go to File</span>
+                            <kbd className="repo-browser__shortcut-keys">Ctrl+P</kbd>
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            className="repo-browser__shortcut"
+                            onClick={() => setIsFindInFilesOpen(true)}
+                          >
+                            <span className="repo-browser__shortcut-label">Find in Files</span>
+                            <kbd className="repo-browser__shortcut-keys">Ctrl+Shift+F</kbd>
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            className="repo-browser__shortcut"
+                            onClick={() => setIsCommandPaletteOpen(true)}
+                          >
+                            <span className="repo-browser__shortcut-label">Command Palette</span>
+                            <kbd className="repo-browser__shortcut-keys">Ctrl+Shift+P</kbd>
+                          </button>
+                        </li>
+                        {recentFiles.length > 0 && (
+                          <li>
+                            <button
+                              type="button"
+                              className="repo-browser__shortcut"
+                              onClick={() => {
+                                setIsQuickOpenOpen(true);
+                                void buildQuickOpenIndex();
+                              }}
+                            >
+                              <span className="repo-browser__shortcut-label">Recent Files</span>
+                              <kbd className="repo-browser__shortcut-keys">Ctrl+P</kbd>
+                            </button>
+                          </li>
+                        )}
+                        {totalBreakpointCount > 0 && (
+                          <li>
+                            <button
+                              type="button"
+                              className="repo-browser__shortcut"
+                              onClick={() => setIsBreakpointsPopoverOpen(true)}
+                            >
+                              <span className="repo-browser__shortcut-label">
+                                Breakpoints ({totalBreakpointCount})
+                              </span>
+                              <kbd className="repo-browser__shortcut-keys">F9</kbd>
+                            </button>
+                          </li>
+                        )}
+                        <li className="repo-browser__shortcut-hint">
+                          Or pick any file from the tree on the left
+                        </li>
+                      </ul>
+                    )}
                   </div>
                 ) : previewFile.loading ? (
                   <div className="repo-browser__preview-empty">Loading...</div>
@@ -2449,11 +2761,30 @@ export function SeleniumRepoBrowserModal({
                               (2048 /* KeyMod.CtrlCmd */) | (49 /* KeyCode.KeyS */),
                               () => { void saveCurrentFile(); },
                             );
-                            // Apply any pending jump that landed before mount
+                            // Apply any pending jump that landed before mount.
+                            // For manage-automation auto-open the placeholder line is 1 —
+                            // re-resolve it against the loaded content to land on the
+                            // actual method definition.
                             const pending = pendingJumpRef.current;
                             if (pending && previewFile && pending.path === previewFile.path) {
-                              editor.revealLineInCenter(pending.line);
-                              editor.setPosition({ lineNumber: pending.line, column: pending.column });
+                              let line = pending.line;
+                              let col = pending.column;
+                              if (mode === 'manage-automation' && currentMethodName && line === 1) {
+                                const content = previewFile.content;
+                                const safeName = currentMethodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                const re = new RegExp(`\\b${safeName}\\s*\\(`);
+                                const lines = content.split('\n');
+                                for (let i = 0; i < lines.length; i += 1) {
+                                  if (re.test(lines[i])) {
+                                    line = i + 1;
+                                    const c = lines[i].search(re);
+                                    if (c >= 0) col = c + 1;
+                                    break;
+                                  }
+                                }
+                              }
+                              editor.revealLineInCenter(line);
+                              editor.setPosition({ lineNumber: line, column: col });
                               editor.focus();
                               pendingJumpRef.current = null;
                             }
@@ -2544,9 +2875,13 @@ export function SeleniumRepoBrowserModal({
                               type="button"
                               className="preview-status-bar__item preview-status-bar__item--bp preview-status-bar__item--clickable"
                               onClick={() => setIsBreakpointsPopoverOpen((v) => !v)}
-                              title={`${totalBreakpointCount} breakpoint(s) across the repo — click to list`}
+                              title={
+                                currentFileBreakpoints.length > 0
+                                  ? `${currentFileBreakpoints.length} breakpoint${currentFileBreakpoints.length > 1 ? 's' : ''} in this file (${totalBreakpointCount} total) — click to list`
+                                  : `${totalBreakpointCount} breakpoint${totalBreakpointCount > 1 ? 's' : ''} across the repo — click to list`
+                              }
                             >
-                              ● {currentFileBreakpoints.length}/{totalBreakpointCount} BP
+                              ● {totalBreakpointCount} BP
                             </button>
                           )}
                           <span className="preview-status-bar__item" title="Cursor position">
@@ -2837,17 +3172,17 @@ export function SeleniumRepoBrowserModal({
             {
               id: 'view.expandAll',
               category: 'View',
-              label: 'Expand All Loaded Folders',
-              run: () => {
-                const allLoadedDirs = Object.keys(nodesByPath);
-                setExpandedPaths(new Set([repoPath, ...allLoadedDirs]));
-              },
+              label: 'Expand All Folders',
+              run: () => { void expandAllRecursively(); },
             },
             {
               id: 'view.collapseAll',
               category: 'View',
               label: 'Collapse All Folders',
-              run: () => setExpandedPaths(new Set([repoPath])),
+              run: () => {
+                userCollapsedRef.current.clear();
+                setExpandedPaths(new Set([repoPath]));
+              },
             },
             {
               id: 'debug.toggleBreakpoint',

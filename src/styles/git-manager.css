@@ -5,8 +5,16 @@
    plenty of room.
    ============================================================================ */
 .settings-workbench.repo-browser {
-  width: min(90vw, 100%);
+  width: min(80vw, 100%);
   max-width: none;
+}
+
+/* When the repo browser is embedded inside the workspace pane (Plans page,
+   Automation Repo section), it must take 100% of the embedding container —
+   never overflow into the fixed workspace navigation rail on the left. */
+.split-pane__main--workspace .settings-workbench.repo-browser {
+  width: 100%;
+  max-width: 100%;
 }
 
 /* ============================================================================
@@ -83,12 +91,62 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px;
+  padding: 0 8px 0 10px;
   background: var(--color-surface-subtle);
   flex-shrink: 0;
+  /* Same height as REPO (.settings-panel__head) and GIT (.git-manager__title-bar). */
   height: 36px;
   min-height: 36px;
   border-bottom: 1px solid var(--color-border-soft);
+}
+
+.repo-browser__preview-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.repo-browser__preview-header-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.repo-browser__preview-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.repo-browser__preview-header-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--color-border, #333);
+  margin: 0 3px;
+}
+/* Standardize icon-only buttons in the preview header — tight, square,
+   matches the REPO/GIT header buttons. */
+.repo-browser__preview-header-actions .btn--sm {
+  height: 22px;
+  min-width: 22px;
+  width: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.repo-browser__preview-header-actions .btn--sm .material-symbols {
+  font-size: 14px;
+}
+.repo-browser__preview-header-actions .btn--sm svg {
+  width: 12px;
+  height: 12px;
+}
+.repo-browser__preview-header-actions .btn--sm.is-active {
+  background: var(--color-surface-selected, rgba(143, 180, 255, 0.16));
+  color: var(--color-primary, #4fc3f7);
+  border-color: var(--color-primary, #4fc3f7);
 }
 
 .repo-browser__preview-label {
@@ -1703,10 +1761,73 @@
   color: var(--color-text-muted);
 }
 
+/* Themed checkbox — replaces the OS-default tickbox so it follows the app
+   theme and reads cleanly on every surface (dark, light, paper, slate, etc.). */
 .git-manager__checkbox {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
   cursor: pointer;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong, var(--color-border, #555));
+  border-radius: 3px;
+  position: relative;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.git-manager__checkbox:hover:not(:disabled) {
+  border-color: var(--color-primary, #4fc3f7);
+}
+
+.git-manager__checkbox:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #4fc3f7) 35%, transparent);
+}
+
+.git-manager__checkbox:checked {
+  background: var(--color-primary, #4fc3f7);
+  border-color: var(--color-primary, #4fc3f7);
+}
+
+/* Checkmark drawn with a CSS pseudo-element so it doesn't depend on a font */
+.git-manager__checkbox:checked::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Indeterminate state ("some files selected") — horizontal bar */
+.git-manager__checkbox:indeterminate {
+  background: var(--color-primary, #4fc3f7);
+  border-color: var(--color-primary, #4fc3f7);
+}
+.git-manager__checkbox:indeterminate::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  background: #fff;
+  border-radius: 1px;
+  transform: translateY(-50%);
+}
+
+.git-manager__checkbox:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .git-manager__file-list {
@@ -2927,4 +3048,225 @@
 .monaco-editor .minimap-slider.active {
   background: var(--color-primary, #4fc3f7) !important;
   opacity: 0.6;
+}
+
+/* Search input on its own row above the file tree */
+/* Wrapper provides the integrated panel-edge feel: full width with subtle
+   bottom separator from the file tree, no detached "card" look. */
+.repo-browser__search-wrap {
+  padding: 6px 8px 8px;
+  background: var(--color-surface-subtle, var(--color-surface));
+  border-bottom: 1px solid var(--color-border-soft, var(--color-border, #333));
+  flex-shrink: 0;
+}
+
+.repo-browser__search--row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--color-surface, #1e1e1e);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 4px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.repo-browser__search--row:hover {
+  border-color: var(--color-border-strong, #444);
+}
+.repo-browser__search--row:focus-within {
+  border-color: var(--color-primary, #4fc3f7);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #4fc3f7) 20%, transparent);
+}
+
+.repo-browser__search--row > svg {
+  color: var(--color-text-muted, #888);
+  flex-shrink: 0;
+}
+
+.repo-browser__search--row input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--color-text, #ddd);
+  font-size: 12px;
+  min-width: 0;
+  padding: 0;
+  line-height: 1.4;
+}
+.repo-browser__search--row input::placeholder {
+  color: var(--color-text-muted, #888);
+}
+
+/* Clear (✕) button only shows when there's text — keeps the input clean otherwise */
+.repo-browser__search-clear {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted, #888);
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.repo-browser__search-clear:hover {
+  background: var(--color-surface-hover, rgba(255, 255, 255, 0.10));
+  color: var(--color-text, #fff);
+}
+
+/* ===========================================================
+   Multi-tab editor strip
+   =========================================================== */
+.repo-browser__tabs {
+  display: flex;
+  align-items: stretch;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border, #333);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  flex-shrink: 0;
+  min-height: 30px;
+}
+
+.repo-browser__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px 5px 12px;
+  font-size: 11.5px;
+  color: var(--color-text-muted, #aaa);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border, #333);
+  border-top: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  max-width: 220px;
+  position: relative;
+}
+
+.repo-browser__tab:hover {
+  background: var(--color-surface-hover, #2a2d2e);
+  color: var(--color-text, #ddd);
+}
+
+.repo-browser__tab.is-active {
+  background: var(--color-surface-raised, #1e1e1e);
+  color: var(--color-text, #fff);
+  border-top-color: var(--color-primary, #4fc3f7);
+}
+
+.repo-browser__tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.repo-browser__tab-dirty {
+  color: var(--color-warning, #e0a64b);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.repo-browser__tab-close {
+  background: transparent;
+  border: 0;
+  color: var(--color-text-muted, #888);
+  font-size: 11px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.repo-browser__tab-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--color-text, #fff);
+}
+
+/* Compact autosave chip for the centered slot of the new preview header */
+.repo-browser__preview-header-center .repo-browser__autosave {
+  font-size: 10.5px;
+  padding: 2px 8px;
+  letter-spacing: 0.2px;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+.repo-browser__preview-header-center .repo-browser__autosave--pending {
+  border-color: rgba(255, 213, 0, 0.30);
+}
+.repo-browser__preview-header-center .repo-browser__autosave--saved {
+  border-color: rgba(80, 180, 100, 0.30);
+}
+
+/* ===========================================================
+   JetBrains-style empty-state shortcut list (CODE preview)
+   =========================================================== */
+.repo-browser__shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 280px;
+}
+
+.repo-browser__shortcut {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-muted, #888);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  font-size: 13px;
+  text-align: left;
+}
+
+.repo-browser__shortcut:hover {
+  background: var(--color-surface-hover, rgba(255, 255, 255, 0.05));
+  color: var(--color-text, #ddd);
+}
+
+.repo-browser__shortcut-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.repo-browser__shortcut-keys {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--color-text-subtle, var(--color-text-muted, #888));
+  background: var(--color-surface-raised, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--color-border, #333);
+  border-radius: 4px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+
+.repo-browser__shortcut-hint {
+  margin-top: 8px;
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--color-text-subtle, #888);
+  text-align: center;
+  font-style: italic;
 }

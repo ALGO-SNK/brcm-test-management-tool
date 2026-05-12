@@ -7,7 +7,7 @@
 // - Auto-syncs theme to app theme (light/dark).
 // - Read-only or editable based on prop.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Editor, { loader } from '@monaco-editor/react';
 import type { editor as MonacoEditorNS } from 'monaco-editor';
 import * as monaco from 'monaco-editor';
@@ -304,6 +304,10 @@ export function CodeEditor({
   const editorRef = useRef<MonacoEditorNS.IStandaloneCodeEditor | null>(null);
   const decorationIdsRef = useRef<string[]>([]);
   const executionDecorationIdsRef = useRef<string[]>([]);
+  // Flips to true after Monaco mounts. We key the breakpoint/execution
+  // decoration effects on this so they re-run once the editor is ready
+  // (the initial render's effect bails out because editorRef.current is still null).
+  const [isEditorReady, setIsEditorReady] = useState(false);
   // Keep latest toggle callback in a ref so the once-attached mouse handler always uses fresh state.
   const onToggleBreakpointRef = useRef(onToggleBreakpoint);
   useEffect(() => { onToggleBreakpointRef.current = onToggleBreakpoint; }, [onToggleBreakpoint]);
@@ -353,7 +357,7 @@ export function CodeEditor({
       },
     }));
     decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, newDecorations);
-  }, [breakpoints, filePath, value]);
+  }, [breakpoints, filePath, value, isEditorReady]);
 
   // Sync execution-pointer decoration (yellow arrow + line highlight) when paused.
   useEffect(() => {
@@ -380,7 +384,7 @@ export function CodeEditor({
       executionDecorationIdsRef.current,
       decos,
     );
-  }, [executionLine, filePath, value]);
+  }, [executionLine, filePath, value, isEditorReady]);
 
   return (
     <Editor
@@ -393,6 +397,49 @@ export function CodeEditor({
       onChange={(next) => onChange?.(next ?? '')}
       onMount={(editor) => {
         editorRef.current = editor;
+        // Apply current breakpoint + execution-pointer decorations IMMEDIATELY
+        // on mount so they appear on the first frame, even before the React
+        // re-render triggered by setIsEditorReady completes. Critical for the
+        // case where a user reopens a file that already has saved breakpoints
+        // — without this we briefly (or sometimes permanently) skip the paint
+        // because the effect's first run happens before editorRef is set.
+        try {
+          const model = editor.getModel();
+          if (model) {
+            if (breakpoints && breakpoints.length > 0) {
+              decorationIdsRef.current = editor.deltaDecorations(
+                decorationIdsRef.current,
+                breakpoints.map((line) => ({
+                  range: new monaco.Range(line, 1, line, 1),
+                  options: {
+                    isWholeLine: false,
+                    glyphMarginClassName: 'monaco-bp-glyph',
+                    glyphMarginHoverMessage: { value: 'Breakpoint (click to remove)' },
+                    stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+                  },
+                })),
+              );
+            }
+            if (executionLine && executionLine > 0) {
+              executionDecorationIdsRef.current = editor.deltaDecorations(
+                executionDecorationIdsRef.current,
+                [{
+                  range: new monaco.Range(executionLine, 1, executionLine, 1),
+                  options: {
+                    isWholeLine: true,
+                    glyphMarginClassName: 'monaco-exec-glyph',
+                    className: 'monaco-exec-line',
+                    glyphMarginHoverMessage: { value: 'Execution paused here' },
+                    stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+                  },
+                }],
+              );
+            }
+          }
+        } catch { /* ignore — effect below will retry */ }
+        // Trigger re-render so the breakpoint / execution-pointer effects
+        // fire on any future prop changes.
+        setIsEditorReady(true);
         // Emit cursor position changes for the parent's status bar.
         if (onCursorChange) {
           const pos = editor.getPosition();
