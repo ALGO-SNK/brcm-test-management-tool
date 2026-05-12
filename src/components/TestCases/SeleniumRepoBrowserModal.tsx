@@ -175,7 +175,9 @@ export function SeleniumRepoBrowserModal({
   // Always editable — no read-only state. Kept as state so existing references
   // continue to compile, but the UI never flips it back to false.
   const [isEditing, setIsEditing] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  // `setIsSaving` is consumed by saveCurrentFile to drive the autosave pill; the
+  // displayed value comes via `autoSaveStatus`, so the state itself isn't read here.
+  const [, setIsSaving] = useState(false);
   // Auto-save status surfaced in the status bar (transient "Saved" indicator).
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveTimerRef = useRef<number | null>(null);
@@ -387,7 +389,8 @@ export function SeleniumRepoBrowserModal({
   const [debugRunId, setDebugRunId] = useState<string | null>(null);
   const [debugStatus, setDebugStatus] = useState<'idle' | 'starting' | 'running' | 'paused' | 'stopping'>('idle');
   const [debugStopDetails, setDebugStopDetails] = useState<DesktopDebuggerStopDetails | null>(null);
-  const [debugThreadId, setDebugThreadId] = useState<number | null>(null);
+  // Setter only — threadId is captured for future DAP commands; not displayed in UI.
+  const [, setDebugThreadId] = useState<number | null>(null);
   // Mirror debugStatus into the ref so F-key hotkeys (registered once globally) see fresh state.
   useEffect(() => { debugStatusRef.current = debugStatus; }, [debugStatus]);
   // Where the debugger is currently paused (drives the editor pointer + auto-open).
@@ -758,18 +761,6 @@ export function SeleniumRepoBrowserModal({
     e.preventDefault();
     e.stopPropagation();
     setTreeContextMenu({ x: e.clientX, y: e.clientY, entry, parentDir });
-  };
-
-  const discardEdits = () => {
-    if (!previewFile) return;
-    if (!isDirty) {
-      setIsEditing(false);
-      return;
-    }
-    const ok = window.confirm('Discard your unsaved edits?');
-    if (!ok) return;
-    setPreviewFile((current) => (current ? { ...current, content: current.original } : current));
-    setIsEditing(false);
   };
 
   // Apply a pending jump (from Find in Files / auto-open) once the file
@@ -2731,7 +2722,7 @@ export function SeleniumRepoBrowserModal({
                               type="button"
                               className="btn btn--danger btn--sm debug-ribbon__btn"
                               onClick={() => { void stopDebugRun(); }}
-                              disabled={debugStatus === 'stopping' || debugStatus === 'idle'}
+                              disabled={debugStatus === 'stopping'}
                               title="Stop debug session (Shift+F5)"
                             >
                               <span className="material-symbols" aria-hidden="true">stop_circle</span>
