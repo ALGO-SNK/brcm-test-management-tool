@@ -17,6 +17,7 @@ interface TestCaseListProps {
   onSelectCase: (testCase: ADOTestCase) => void;
   onBackToCases: () => void;
   onBackToPlan: () => void;
+  onAutomationRepoClick: () => void;
   onHelpClick: () => void;
   onSettingsClick: () => void;
   workspaceSettings: WorkspaceSettingsValues;
@@ -37,6 +38,7 @@ export function TestCaseList({
   onSelectCase,
   onBackToCases,
   onBackToPlan,
+  onAutomationRepoClick,
   onHelpClick,
   onSettingsClick,
   workspaceSettings,
@@ -188,6 +190,7 @@ export function TestCaseList({
     <div className="app-shell">
       <Header
         title={plan.name}
+        onAutomationRepoClick={onAutomationRepoClick}
         onHelpClick={onHelpClick}
         onSettingsClick={onSettingsClick}
       />

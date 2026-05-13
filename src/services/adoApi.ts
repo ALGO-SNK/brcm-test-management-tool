@@ -453,6 +453,11 @@ function deriveTestCaseUrlFromSuiteSelf(selfHref: string, apiVersion: string, pl
   return `${base}/${endpoint}?api-version=${encodeURIComponent(apiVersion)}`;
 }
 
+function deriveTestPointsUrlFromSuiteSelf(selfHref: string, apiVersion: string): string {
+  const base = normalizeSuiteSelfHref(selfHref);
+  return `${base}/points?api-version=${encodeURIComponent(apiVersion)}`;
+}
+
 function normalizeWorkItemHref(href: string, workItemId: number): string | null {
   const trimmed = href.trim();
   if (!trimmed) return null;
@@ -552,6 +557,105 @@ function normalizeFieldText(value: unknown): string {
   return '';
 }
 
+interface ADOTestPointListItem {
+  outcome?: unknown;
+  configuration?: {
+    name?: unknown;
+  };
+  testCase?: {
+    id?: unknown;
+  };
+}
+
+interface CasePointSummary {
+  configurationName?: string;
+  outcome?: string;
+}
+
+function buildJoinedDistinctValues(values: string[]): string | undefined {
+  const uniqueValues = Array.from(
+    new Set(values.map((value) => value.trim()).filter(Boolean)),
+  );
+  if (uniqueValues.length === 0) return undefined;
+  return uniqueValues.join(', ');
+}
+
+function mapPointSummaryByCaseId(response: ADOListResponse<ADOTestPointListItem>): Map<number, CasePointSummary> {
+  const grouped = new Map<number, { configurations: string[]; outcomes: string[] }>();
+
+  for (const point of response.value ?? []) {
+    const numericCaseId = Number(point?.testCase?.id);
+    if (!Number.isInteger(numericCaseId) || numericCaseId <= 0) continue;
+
+    const current = grouped.get(numericCaseId) ?? { configurations: [], outcomes: [] };
+    const configurationName = normalizeFieldText(point?.configuration?.name).trim();
+    if (configurationName) current.configurations.push(configurationName);
+
+    const outcome = normalizeFieldText(point?.outcome).trim();
+    if (outcome) current.outcomes.push(outcome);
+
+    grouped.set(numericCaseId, current);
+  }
+
+  const mapped = new Map<number, CasePointSummary>();
+  for (const [caseId, value] of grouped.entries()) {
+    mapped.set(caseId, {
+      configurationName: buildJoinedDistinctValues(value.configurations),
+      outcome: buildJoinedDistinctValues(value.outcomes),
+    });
+  }
+  return mapped;
+}
+
+async function fetchPointSummaryByCaseId(
+  settings: WorkspaceConnectionSettings,
+  planId: number,
+  suiteId: number,
+  suiteSelfHref: string | undefined,
+  signal?: AbortSignal,
+): Promise<Map<number, CasePointSummary>> {
+  const apiVersions = getApiVersionCandidates(settings.apiVersion);
+  const encodedPlanId = encodeURIComponent(String(planId));
+  const encodedSuiteId = encodeURIComponent(String(suiteId));
+  const baseApis = buildBaseApiUrls(settings);
+  const candidateUrls: string[] = [];
+
+  for (const apiVersion of apiVersions) {
+    const encodedApiVersion = encodeURIComponent(apiVersion);
+    candidateUrls.push(
+      ...baseApis.map(
+        (baseApi) => `${baseApi}/test/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/points?api-version=${encodedApiVersion}`,
+      ),
+    );
+
+    if (suiteSelfHref) {
+      candidateUrls.push(deriveTestPointsUrlFromSuiteSelf(suiteSelfHref, apiVersion));
+    }
+  }
+
+  for (const url of Array.from(new Set(candidateUrls))) {
+    try {
+      const response = await fetchJsonWithAction<ADOListResponse<ADOTestPointListItem>>(
+        url,
+        settings.patToken.trim(),
+        'load test points',
+        signal,
+      );
+      return mapPointSummaryByCaseId(response);
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      return new Map();
+    }
+  }
+
+  return new Map();
+}
+
 function mapTestCaseListItemToCase(
   item: unknown,
   fallbackSelfHref: string,
@@ -596,6 +700,7 @@ function mapTestCaseListItemToCase(
     id: workItemId,
     name: normalizedItem.workItem?.name?.trim() || normalizeFieldText(normalizedItem.name).trim() || `Test Case ${workItemId}`,
     state,
+    outcome: undefined,
     order,
     priority: normalizePriority(fields['Microsoft.VSTS.Common.Priority']),
     testPlanName: normalizedItem.testPlan?.name,
@@ -630,6 +735,7 @@ function mergeCaseListItemWithDetailCache(listCase: ADOTestCase, cachedCase?: AD
     ...listCase,
     name: listCase.name || cachedCase.name,
     state: resolvedState,
+    outcome: listCase.outcome ?? cachedCase.outcome,
     order: listCase.order ?? cachedCase.order,
     priority: listCase.priority || cachedCase.priority,
     testPlanName: listCase.testPlanName ?? cachedCase.testPlanName,
@@ -676,6 +782,7 @@ function mapWorkItemToTestCase(workItem: ADOWorkItem, fallbackCase?: ADOTestCase
     id: workItem.id,
     name: normalizeFieldText(fields['System.Title']).trim() || fallbackCase?.name || `Test Case ${workItem.id}`,
     state,
+    outcome: fallbackCase?.outcome,
     priority: normalizePriority(fields['Microsoft.VSTS.Common.Priority'] ?? fallbackCase?.priority),
     testPlanName: fallbackCase?.testPlanName,
     testSuiteName: fallbackCase?.testSuiteName,
@@ -859,6 +966,13 @@ export async function fetchTestCasesForSuite(
   }
 
   const uniqueCandidateUrls = Array.from(new Set(candidateUrls));
+  const pointSummaryByCaseId = await fetchPointSummaryByCaseId(
+    settings,
+    planId,
+    suiteId,
+    suiteSelfHref,
+    signal,
+  );
 
   let lastError: unknown = null;
 
@@ -874,6 +988,15 @@ export async function fetchTestCasesForSuite(
       const mappedCases = (response.value ?? [])
         .map((item) => mapTestCaseListItemToCase(item, selfHref))
         .filter((item): item is ADOTestCase => item !== null)
+        .map((item) => {
+          const pointSummary = pointSummaryByCaseId.get(item.id);
+          if (!pointSummary) return item;
+          return {
+            ...item,
+            configurationName: pointSummary.configurationName ?? item.configurationName,
+            outcome: pointSummary.outcome ?? item.outcome,
+          };
+        })
         .map((item) => {
           const cachedDetail = readCacheEntry<ADOTestCase>(getTestCaseDetailCacheKey(settings, item.id))?.data ?? null;
           return mergeCaseListItemWithDetailCache(item, cachedDetail);

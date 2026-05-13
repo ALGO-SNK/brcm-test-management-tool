@@ -4,6 +4,7 @@ import { Header } from './Header';
 interface MainLayoutProps {
   children: ReactNode;
   title?: string;
+  onAutomationRepoClick?: () => void;
   onHelpClick?: () => void;
   onSettingsClick?: () => void;
 }
@@ -11,6 +12,7 @@ interface MainLayoutProps {
 export function MainLayout({
   children,
   title,
+  onAutomationRepoClick,
   onHelpClick,
   onSettingsClick,
 }: MainLayoutProps) {
@@ -18,6 +20,7 @@ export function MainLayout({
     <div className="app-shell">
       <Header
         title={title}
+        onAutomationRepoClick={onAutomationRepoClick}
         onHelpClick={onHelpClick}
         onSettingsClick={onSettingsClick}
       />

@@ -87,6 +87,7 @@ export interface ADOTestCase {
   id: number;
   name: string;
   state: string;
+  outcome?: string;
   order?: number;
   priority: number;
   testPlanName?: string;

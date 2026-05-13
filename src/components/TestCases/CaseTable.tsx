@@ -1,5 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { IconArrowDownward, IconArrowUpward, IconCopy, IconDelete, IconDescription, IconMoreHoriz, IconRefresh, IconSearch, IconSort, IconX } from '../Common/Icons';
+import {
+  IconArrowDownward,
+  IconArrowUpward,
+  IconCheckCircle,
+  IconCopy,
+  IconDelete,
+  IconDescription,
+  IconError,
+  IconInfo,
+  IconMotionPlay,
+  IconMoreHoriz,
+  IconRefresh,
+  IconRuleSettings,
+  IconSearch,
+  IconSort,
+  IconTimelapse,
+  IconWarning,
+  IconX,
+} from '../Common/Icons';
 import type { ADOTestCase } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { EmptyTestCases } from './EmptyTestCases';
@@ -35,7 +53,7 @@ interface CaseTableProps {
   refreshToken?: number;
 }
 
-type SortField = 'order' | 'id' | 'name' | 'state';
+type SortField = 'order' | 'id' | 'name' | 'state' | 'configuration' | 'outcome';
 type SortOrder = 'asc' | 'desc';
 
 interface SortOption {
@@ -48,6 +66,8 @@ const SORT_OPTIONS: SortOption[] = [
   { label: 'TC Id', field: 'id' },
   { label: 'Test Case Title', field: 'name' },
   { label: 'State', field: 'state' },
+  { label: 'Config', field: 'configuration' },
+  { label: 'Outcome', field: 'outcome' },
 ];
 
 function getStatusBadgeClass(status: string): string {
@@ -63,6 +83,66 @@ function getStatusBadgeClass(status: string): string {
     default:
       return 'badge badge--warning';
   }
+}
+
+function toTitleCaseOutcomeLabel(value: string): string {
+  const normalized = value.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getOutcomeBadgeModel(outcome?: string): {
+  label: string;
+  badgeClass: string;
+  icon: JSX.Element;
+} {
+  const normalized = (outcome ?? '').trim().toLowerCase();
+
+  if (!normalized || normalized === 'unspecified') {
+    return {
+      label: 'Active',
+      badgeClass: 'badge badge--info cases-table__outcome-badge',
+      icon: <IconMotionPlay size={12} />,
+    };
+  }
+
+  if (normalized === 'none') {
+    return {
+      label: 'In Progress',
+      badgeClass: 'badge badge--warning cases-table__outcome-badge',
+      icon: <IconTimelapse size={12} />,
+    };
+  }
+
+  if (normalized === 'passed') {
+    return {
+      label: 'Passed',
+      badgeClass: 'badge badge--success cases-table__outcome-badge',
+      icon: <IconCheckCircle size={12} />,
+    };
+  }
+
+  if (normalized === 'failed') {
+    return {
+      label: 'Failed',
+      badgeClass: 'badge badge--danger cases-table__outcome-badge',
+      icon: <IconError size={12} />,
+    };
+  }
+
+  if (normalized === 'blocked') {
+    return {
+      label: 'Blocked',
+      badgeClass: 'badge badge--warning cases-table__outcome-badge',
+      icon: <IconWarning size={12} />,
+    };
+  }
+
+  return {
+    label: toTitleCaseOutcomeLabel(outcome ?? '') || 'Active',
+    badgeClass: 'badge badge--primary cases-table__outcome-badge',
+    icon: <IconInfo size={12} />,
+  };
 }
 
 /*function normalizeFieldText(value: unknown): string {
@@ -288,6 +368,8 @@ export function CaseTable({
       const matchesSearch = normalizedSearch.length === 0
         || testCase.name.toLowerCase().includes(normalizedSearch)
         || String(testCase.id).includes(normalizedSearch)
+        || (testCase.configurationName?.toLowerCase().includes(normalizedSearch) ?? false)
+        || (testCase.outcome?.toLowerCase().includes(normalizedSearch) ?? false)
         || testCase.assignedTo?.displayName.toLowerCase().includes(normalizedSearch)
         || false;
       return matchesSearch;
@@ -315,6 +397,14 @@ export function CaseTable({
         case 'state':
           aVal = a.state.toLowerCase();
           bVal = b.state.toLowerCase();
+          break;
+        case 'configuration':
+          aVal = (a.configurationName ?? '').toLowerCase();
+          bVal = (b.configurationName ?? '').toLowerCase();
+          break;
+        case 'outcome':
+          aVal = (a.outcome ?? '').toLowerCase();
+          bVal = (b.outcome ?? '').toLowerCase();
           break;
       }
 
@@ -665,6 +755,8 @@ export function CaseTable({
               {renderSortableHeader(SORT_OPTIONS[1], 88)}
               {renderSortableHeader(SORT_OPTIONS[2])}
               {renderSortableHeader(SORT_OPTIONS[3], 140)}
+              {renderSortableHeader(SORT_OPTIONS[4], 180)}
+              {renderSortableHeader(SORT_OPTIONS[5], 140)}
               <th style={{ width: 220 }}>
                 <span>Assigned To</span>
               </th>
@@ -674,7 +766,7 @@ export function CaseTable({
           <tbody>
             {noFilteredData ? (
               <tr>
-                <td colSpan={showSelectionColumn ? 7 : 6}>
+                <td colSpan={showSelectionColumn ? 9 : 8}>
                   <div className="cases-table__no-data">
                     <strong>No data</strong>
                     <span>
@@ -721,6 +813,27 @@ export function CaseTable({
                     <span className={getStatusBadgeClass(testCase.state || 'Unknown')}>
                       {testCase.state || 'Unknown'}
                     </span>
+                  </td>
+                  <td>
+                    <span className="badge badge--neutral cases-table__config-badge">
+                      <span className="cases-table__config-icon" aria-hidden="true">
+                        <IconRuleSettings size={12} />
+                      </span>
+                      <span>{testCase.configurationName || 'Default'}</span>
+                    </span>
+                  </td>
+                  <td>
+                    {(() => {
+                      const outcomeBadge = getOutcomeBadgeModel(testCase.outcome);
+                      return (
+                        <span className={outcomeBadge.badgeClass}>
+                          <span className="cases-table__outcome-icon" aria-hidden="true">
+                            {outcomeBadge.icon}
+                          </span>
+                          <span>{outcomeBadge.label}</span>
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td>
                     <div className="cases-table__assigned-to">

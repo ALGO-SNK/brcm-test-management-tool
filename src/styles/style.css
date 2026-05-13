@@ -20252,3 +20252,53 @@ input[type="radio"] {
     border-color: var(--color-primary);
     color: var(--color-primary);
 }
+
+/* Full-width Automation Repo modal opened from top header action */
+.settings-dock.settings-dock--repo-browser-modal {
+    justify-content: stretch;
+}
+
+.settings-dock.settings-dock--repo-browser-modal .settings-workbench,
+.settings-dock.settings-dock--repo-browser-modal.settings-dock--no-aside .settings-workbench {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+}
+
+.settings-dock.settings-dock--repo-browser-modal .settings-workbench__header {
+    padding-bottom: 10px;
+}
+
+.settings-dock.settings-dock--repo-browser-modal .settings-workbench__subtitle {
+    margin-top: 4px;
+    margin-bottom: 0;
+    max-width: none;
+}
+
+.cases-table__outcome-badge {
+    min-height: 22px;
+    gap: 4px;
+    padding: 0 8px;
+    font-size: 11px;
+}
+
+.cases-table__outcome-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.cases-table__config-badge {
+    min-height: 22px;
+    gap: 4px;
+    padding: 0 8px;
+    font-size: 11px;
+}
+
+.cases-table__config-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}

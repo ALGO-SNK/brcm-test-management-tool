@@ -24,6 +24,14 @@ export function IconRefresh(props: IconProps) {
   return <MaterialIcon name="refresh" {...props} />;
 }
 
+export function IconMotionPlay(props: IconProps) {
+  return <MaterialIcon name="motion_play" {...props} />;
+}
+
+export function IconTimelapse(props: IconProps) {
+  return <MaterialIcon name="timelapse" {...props} />;
+}
+
 export function IconSettings(props: IconProps) {
   return <MaterialIcon name="settings" {...props} />;
 }
@@ -82,6 +90,10 @@ export function IconPlus(props: IconProps) {
 
 export function IconTune(props: IconProps) {
   return <MaterialIcon name="tune" {...props} />;
+}
+
+export function IconRuleSettings(props: IconProps) {
+  return <MaterialIcon name="rule_settings" {...props} />;
 }
 
 export function IconX(props: IconProps) {
@@ -174,4 +186,12 @@ export function IconPushPin(props: IconProps) {
 
 export function IconAttachFile(props: IconProps) {
   return <MaterialIcon name="attach_file" {...props} />;
+}
+
+export function IconSchedule(props: IconProps) {
+  return <MaterialIcon name="schedule" {...props} />;
+}
+
+export function IconBolt(props: IconProps) {
+  return <MaterialIcon name="bolt" {...props} />;
 }

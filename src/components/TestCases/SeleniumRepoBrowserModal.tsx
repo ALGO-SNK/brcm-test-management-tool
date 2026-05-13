@@ -2125,7 +2125,7 @@ export function SeleniumRepoBrowserModal({
           aria-label="Close Selenium repo browser"
         />
       )}
-      <div className={`settings-dock settings-dock--no-aside${embedded ? ' settings-dock--embedded-page' : ''}`}>
+      <div className={`settings-dock settings-dock--no-aside${embedded ? ' settings-dock--embedded-page' : ' settings-dock--repo-browser-modal'}`}>
         <section className="settings-workbench repo-browser">
           <header className="settings-workbench__header">
             <div>

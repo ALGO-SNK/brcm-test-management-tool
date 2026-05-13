@@ -4,10 +4,11 @@ import { PlansList, type ConnectionStatus } from '../TestPlans/PlansList';
 import { DbUpdaterModal } from '../DbUpdater/DbUpdaterModal';
 import { SeleniumRepoBrowserModal } from '../TestCases/SeleniumRepoBrowserModal';
 import type { WorkspaceSettingsValues } from './WorkspaceSettings';
-import { IconDatabase, IconFolderCode } from '../Common/Icons';
+import { IconBolt, IconDatabase, IconSchedule } from '../Common/Icons';
 import type { ADOTestPlan } from '../../types';
+import { useNotification } from '../../context/useNotification';
 
-export type MainWorkspaceSection = 'plans' | 'automation-repo' | 'db-manager';
+export type MainWorkspaceSection = 'plans' | 'schedule-run' | 'automation-repo' | 'db-manager';
 
 interface MainWorkspaceProps {
   section: MainWorkspaceSection;
@@ -16,6 +17,7 @@ interface MainWorkspaceProps {
   onSaveWorkspaceSettings: (values: WorkspaceSettingsValues) => void;
   onSelectPlan: (plan: ADOTestPlan) => void;
   onCreateSuiteForPlan: (plan: ADOTestPlan) => void;
+  onAutomationRepoClick: () => void;
   onSettingsClick: () => void;
   onHelpClick: () => void;
 }
@@ -33,9 +35,9 @@ const WORKSPACE_NAV_ITEMS: WorkspaceNavItem[] = [
     icon: <span className="material-symbols" aria-hidden="true">list_alt</span>,
   },
   {
-    id: 'automation-repo',
-    title: 'Automation Repo',
-    icon: <IconFolderCode size={16} />,
+    id: 'schedule-run',
+    title: 'Schedule Run',
+    icon: <IconSchedule size={16} />,
   },
   {
     id: 'db-manager',
@@ -63,6 +65,7 @@ export function MainWorkspace({
   workspaceSettings,
   onSelectPlan,
   onCreateSuiteForPlan,
+  onAutomationRepoClick,
   onSettingsClick,
   onHelpClick,
 }: MainWorkspaceProps) {
@@ -72,6 +75,7 @@ export function MainWorkspace({
   const projectName = workspaceSettings.projectName.trim() || 'Azure Test Plans';
   const connectionMeta = useMemo(() => getConnectionMeta(connectionStatus), [connectionStatus]);
   const seleniumRepoPath = workspaceSettings.seleniumRepoPath.trim();
+  const { addNotification } = useNotification();
   const handleRefreshPlans = useCallback(() => {
     setPlanRefreshToken((current) => current + 1);
   }, []);
@@ -118,9 +122,44 @@ export function MainWorkspace({
     </section>
   );
 
+  const scheduleRunView = (
+    <section className="settings-panel workspace-hub__empty">
+      <div className="settings-panel__head">
+        <h2 className="settings-panel__title">Schedule Run</h2>
+        <p className="settings-panel__sub">Create and queue scheduled test runs from workspace level.</p>
+      </div>
+      <div className="empty-state">
+        <p className="empty-state__desc">
+          Dummy scheduling area. This will host scheduler rules and run queue configuration.
+        </p>
+        <div className="empty-state__actions">
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={() => addNotification('info', 'Dummy action: scheduled run created.')}
+          >
+            <IconSchedule size={15} />
+            Schedule Run
+          </button>
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            onClick={() => addNotification('info', 'Dummy action: quick schedule test run created.')}
+          >
+            <IconBolt size={15} />
+            Quick Schedule
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+
   const content = (() => {
     if (section === 'plans') {
       return plansView;
+    }
+    if (section === 'schedule-run') {
+      return scheduleRunView;
     }
     if (section === 'db-manager') {
       return <DbUpdaterModal workspaceSettings={workspaceSettings} onClose={() => onSectionChange('plans')} embedded />;
@@ -154,6 +193,7 @@ export function MainWorkspace({
     <div className="app-shell">
       <Header
         title={projectName}
+        onAutomationRepoClick={onAutomationRepoClick}
         onSettingsClick={onSettingsClick}
         onHelpClick={onHelpClick}
       />

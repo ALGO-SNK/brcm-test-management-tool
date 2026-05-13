@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  IconBranch,
   IconChevronRight,
   IconFolder,
   IconFolderOpen,
   IconMoreHoriz,
+  IconMotionPlay,
   IconPlus,
+  IconRefresh,
 } from '../Common/Icons';
 import type { ADOTestSuite } from '../../types';
 import azureLogo from '../../assets/azure.png';
@@ -17,6 +20,9 @@ interface SuiteTreeNodeProps {
   onSelect: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
   onAddSuite: (suite: ADOTestSuite) => void;
   onAddTestCase: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
+  onRunSuiteInCi: (suite: ADOTestSuite) => void;
+  onRunSuiteOnDevicesInBatches: (suite: ADOTestSuite) => void;
+  onRerunFailedTests: (suite: ADOTestSuite) => void;
   onOpenInAdo: (suite: ADOTestSuite) => void;
   filterText: string;
   expandSignal: number;
@@ -40,6 +46,9 @@ export function SuiteTreeNode({
   onSelect,
   onAddSuite,
   onAddTestCase,
+  onRunSuiteInCi,
+  onRunSuiteOnDevicesInBatches,
+  onRerunFailedTests,
   onOpenInAdo,
   filterText,
   expandSignal,
@@ -180,6 +189,42 @@ export function SuiteTreeNode({
                 className="action-menu__item"
                 onClick={() => {
                   setMenuOpen(false);
+                  onRunSuiteInCi(suite);
+                }}
+              >
+                <IconMotionPlay size={16} />
+                <span>Run in CI Pipeline</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="action-menu__item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onRunSuiteOnDevicesInBatches(suite);
+                }}
+              >
+                <IconBranch size={16} />
+                <span>Run in CI (Batched)</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="action-menu__item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onRerunFailedTests(suite);
+                }}
+              >
+                <IconRefresh size={16} />
+                <span>Rerun Failed Tests</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="action-menu__item"
+                onClick={() => {
+                  setMenuOpen(false);
                   onOpenInAdo(suite);
                 }}
                 disabled={!canOpenInAdo}
@@ -204,6 +249,9 @@ export function SuiteTreeNode({
               onSelect={onSelect}
               onAddSuite={onAddSuite}
               onAddTestCase={onAddTestCase}
+              onRunSuiteInCi={onRunSuiteInCi}
+              onRunSuiteOnDevicesInBatches={onRunSuiteOnDevicesInBatches}
+              onRerunFailedTests={onRerunFailedTests}
               onOpenInAdo={onOpenInAdo}
               filterText={filterText}
               expandSignal={expandSignal}

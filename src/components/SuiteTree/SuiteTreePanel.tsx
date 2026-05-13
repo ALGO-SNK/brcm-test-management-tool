@@ -15,6 +15,7 @@ import {
   getCachedSuitesForPlan,
 } from '../../services/adoApi';
 import { useNotification } from '../../context/useNotification';
+import { divideIntoBalancedBatches } from '../../utils/divideIntoBalancedBatches';
 
 interface SuiteTreePanelProps {
   plan: ADOTestPlan;
@@ -168,6 +169,7 @@ export function SuiteTreePanel({
       && workspaceSettings.projectName.trim()
       && workspaceSettings.patToken.trim(),
   );
+  const DEFAULT_DEVICE_BATCH_SIZE = 10;
 
   useEffect(() => {
     let active = true;
@@ -282,6 +284,30 @@ export function SuiteTreePanel({
 
   const handleAddTestCase = (suite: ADOTestSuite, path: ADOTestSuite[]) => {
     onAddTestCase(suite, path);
+  };
+
+  const handleRunSuiteInCi = (suite: ADOTestSuite) => {
+    addNotification('info', `Dummy action: "${suite.name}" queued for CI pipeline execution.`);
+  };
+
+  const handleRunSuiteOnDevicesInBatches = (suite: ADOTestSuite) => {
+    const testCaseCount = Math.max(0, Number(suite.testCaseCount ?? 0));
+    const suiteItems = Array.from({ length: testCaseCount }, (_, index) => index + 1);
+    const batches = divideIntoBalancedBatches(suiteItems, DEFAULT_DEVICE_BATCH_SIZE);
+
+    if (testCaseCount === 0) {
+      addNotification('info', `Dummy action: "${suite.name}" has no test cases for CI batched run.`);
+      return;
+    }
+
+    addNotification(
+      'info',
+      `Dummy action: "${suite.name}" queued for CI batched run with ${batches.length} balanced batches (${testCaseCount} cases, max ${DEFAULT_DEVICE_BATCH_SIZE} per batch).`,
+    );
+  };
+
+  const handleRerunFailedTests = (suite: ADOTestSuite) => {
+    addNotification('info', `Dummy action: rerun failed tests requested for "${suite.name}".`);
   };
 
   const handleCreateSuite = async () => {
@@ -418,6 +444,9 @@ export function SuiteTreePanel({
                   onSelect={onSelectSuite}
                   onAddSuite={(selectedSuite) => openCreateSuiteModal(selectedSuite)}
                   onAddTestCase={handleAddTestCase}
+                  onRunSuiteInCi={handleRunSuiteInCi}
+                  onRunSuiteOnDevicesInBatches={handleRunSuiteOnDevicesInBatches}
+                  onRerunFailedTests={handleRerunFailedTests}
                   onOpenInAdo={handleOpenSuiteInAdo}
                   filterText={filterText}
                   expandSignal={expandSignal}

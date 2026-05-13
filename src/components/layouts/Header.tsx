@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 /*import { useThemeContext } from '../../context/useThemeContext';*/
 import {
+  IconFolderCode,
   IconHelp,
  /* IconMoon,
   IconSearch,*/
@@ -14,6 +15,7 @@ interface HeaderProps {
   contextTitle?: string;
   contextMeta?: string;
   actions?: ReactNode;
+  onAutomationRepoClick?: () => void;
   onHelpClick?: () => void;
   onSettingsClick?: () => void;
 }
@@ -23,10 +25,12 @@ export function Header({
   contextTitle,
   contextMeta,
   actions,
+  onAutomationRepoClick,
   onHelpClick,
   onSettingsClick,
 }: HeaderProps) {
  /* const { mode, toggleTheme } = useThemeContext();*/
+  const canOpenAutomationRepo = typeof onAutomationRepoClick === 'function';
   const canOpenHelp = typeof onHelpClick === 'function';
   const canOpenSettings = typeof onSettingsClick === 'function';
   /*const isLightMode = mode === 'light';*/
@@ -66,6 +70,16 @@ export function Header({
         >
           {isLightMode ? <IconMoon size={18} /> : <IconSun size={18} />}
         </button>*/}
+        {canOpenAutomationRepo && (
+          <button
+            className="app-header__icon-btn"
+            onClick={onAutomationRepoClick}
+            disabled={!canOpenAutomationRepo}
+            title="Open Automation Repo"
+          >
+            <IconFolderCode size={18} />
+          </button>
+        )}
         {(typeof onHelpClick === 'function') && (
           <button
             className="app-header__icon-btn"

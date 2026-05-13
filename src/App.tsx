@@ -8,6 +8,7 @@ import { Toast } from './components/Common/Toast';
 import { TestCaseList } from './components/pages/TestCaseList';
 import { HelpGuide } from './components/pages/HelpGuide';
 import { MainWorkspace, type MainWorkspaceSection } from './components/pages/MainWorkspace';
+import { SeleniumRepoBrowserModal } from './components/TestCases/SeleniumRepoBrowserModal';
 import {
   DEFAULT_DB_MAPPINGS,
   WorkspaceSettings,
@@ -203,6 +204,7 @@ export function App() {
   const [planSuiteCreateRequest, setPlanSuiteCreateRequest] = useState(0);
   const [workspaceSettings, setWorkspaceSettings] =
     useState<WorkspaceSettingsValues>(getInitialWorkspaceSettings);
+  const [isAutomationRepoModalOpen, setIsAutomationRepoModalOpen] = useState(false);
 
   const handleSelectPlan = (plan: ADOTestPlan) => {
     setSelectedPlan(plan);
@@ -252,6 +254,13 @@ export function App() {
     }
     setCurrentPage('help');
   };
+  const handleAutomationRepoClick = () => {
+    if (!workspaceSettings.seleniumRepoPath.trim()) {
+      handleSettingsClick();
+      return;
+    }
+    setIsAutomationRepoModalOpen(true);
+  };
   const handleBackFromSettings = () => setCurrentPage(previousPage);
   const handleBackFromHelp = () => setCurrentPage(previousPage);
   const handleSaveWorkspaceSettings = (values: WorkspaceSettingsValues) => {
@@ -280,6 +289,7 @@ export function App() {
               onSaveWorkspaceSettings={handleSaveWorkspaceSettings}
               onSelectPlan={handleSelectPlan}
               onCreateSuiteForPlan={handleCreateSuiteForPlan}
+              onAutomationRepoClick={handleAutomationRepoClick}
               onSettingsClick={handleSettingsClick}
               onHelpClick={handleHelpClick}
             />
@@ -295,6 +305,7 @@ export function App() {
               onSelectCase={handleSelectCase}
               onBackToCases={handleBackToCases}
               onBackToPlan={handleBackToPlan}
+              onAutomationRepoClick={handleAutomationRepoClick}
               onHelpClick={handleHelpClick}
               onSettingsClick={handleSettingsClick}
               workspaceSettings={workspaceSettings}
@@ -312,6 +323,14 @@ export function App() {
 
           {isHelpOpen && (
             <HelpGuide onBack={handleBackFromHelp} />
+          )}
+
+          {isAutomationRepoModalOpen && workspaceSettings.seleniumRepoPath.trim() && (
+            <SeleniumRepoBrowserModal
+              repoPath={workspaceSettings.seleniumRepoPath.trim()}
+              onClose={() => setIsAutomationRepoModalOpen(false)}
+              workspaceSettings={workspaceSettings}
+            />
           )}
 
 
