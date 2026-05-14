@@ -36,3 +36,4 @@ mock/
 .vs
 .claude
 tools/netcoredbg/
+C# Scheduler/

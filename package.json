@@ -70,6 +70,10 @@
       "main.cjs",
       "preload.cjs"
     ],
+    "asarUnpack": [
+      "**/node_modules/sqlite3/**",
+      "**/node_modules/sqlite/**"
+    ],
     "extraResources": [
       {
         "from": "tools/netcoredbg",
@@ -84,6 +88,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
+    "test:api:get": "node scripts/api-get-smoke-test.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "bump-version": "node scripts/bump-version.cjs",

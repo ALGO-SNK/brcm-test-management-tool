@@ -36,6 +36,24 @@ export interface WorkspaceSettingsValues {
   testRunSettingsPath: string;
   testRunLogger: string;
   testRunUsePatAsEnv: boolean;
+  schedulerEnabled: boolean;
+  schedulerTimezone: string;
+  schedulerPollSeconds: number;
+  schedulerDefaultCron: string;
+  schedulerDefaultMode: SchedulerRunMode;
+  schedulerDefaultBatchSize: number;
+  schedulerMaxHistoryRows: number;
+  schedulerBuildDefinitionId: number;
+  schedulerDefaultConfigurationId: number;
+  schedulerDefaultPointConfigurationId: number;
+  schedulerReleaseDefinitionIdsCsv: string;
+  schedulerWorldPayRegressionBranch: string;
+  schedulerWorldPayKanbanBranch: string;
+  schedulerSagePayTestPlanId: number;
+  schedulerWorldPayTestPlanId: number;
+  schedulerMappingWorkItemIds: string;
+  schedulerExcludedSuiteIdsCsv: string;
+  schedulerExcludedSuiteNamePatterns: string;
 }
 
 export interface WorkspaceDbMapping {
@@ -53,14 +71,20 @@ interface WorkspaceSettingsProps {
   embedded?: boolean;
 }
 
-type SettingsSection = 'appearance' | 'workspace' | 'db-mappings' | 'action-catalog' | 'about';
+type SettingsSection = 'appearance' | 'workspace' | 'scheduler' | 'db-mappings' | 'action-catalog' | 'about';
 type ValidationState = 'idle' | 'success' | 'error';
+type SchedulerRunMode = 'nightly_full' | 'selected_suite' | 'failed_only_rerun';
 
 const API_VERSION_OPTIONS = ['7.2', '7.1', '7.0', '6.0'];
 const TEST_LOGGER_OPTIONS = [
   'console;verbosity=detailed',
   'console;verbosity=normal',
   'console;verbosity=minimal',
+];
+const SCHEDULER_MODE_OPTIONS: Array<{ value: SchedulerRunMode; label: string }> = [
+  { value: 'nightly_full', label: 'Nightly Full' },
+  { value: 'selected_suite', label: 'Selected Suites' },
+  { value: 'failed_only_rerun', label: 'Failed-Only Re-run' },
 ];
 const AUTO_DETECT_MAX_DEPTH = 4;
 export const DEFAULT_DB_MAPPINGS: WorkspaceDbMapping[] = [
@@ -129,6 +153,32 @@ export function normalizeWorkspaceDbMappings(
 
 function isAppFontMode(value: string): value is AppFontMode {
   return APP_FONT_OPTIONS.some((item) => item.value === value);
+}
+
+function isValidSchedulerCron(value: string): boolean {
+  const parts = value.trim().split(/\s+/);
+  if (parts.length !== 6) return false;
+  return parts.every((token) => token.length > 0);
+}
+
+function isValidTimezone(value: string): boolean {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: value.trim() }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseDefinitionIdsCsv(value: string): number[] {
+  return Array.from(
+    new Set(
+      value
+        .split(/[,\s]+/)
+        .map((token) => Number(token.trim()))
+        .filter((token) => Number.isInteger(token) && token > 0),
+    ),
+  );
 }
 
 async function scanDirectoryFiles(
@@ -403,6 +453,8 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
     ? 'Appearance'
     : section === 'workspace'
       ? 'Workspace'
+      : section === 'scheduler'
+        ? 'Scheduler'
       : section === 'db-mappings'
         ? 'DB Mappings'
         : section === 'action-catalog'
@@ -412,6 +464,8 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
     ? 'Theme modes, accent palettes, and typography controls.'
     : section === 'workspace'
     ? 'Manage Azure connection settings and the Selenium repository location.'
+    : section === 'scheduler'
+    ? 'Control scheduler runtime and orchestration defaults used by Schedule Run.'
     : section === 'db-mappings'
     ? 'Map Azure test plans to local SQLite DB files for targeted refreshes.'
     : section === 'action-catalog'
@@ -529,12 +583,51 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
     return null;
   };
 
+  const validateSchedulerSettings = (): string | null => {
+    if (!form.schedulerTimezone.trim() || !isValidTimezone(form.schedulerTimezone)) {
+      return 'Scheduler timezone must be a valid IANA timezone (for example: Asia/Kolkata).';
+    }
+    if (!isValidSchedulerCron(form.schedulerDefaultCron)) {
+      return 'Scheduler default cron must contain 6 fields (sec min hour day month weekday).';
+    }
+    if (!Number.isInteger(form.schedulerPollSeconds) || form.schedulerPollSeconds < 10 || form.schedulerPollSeconds > 3600) {
+      return 'Scheduler poll interval must be between 10 and 3600 seconds.';
+    }
+    if (!Number.isInteger(form.schedulerDefaultBatchSize) || form.schedulerDefaultBatchSize < 1 || form.schedulerDefaultBatchSize > 200) {
+      return 'Scheduler batch size must be between 1 and 200.';
+    }
+    if (!Number.isInteger(form.schedulerMaxHistoryRows) || form.schedulerMaxHistoryRows < 50 || form.schedulerMaxHistoryRows > 5000) {
+      return 'Scheduler history retention must be between 50 and 5000 rows.';
+    }
+    if (!Number.isInteger(form.schedulerBuildDefinitionId) || form.schedulerBuildDefinitionId <= 0) {
+      return 'Build definition ID must be a positive number.';
+    }
+    if (!Number.isInteger(form.schedulerDefaultConfigurationId) || form.schedulerDefaultConfigurationId <= 0) {
+      return 'Run configuration ID must be a positive number.';
+    }
+    if (!Number.isInteger(form.schedulerDefaultPointConfigurationId) || form.schedulerDefaultPointConfigurationId <= 0) {
+      return 'Default point configuration ID must be a positive number.';
+    }
+    if (parseDefinitionIdsCsv(form.schedulerReleaseDefinitionIdsCsv).length === 0) {
+      return 'Release definition pool must contain at least one numeric definition ID.';
+    }
+    if (!form.schedulerWorldPayRegressionBranch.trim() || !form.schedulerWorldPayKanbanBranch.trim()) {
+      return 'WorldPay branch mappings are required.';
+    }
+    return null;
+  };
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const dbMappings = normalizeWorkspaceDbMappings(form);
     const validationError = validateDbMappings(dbMappings);
     if (validationError) {
       addNotification('error', validationError);
+      return;
+    }
+    const schedulerValidationError = validateSchedulerSettings();
+    if (schedulerValidationError) {
+      addNotification('error', schedulerValidationError);
       return;
     }
 
@@ -733,6 +826,14 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
               >
                 <span className="settings-nav-item__title">Workspace</span>
                 <span className="settings-nav-item__sub">Connection and API defaults</span>
+              </button>
+              <button
+                type="button"
+                className={sectionItemClassName('scheduler')}
+                onClick={() => setSection('scheduler')}
+              >
+                <span className="settings-nav-item__title">Scheduler</span>
+                <span className="settings-nav-item__sub">Polling, defaults, and retention</span>
               </button>
               <button
                 type="button"
@@ -1089,6 +1190,355 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
                       </div>
                     </div>
 
+                  </form>
+                </section>
+              )}
+
+              {section === 'scheduler' && (
+                <section className="settings-pane">
+                  <div className="settings-chip-row">
+                    <div className="settings-summary-chip">
+                      <span>Scheduler</span>
+                      <strong>{form.schedulerEnabled ? 'Enabled' : 'Disabled'}</strong>
+                    </div>
+                    <div className="settings-summary-chip">
+                      <span>Timezone</span>
+                      <strong>{form.schedulerTimezone.trim() || 'Not set'}</strong>
+                    </div>
+                    <div className="settings-summary-chip">
+                      <span>Poll Interval</span>
+                      <strong>{form.schedulerPollSeconds}s</strong>
+                    </div>
+                    <div className="settings-summary-chip">
+                      <span>History Limit</span>
+                      <strong>{form.schedulerMaxHistoryRows}</strong>
+                    </div>
+                    <div className="settings-summary-chip">
+                      <span>Build Def</span>
+                      <strong>{form.schedulerBuildDefinitionId}</strong>
+                    </div>
+                  </div>
+
+                  <form className="settings-form" onSubmit={handleSubmit}>
+                    <div className="settings-panel">
+                      <div className="settings-panel__head">
+                        <h3 className="settings-panel__title">Scheduler Runtime</h3>
+                        <p className="settings-panel__sub">
+                          Controls how frequently the desktop scheduler evaluates due jobs and how much run history it keeps in SQLite.
+                        </p>
+                      </div>
+                      <div className="settings-field-grid">
+                        <label className="settings-field settings-field--full" htmlFor="schedulerEnabled">
+                          <span className="settings-field__label">Enable scheduler engine</span>
+                          <div className="settings-toggle-row">
+                            <button
+                              id="schedulerEnabled"
+                              type="button"
+                              className={`settings-toggle${form.schedulerEnabled ? ' is-active' : ''}`}
+                              role="switch"
+                              aria-checked={form.schedulerEnabled}
+                              onClick={() => setForm((prev) => ({ ...prev, schedulerEnabled: !prev.schedulerEnabled }))}
+                            >
+                              <span className="settings-toggle__thumb" />
+                            </button>
+                            <span className="settings-field__hint">Runs from the Schedule Run workspace view.</span>
+                          </div>
+                        </label>
+                        <label className="settings-field" htmlFor="schedulerTimezone">
+                          <span className="settings-field__label">Default timezone</span>
+                          <input
+                            id="schedulerTimezone"
+                            className="settings-input"
+                            value={form.schedulerTimezone}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerTimezone: event.target.value }))}
+                            placeholder="Asia/Kolkata"
+                          />
+                        </label>
+                        <label className="settings-field" htmlFor="schedulerPollSeconds">
+                          <span className="settings-field__label">Poll interval (seconds)</span>
+                          <input
+                            id="schedulerPollSeconds"
+                            className="settings-input"
+                            type="number"
+                            min={10}
+                            max={3600}
+                            step={1}
+                            value={form.schedulerPollSeconds}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              setForm((prev) => ({
+                                ...prev,
+                                schedulerPollSeconds: Number.isFinite(value) ? Math.max(10, Math.min(3600, Math.round(value))) : 10,
+                              }));
+                            }}
+                          />
+                        </label>
+                        <label className="settings-field" htmlFor="schedulerMaxHistoryRows">
+                          <span className="settings-field__label">Run history retention</span>
+                          <input
+                            id="schedulerMaxHistoryRows"
+                            className="settings-input"
+                            type="number"
+                            min={50}
+                            max={5000}
+                            step={10}
+                            value={form.schedulerMaxHistoryRows}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              setForm((prev) => ({
+                                ...prev,
+                                schedulerMaxHistoryRows: Number.isFinite(value) ? Math.max(50, Math.min(5000, Math.round(value))) : 500,
+                              }));
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="settings-panel">
+                      <div className="settings-panel__head">
+                        <h3 className="settings-panel__title">Schedule Defaults</h3>
+                        <p className="settings-panel__sub">
+                          Pre-fills new schedule forms and drives run batching defaults.
+                        </p>
+                      </div>
+                      <div className="settings-field-grid">
+                        <label className="settings-field settings-field--full" htmlFor="schedulerDefaultCron">
+                          <span className="settings-field__label">Default cron expression (6 fields)</span>
+                          <input
+                            id="schedulerDefaultCron"
+                            className="settings-input"
+                            value={form.schedulerDefaultCron}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerDefaultCron: event.target.value }))}
+                            placeholder="0 0 1 * * *"
+                          />
+                        </label>
+                        <label className="settings-field" htmlFor="schedulerDefaultMode">
+                          <span className="settings-field__label">Default run mode</span>
+                          <select
+                            id="schedulerDefaultMode"
+                            className="settings-input"
+                            value={form.schedulerDefaultMode}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerDefaultMode: event.target.value as SchedulerRunMode }))}
+                          >
+                            {SCHEDULER_MODE_OPTIONS.map((modeOption) => (
+                              <option key={modeOption.value} value={modeOption.value}>
+                                {modeOption.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="settings-field" htmlFor="schedulerDefaultBatchSize">
+                          <span className="settings-field__label">Default batch size</span>
+                          <input
+                            id="schedulerDefaultBatchSize"
+                            className="settings-input"
+                            type="number"
+                            min={1}
+                            max={200}
+                            step={1}
+                            value={form.schedulerDefaultBatchSize}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              setForm((prev) => ({
+                                ...prev,
+                                schedulerDefaultBatchSize: Number.isFinite(value) ? Math.max(1, Math.min(200, Math.round(value))) : 10,
+                              }));
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="settings-actions">
+                        <button type="submit" className="btn btn--primary btn--sm">
+                          <IconSave size={16} />
+                          Save scheduler settings
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="settings-panel">
+                      <div className="settings-panel__head">
+                        <h3 className="settings-panel__title">Run Orchestration Defaults</h3>
+                        <p className="settings-panel__sub">
+                          Build lookup, point filtering, CD pool, and WorldPay branch mapping used for Schedule Run preflight.
+                        </p>
+                      </div>
+                      <div className="settings-field-grid">
+                        <label className="settings-field" htmlFor="schedulerBuildDefinitionId">
+                          <span className="settings-field__label">Build definition ID</span>
+                          <input
+                            id="schedulerBuildDefinitionId"
+                            className="settings-input"
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={form.schedulerBuildDefinitionId}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              setForm((prev) => ({
+                                ...prev,
+                                schedulerBuildDefinitionId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 260,
+                              }));
+                            }}
+                          />
+                        </label>
+                        <label className="settings-field" htmlFor="schedulerDefaultConfigurationId">
+                          <span className="settings-field__label">Run configuration ID</span>
+                          <input
+                            id="schedulerDefaultConfigurationId"
+                            className="settings-input"
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={form.schedulerDefaultConfigurationId}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              setForm((prev) => ({
+                                ...prev,
+                                schedulerDefaultConfigurationId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 34,
+                              }));
+                            }}
+                          />
+                        </label>
+                        <label className="settings-field" htmlFor="schedulerDefaultPointConfigurationId">
+                          <span className="settings-field__label">Base point configuration ID</span>
+                          <input
+                            id="schedulerDefaultPointConfigurationId"
+                            className="settings-input"
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={form.schedulerDefaultPointConfigurationId}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              setForm((prev) => ({
+                                ...prev,
+                                schedulerDefaultPointConfigurationId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 33,
+                              }));
+                            }}
+                          />
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="schedulerReleaseDefinitionIdsCsv">
+                          <span className="settings-field__label">Release definition pool (CSV)</span>
+                          <input
+                            id="schedulerReleaseDefinitionIdsCsv"
+                            className="settings-input"
+                            value={form.schedulerReleaseDefinitionIdsCsv}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerReleaseDefinitionIdsCsv: event.target.value }))}
+                            placeholder="24,25,26,27,..."
+                          />
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="schedulerWorldPayRegressionBranch">
+                          <span className="settings-field__label">WorldPay Regression branch</span>
+                          <input
+                            id="schedulerWorldPayRegressionBranch"
+                            className="settings-input"
+                            value={form.schedulerWorldPayRegressionBranch}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerWorldPayRegressionBranch: event.target.value }))}
+                            placeholder="refs/heads/regression_worldpay"
+                          />
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="schedulerWorldPayKanbanBranch">
+                          <span className="settings-field__label">WorldPay Kanban branch</span>
+                          <input
+                            id="schedulerWorldPayKanbanBranch"
+                            className="settings-input"
+                            value={form.schedulerWorldPayKanbanBranch}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerWorldPayKanbanBranch: event.target.value }))}
+                            placeholder="refs/heads/kanban_worldpay"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="settings-panel">
+                      <div className="settings-panel__head">
+                        <h3 className="settings-panel__title">Test Plan & Mapping Configuration</h3>
+                        <p className="settings-panel__sub">
+                          Map test plans and work items used for suite selection and release mapping.
+                        </p>
+                      </div>
+                      <div className="settings-field-grid">
+                        <label className="settings-field" htmlFor="schedulerSagePayTestPlanId">
+                          <span className="settings-field__label">Sage Pay test plan ID</span>
+                          <input
+                            id="schedulerSagePayTestPlanId"
+                            className="settings-input"
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={form.schedulerSagePayTestPlanId}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              setForm((prev) => ({
+                                ...prev,
+                                schedulerSagePayTestPlanId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 78806,
+                              }));
+                            }}
+                          />
+                        </label>
+                        <label className="settings-field" htmlFor="schedulerWorldPayTestPlanId">
+                          <span className="settings-field__label">WorldPay test plan ID</span>
+                          <input
+                            id="schedulerWorldPayTestPlanId"
+                            className="settings-input"
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={form.schedulerWorldPayTestPlanId}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              setForm((prev) => ({
+                                ...prev,
+                                schedulerWorldPayTestPlanId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 139145,
+                              }));
+                            }}
+                          />
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="schedulerMappingWorkItemIds">
+                          <span className="settings-field__label">Mapping work item IDs (CSV)</span>
+                          <input
+                            id="schedulerMappingWorkItemIds"
+                            className="settings-input"
+                            value={form.schedulerMappingWorkItemIds}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerMappingWorkItemIds: event.target.value }))}
+                            placeholder="136838,147829"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="settings-panel">
+                      <div className="settings-panel__head">
+                        <h3 className="settings-panel__title">Failed Suite Rerun Exclusions</h3>
+                        <p className="settings-panel__sub">
+                          Exclude specific suites and suite name patterns from the 5 AM failed-suite rerun.
+                        </p>
+                      </div>
+                      <div className="settings-field-grid">
+                        <label className="settings-field settings-field--full" htmlFor="schedulerExcludedSuiteIdsCsv">
+                          <span className="settings-field__label">Excluded suite IDs (CSV)</span>
+                          <input
+                            id="schedulerExcludedSuiteIdsCsv"
+                            className="settings-input"
+                            value={form.schedulerExcludedSuiteIdsCsv}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerExcludedSuiteIdsCsv: event.target.value }))}
+                            placeholder="123,456,789"
+                          />
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="schedulerExcludedSuiteNamePatterns">
+                          <span className="settings-field__label">Excluded suite name patterns</span>
+                          <input
+                            id="schedulerExcludedSuiteNamePatterns"
+                            className="settings-input"
+                            value={form.schedulerExcludedSuiteNamePatterns}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerExcludedSuiteNamePatterns: event.target.value }))}
+                            placeholder="initial,intial"
+                          />
+                        </label>
+                      </div>
+                    </div>
                   </form>
                 </section>
               )}

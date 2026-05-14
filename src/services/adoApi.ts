@@ -326,6 +326,10 @@ function buildBaseWebUrl(settings: WorkspaceConnectionSettings): string {
   return `https://dev.azure.com/${organization}/${project}`;
 }
 
+function getUrlCandidates(settings: WorkspaceConnectionSettings): string[] {
+  return buildBaseApiUrls(settings).map((url) => url.replace('/_apis', ''));
+}
+
 export function buildPlanAdoUrl(settings: WorkspaceConnectionSettings, planId: number): string {
   return `${buildBaseWebUrl(settings)}/_testPlans/define?planId=${encodeURIComponent(String(planId))}`;
 }
@@ -551,6 +555,12 @@ function normalizePriority(value: unknown): number {
   return rounded;
 }
 
+function normalizeOptionalNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function normalizeFieldText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return String(value);
@@ -570,6 +580,10 @@ interface ADOTestPointListItem {
 interface CasePointSummary {
   configurationName?: string;
   outcome?: string;
+  pointBreakdown?: Array<{
+    configurationName?: string;
+    outcome?: string;
+  }>;
 }
 
 function buildJoinedDistinctValues(values: string[]): string | undefined {
@@ -581,18 +595,39 @@ function buildJoinedDistinctValues(values: string[]): string | undefined {
 }
 
 function mapPointSummaryByCaseId(response: ADOListResponse<ADOTestPointListItem>): Map<number, CasePointSummary> {
-  const grouped = new Map<number, { configurations: string[]; outcomes: string[] }>();
+  const grouped = new Map<number, {
+    configurations: string[];
+    outcomes: string[];
+    pointRows: Array<{ configurationName?: string; outcome?: string }>;
+    seenPointRows: Set<string>;
+  }>();
 
   for (const point of response.value ?? []) {
     const numericCaseId = Number(point?.testCase?.id);
     if (!Number.isInteger(numericCaseId) || numericCaseId <= 0) continue;
 
-    const current = grouped.get(numericCaseId) ?? { configurations: [], outcomes: [] };
+    const current = grouped.get(numericCaseId) ?? {
+      configurations: [],
+      outcomes: [],
+      pointRows: [],
+      seenPointRows: new Set<string>(),
+    };
     const configurationName = normalizeFieldText(point?.configuration?.name).trim();
     if (configurationName) current.configurations.push(configurationName);
 
     const outcome = normalizeFieldText(point?.outcome).trim();
     if (outcome) current.outcomes.push(outcome);
+
+    const normalizedConfiguration = configurationName || undefined;
+    const normalizedOutcome = outcome || undefined;
+    const pointRowKey = `${normalizedConfiguration ?? ''}::${normalizedOutcome ?? ''}`;
+    if (!current.seenPointRows.has(pointRowKey)) {
+      current.seenPointRows.add(pointRowKey);
+      current.pointRows.push({
+        configurationName: normalizedConfiguration,
+        outcome: normalizedOutcome,
+      });
+    }
 
     grouped.set(numericCaseId, current);
   }
@@ -602,6 +637,7 @@ function mapPointSummaryByCaseId(response: ADOListResponse<ADOTestPointListItem>
     mapped.set(caseId, {
       configurationName: buildJoinedDistinctValues(value.configurations),
       outcome: buildJoinedDistinctValues(value.outcomes),
+      pointBreakdown: value.pointRows.length > 0 ? value.pointRows : undefined,
     });
   }
   return mapped;
@@ -688,11 +724,8 @@ function mapTestCaseListItemToCase(
   const lastUpdatedBy = toIdentity(fields['System.ChangedBy'] ?? fields['Microsoft.VSTS.Common.ActivatedBy']);
   const pointAssignment = normalizedItem.pointAssignments?.[0];
   const tester = toIdentity(pointAssignment?.tester ?? undefined);
-  const order = typeof normalizedItem.sequenceNumber === 'number'
-    ? normalizedItem.sequenceNumber
-    : typeof normalizedItem.order === 'number'
-      ? normalizedItem.order
-      : undefined;
+  const order = normalizeOptionalNumber(normalizedItem.order)
+    ?? normalizeOptionalNumber(normalizedItem.sequenceNumber);
 
   const selfHref = normalizedItem.links?._self?.href ?? fallbackSelfHref;
   const workItemHref = normalizedItem.links?.workItem?.href;
@@ -995,6 +1028,7 @@ export async function fetchTestCasesForSuite(
             ...item,
             configurationName: pointSummary.configurationName ?? item.configurationName,
             outcome: pointSummary.outcome ?? item.outcome,
+            pointBreakdown: pointSummary.pointBreakdown ?? item.pointBreakdown,
           };
         })
         .map((item) => {
@@ -1167,30 +1201,55 @@ export async function updateTestCase(
 
   // Build PATCH operations using "add" operation (more reliable than "replace")
   const operations: Array<{ op: string; path: string; value?: unknown }> = [];
+  const setFieldValue = (path: string, value: unknown) => {
+    const operation = { op: 'add', path, value };
+    const existingIndex = operations.findIndex((item) => item.path === path);
+    if (existingIndex >= 0) {
+      operations[existingIndex] = operation;
+      return;
+    }
+    operations.push(operation);
+  };
 
   // Only add operations for fields that have values
   if (updateData.title && updateData.title.trim()) {
-    operations.push({ op: 'add', path: '/fields/System.Title', value: updateData.title });
+    setFieldValue('/fields/System.Title', updateData.title);
   }
   if (updateData.status) {
-    operations.push({ op: 'add', path: '/fields/System.State', value: updateData.status });
+    setFieldValue('/fields/System.State', updateData.status);
   }
   if (updateData.method) {
-    operations.push({ op: 'add', path: '/fields/Custom.TestingMethod', value: updateData.method });
+    setFieldValue('/fields/Custom.TestingMethod', updateData.method);
   }
   if (updateData.region) {
-    operations.push({ op: 'add', path: '/fields/Custom.ApplicableRegions', value: updateData.region });
+    setFieldValue('/fields/Custom.ApplicableRegions', updateData.region);
   }
   if (updateData.execProcess) {
-    operations.push({ op: 'add', path: '/fields/Custom.ExecutiveProcess', value: updateData.execProcess });
+    setFieldValue('/fields/Custom.ExecutiveProcess', updateData.execProcess);
   }
   if (updateData.pltpProcess) {
-    operations.push({ op: 'add', path: '/fields/Custom.PLTPProcessArea', value: updateData.pltpProcess });
+    setFieldValue('/fields/Custom.PLTPProcessArea', updateData.pltpProcess);
   }
   if (updateData.initialSteps !== undefined && updateData.initialSteps.trim()) {
-    operations.push({ op: 'add', path: '/fields/Custom.InitialStep', value: updateData.initialSteps });
+    setFieldValue('/fields/Custom.InitialStep', updateData.initialSteps);
   }
   const removeAutomationAssociation = updateData.removeAutomationAssociation === true;
+  const hasAutomationAssociationPayload = Object.prototype.hasOwnProperty.call(updateData, 'automatedTestName')
+    || Object.prototype.hasOwnProperty.call(updateData, 'automatedTestStorage')
+    || Object.prototype.hasOwnProperty.call(updateData, 'automatedTestId');
+  const automationStatus = typeof updateData.automationStatus === 'string'
+    ? updateData.automationStatus.trim().toLowerCase()
+    : '';
+  const isAddingAutomationAssociation = !removeAutomationAssociation
+    && (hasAutomationAssociationPayload || automationStatus === 'automated');
+
+  if (isAddingAutomationAssociation) {
+    setFieldValue('/fields/Custom.AutomationTestID', caseId);
+    setFieldValue('/fields/Custom.TestingMethod', 'Selenium');
+  } else if (removeAutomationAssociation) {
+    operations.push({ op: 'remove', path: '/fields/Custom.AutomationTestID' });
+    setFieldValue('/fields/Custom.TestingMethod', 'Manual');
+  }
 
   if (Object.prototype.hasOwnProperty.call(updateData, 'automatedTestName')) {
     operations.push({
@@ -1206,30 +1265,30 @@ export async function updateTestCase(
       ...(removeAutomationAssociation ? {} : { value: typeof updateData.automatedTestStorage === 'string' ? updateData.automatedTestStorage : '' }),
     });
   }
-  if (Object.prototype.hasOwnProperty.call(updateData, 'automatedTestType')) {
-    operations.push({
-      op: removeAutomationAssociation ? 'remove' : 'add',
-      path: '/fields/Microsoft.VSTS.TCM.AutomatedTestType',
-      ...(removeAutomationAssociation ? {} : { value: typeof updateData.automatedTestType === 'string' ? updateData.automatedTestType : '' }),
-    });
-  }
+  // if (Object.prototype.hasOwnProperty.call(updateData, 'automatedTestType')) {
+  //   operations.push({
+  //     op: removeAutomationAssociation ? 'remove' : 'add',
+  //     path: '/fields/Microsoft.VSTS.TCM.AutomatedTestType',
+  //     ...(removeAutomationAssociation ? {} : { value: typeof updateData.automatedTestType === 'string' ? updateData.automatedTestType : '' }),
+  //   });
+  // }
   if (Object.prototype.hasOwnProperty.call(updateData, 'automatedTestId')) {
     operations.push({
       op: removeAutomationAssociation ? 'remove' : 'add',
       path: '/fields/Microsoft.VSTS.TCM.AutomatedTestId',
-      ...(removeAutomationAssociation ? {} : { value: typeof updateData.automatedTestId === 'string' ? updateData.automatedTestId : '' }),
+      ...(removeAutomationAssociation ? {} : { value: typeof updateData.automatedTestId === 'string' ? updateData.automatedTestId : '' })
     });
   }
+
   if (Object.prototype.hasOwnProperty.call(updateData, 'automationStatus')) {
-    operations.push({
-      op: 'add',
-      path: '/fields/Microsoft.VSTS.TCM.AutomationStatus',
-      value: typeof updateData.automationStatus === 'string' ? updateData.automationStatus : '',
-    });
+    setFieldValue(
+      '/fields/Microsoft.VSTS.TCM.AutomationStatus',
+      typeof updateData.automationStatus === 'string' ? updateData.automationStatus : '',
+    );
   }
   // Always update steps XML if provided (most important field)
   if (updateData.stepsXml) {
-    operations.push({ op: 'add', path: '/fields/Microsoft.VSTS.TCM.Steps', value: updateData.stepsXml });
+    setFieldValue('/fields/Microsoft.VSTS.TCM.Steps', updateData.stepsXml);
   }
 
   if (operations.length === 0) {
@@ -1404,6 +1463,39 @@ async function postJson<T>(
   if (!response.ok) {
     const body = await response.text();
     throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body));
+  }
+
+  return (await response.json()) as T;
+}
+
+async function putJson<T>(
+  url: string,
+  patToken: string,
+  body: unknown,
+  contentType: string = 'application/json',
+  action = 'update data',
+): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType,
+        Accept: 'application/json',
+        Authorization: `Basic ${toBasicAuthToken(patToken)}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    throw new Error(`We couldn't ${action}. Check your connection and Azure DevOps settings, then try again.`);
+  }
+
+  if (!response.ok) {
+    const body_text = await response.text();
+    throw new ADORequestError(response.status, buildAdoErrorMessage(action, response.status, body_text));
   }
 
   return (await response.json()) as T;
@@ -1659,4 +1751,823 @@ export async function createTestCase(
   }
 
   throw new Error("We couldn't create the test case. Please try again.");
+}
+
+export interface ADOBuildSummary {
+  id: number;
+  buildNumber: string;
+  sourceBranch: string;
+  sourceVersion: string;
+  status: string;
+  result: string;
+  queueTime: string;
+  repositoryId: string;
+  repositoryType: string;
+}
+
+export interface ADOTestConfigurationSummary {
+  id: number;
+  name: string;
+}
+
+export interface ADOTestPointSummary {
+  id: number;
+  caseId: number | null;
+  outcome: string;
+  state: string;
+  configurationId: number | null;
+  configurationName: string;
+  automationStatus: string;
+  isAutomated: boolean;
+}
+
+export interface ADOReleaseDefinitionAvailability {
+  definitionId: number;
+  definitionName: string;
+  environmentStatus: string;
+  latestReleaseId: number | null;
+  isAvailable: boolean;
+}
+
+export interface ADOSuiteReleaseMapping {
+  testSuiteId: number;
+  testSuiteName: string;
+  releaseDefinitionId: number | null;
+  releaseDefinitionName: string;
+  assignedPerson: string;
+  tag: string;
+  priority: number | null;
+}
+
+interface ADOBuildListItem {
+  id?: unknown;
+  buildNumber?: unknown;
+  sourceBranch?: unknown;
+  sourceVersion?: unknown;
+  status?: unknown;
+  result?: unknown;
+  queueTime?: unknown;
+  repository?: {
+    id?: unknown;
+    type?: unknown;
+  };
+}
+
+interface ADOTestConfigurationListItem {
+  id?: unknown;
+  name?: unknown;
+}
+
+function buildReleaseBaseApiUrls(settings: WorkspaceConnectionSettings): string[] {
+  const organization = normalizeOrganization(settings.organization);
+  const project = encodeURIComponent(normalizeProjectName(settings.projectName));
+  return Array.from(new Set([
+    `https://vsrm.dev.azure.com/${organization}/${project}/_apis/release`,
+    `https://${organization}.vsrm.visualstudio.com/${project}/_apis/release`,
+  ]));
+}
+
+function isReleaseEnvironmentBusy(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+  return normalized === 'inprogress' || normalized === 'queued' || normalized === 'notstarted';
+}
+
+function normalizePointAutomationStatus(point: Record<string, unknown>): string {
+  const workItemProperties = Array.isArray(point.workItemProperties)
+    ? point.workItemProperties
+    : [];
+  for (const property of workItemProperties) {
+    const candidate = property as {
+      workItem?: {
+        key?: unknown;
+        value?: unknown;
+      };
+    };
+    const key = String(candidate.workItem?.key ?? '').trim();
+    if (key === 'Microsoft.VSTS.TCM.AutomationStatus') {
+      return String(candidate.workItem?.value ?? '').trim();
+    }
+  }
+  return '';
+}
+
+function parseSuiteReleaseMappingsXml(xml: string): ADOSuiteReleaseMapping[] {
+  const source = xml.trim();
+  if (!source) return [];
+  if (typeof DOMParser === 'undefined') return [];
+
+  const parser = new DOMParser();
+  const documentNode = parser.parseFromString(source, 'application/xml');
+  if (documentNode.querySelector('parsererror')) {
+    return [];
+  }
+
+  const rows = Array.from(documentNode.getElementsByTagName('dataRow'));
+  const mappings: ADOSuiteReleaseMapping[] = [];
+
+  for (const row of rows) {
+    // ADO stores rows as <kvp key="..." value="..."/> children of <dataRow>.
+    // Accept legacy <dataItem> spelling too so test fixtures don't break.
+    const items = [
+      ...Array.from(row.getElementsByTagName('kvp')),
+      ...Array.from(row.getElementsByTagName('dataItem')),
+    ];
+    const mapping: ADOSuiteReleaseMapping = {
+      testSuiteId: 0,
+      testSuiteName: '',
+      releaseDefinitionId: null,
+      releaseDefinitionName: '',
+      assignedPerson: '',
+      tag: '',
+      priority: null,
+    };
+
+    for (const item of items) {
+      const key = item.getAttribute('key')?.trim() ?? '';
+      const value = item.getAttribute('value')?.trim() ?? '';
+      if (!key) continue;
+      switch (key.toLowerCase()) {
+        case 'testsuiteid': {
+          const parsed = Number(value);
+          if (Number.isInteger(parsed) && parsed > 0) {
+            mapping.testSuiteId = parsed;
+          }
+          break;
+        }
+        case 'testsuitename':
+          mapping.testSuiteName = value;
+          break;
+        case 'releasedefinitionid': {
+          const parsed = Number(value);
+          mapping.releaseDefinitionId = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+          break;
+        }
+        case 'releasedefinitionname':
+          mapping.releaseDefinitionName = value;
+          break;
+        case 'assignedperson':
+          mapping.assignedPerson = value;
+          break;
+        case 'tag':
+          mapping.tag = value;
+          break;
+        case 'priority': {
+          const parsed = Number(value);
+          mapping.priority = Number.isInteger(parsed) ? parsed : null;
+          break;
+        }
+        default:
+          break;
+      }
+    }
+
+    if (mapping.testSuiteId > 0) {
+      mappings.push(mapping);
+    }
+  }
+
+  return mappings;
+}
+
+async function fetchWorkItemFields(
+  settings: WorkspaceConnectionSettings,
+  workItemId: number,
+  fields: string[],
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  assertSettings(settings);
+  const encodedWorkItemId = encodeURIComponent(String(workItemId));
+  const apiVersion = normalizeApiVersion(settings.apiVersion);
+  const candidateUrls = buildBaseApiUrls(settings).map((baseApi) => (
+    `${baseApi}/wit/workitems/${encodedWorkItemId}?fields=${encodeURIComponent(fields.join(','))}&api-version=${encodeURIComponent(apiVersion)}`
+  ));
+
+  let lastError: unknown = null;
+  for (const url of candidateUrls) {
+    try {
+      const workItem = await fetchJsonWithAction<ADOWorkItem>(
+        url,
+        settings.patToken.trim(),
+        'load mapping work item',
+        signal,
+      );
+      return workItem.fields ?? {};
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('load mapping work item', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load mapping work item', lastError);
+  }
+
+  throw new Error("We couldn't load mapping work item.");
+}
+
+export async function fetchSuiteReleaseMappings(
+  settings: WorkspaceConnectionSettings,
+  workItemIds: number[],
+  signal?: AbortSignal,
+): Promise<ADOSuiteReleaseMapping[]> {
+  const ids = Array.from(
+    new Set(
+      workItemIds
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item > 0),
+    ),
+  );
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const mappingLists = await Promise.all(
+    ids.map(async (workItemId) => {
+      const fields = await fetchWorkItemFields(settings, workItemId, ['Microsoft.VSTS.TCM.Parameters'], signal);
+      const xmlValue = String(fields['Microsoft.VSTS.TCM.Parameters'] ?? '').trim();
+      if (!xmlValue) return [];
+      return parseSuiteReleaseMappingsXml(xmlValue);
+    }),
+  );
+
+  return mappingLists.flat();
+}
+
+export async function fetchBuilds(
+  settings: WorkspaceConnectionSettings,
+  buildDefinitionId = 260,
+  top = 50,
+  signal?: AbortSignal,
+): Promise<ADOBuildSummary[]> {
+  assertSettings(settings);
+  const apiVersion = normalizeApiVersion(settings.apiVersion);
+  const candidateUrls = buildBaseApiUrls(settings).map(
+    (baseApi) => (
+      `${baseApi}/build/builds`
+      + `?definitions=${encodeURIComponent(String(buildDefinitionId))}`
+      + `&$top=${encodeURIComponent(String(Math.max(1, Math.min(250, Math.round(top)))))}` 
+      + `&api-version=${encodeURIComponent(apiVersion)}`
+    ),
+  );
+
+  let lastError: unknown = null;
+  for (const url of candidateUrls) {
+    try {
+      const response = await fetchJsonWithAction<ADOListResponse<ADOBuildListItem>>(url, settings.patToken.trim(), 'load builds', signal);
+      return (response.value ?? [])
+        .map((build) => ({
+          id: Number(build.id),
+          buildNumber: normalizeFieldText(build.buildNumber).trim(),
+          sourceBranch: normalizeFieldText(build.sourceBranch).trim(),
+          sourceVersion: normalizeFieldText(build.sourceVersion).trim(),
+          status: normalizeFieldText(build.status).trim(),
+          result: normalizeFieldText(build.result).trim(),
+          queueTime: normalizeFieldText(build.queueTime).trim(),
+          repositoryId: normalizeFieldText(build.repository?.id).trim(),
+          repositoryType: normalizeFieldText(build.repository?.type).trim(),
+        }))
+        .filter((build) => Number.isInteger(build.id) && build.id > 0);
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('load builds', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load builds', lastError);
+  }
+  throw new Error("We couldn't load builds. Please try again.");
+}
+
+export async function fetchTestConfigurations(
+  settings: WorkspaceConnectionSettings,
+  signal?: AbortSignal,
+): Promise<ADOTestConfigurationSummary[]> {
+  assertSettings(settings);
+  const apiVersion = normalizeApiVersion(settings.apiVersion);
+  const candidateUrls = buildBaseApiUrls(settings).map(
+    (baseApi) => `${baseApi}/testplan/configurations?api-version=${encodeURIComponent(apiVersion)}`,
+  );
+
+  let lastError: unknown = null;
+  for (const url of candidateUrls) {
+    try {
+      const response = await fetchJsonWithAction<ADOListResponse<ADOTestConfigurationListItem>>(
+        url,
+        settings.patToken.trim(),
+        'load test configurations',
+        signal,
+      );
+      return (response.value ?? [])
+        .map((configuration) => ({
+          id: Number(configuration.id),
+          name: normalizeFieldText(configuration.name).trim() || `Configuration ${configuration.id ?? ''}`.trim(),
+        }))
+        .filter((configuration) => Number.isInteger(configuration.id) && configuration.id > 0);
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('load test configurations', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load test configurations', lastError);
+  }
+  throw new Error("We couldn't load test configurations. Please try again.");
+}
+
+export async function fetchTestPointsForSuite(
+  settings: WorkspaceConnectionSettings,
+  planId: number,
+  suiteId: number,
+  signal?: AbortSignal,
+): Promise<ADOTestPointSummary[]> {
+  assertSettings(settings);
+  const apiVersion = normalizeApiVersion(settings.apiVersion);
+  const encodedPlanId = encodeURIComponent(String(planId));
+  const encodedSuiteId = encodeURIComponent(String(suiteId));
+  const candidateUrls: string[] = [];
+
+  for (const baseApi of buildBaseApiUrls(settings)) {
+    candidateUrls.push(
+      `${baseApi}/test/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/points?api-version=${encodeURIComponent(apiVersion)}`,
+    );
+    candidateUrls.push(
+      `${baseApi}/testplan/Plans/${encodedPlanId}/Suites/${encodedSuiteId}/TestPoint?includePointDetails=true&returnIdentityRef=true&api-version=${encodeURIComponent(apiVersion)}`,
+    );
+  }
+
+  let lastError: unknown = null;
+  for (const url of Array.from(new Set(candidateUrls))) {
+    try {
+      const response = await fetchJsonWithAction<ADOListResponse<Record<string, unknown>>>(url, settings.patToken.trim(), 'load test points', signal);
+      return (response.value ?? [])
+        .map((item) => {
+          const point = item as Record<string, unknown>;
+          const configuration = (point.configuration ?? {}) as Record<string, unknown>;
+          const results = (point.results ?? {}) as Record<string, unknown>;
+          const automationStatus = normalizePointAutomationStatus(point);
+          const isAutomatedByStatus = automationStatus ? !/^not automated$/i.test(automationStatus) : true;
+          const isAutomatedFlag = typeof point.isAutomated === 'boolean' ? point.isAutomated : isAutomatedByStatus;
+
+          const outcome = normalizeFieldText(point.outcome ?? results.outcome).trim();
+          const state = normalizeFieldText(point.state ?? results.state).trim();
+          const caseId = Number((point.testCase as { id?: unknown } | undefined)?.id);
+          const configurationId = Number(configuration.id);
+
+          return {
+            id: Number(point.id),
+            caseId: Number.isInteger(caseId) && caseId > 0 ? caseId : null,
+            outcome,
+            state,
+            configurationId: Number.isInteger(configurationId) && configurationId > 0 ? configurationId : null,
+            configurationName: normalizeFieldText(configuration.name).trim(),
+            automationStatus,
+            isAutomated: Boolean(isAutomatedFlag),
+          };
+        })
+        .filter((point) => Number.isInteger(point.id) && point.id > 0);
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('load test points', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load test points', lastError);
+  }
+  throw new Error("We couldn't load test points. Please try again.");
+}
+
+export async function fetchReleaseDefinitionAvailability(
+  settings: WorkspaceConnectionSettings,
+  definitionIds: number[],
+  signal?: AbortSignal,
+): Promise<ADOReleaseDefinitionAvailability[]> {
+  assertSettings(settings);
+  const uniqueDefinitionIds = Array.from(
+    new Set(definitionIds.filter((id) => Number.isInteger(id) && id > 0)),
+  );
+  if (uniqueDefinitionIds.length === 0) {
+    return [];
+  }
+
+  const apiVersion = normalizeApiVersion(settings.apiVersion);
+  const definitionIdsCsv = uniqueDefinitionIds.join(',');
+  let lastError: unknown = null;
+
+  for (const releaseBase of buildReleaseBaseApiUrls(settings)) {
+    try {
+      const definitionsUrl = `${releaseBase}/definitions?definitionIdFilter=${encodeURIComponent(definitionIdsCsv)}&$expand=LastRelease,Environments&api-version=${encodeURIComponent(apiVersion)}`;
+      const definitionsResponse = await fetchJsonWithAction<ADOListResponse<Record<string, unknown>>>(
+        definitionsUrl,
+        settings.patToken.trim(),
+        'load release definitions',
+        signal,
+      );
+
+      const definitions = (definitionsResponse.value ?? [])
+        .map((definition) => ({
+          id: Number(definition.id),
+          name: normalizeFieldText(definition.name).trim() || `CD ${definition.id ?? ''}`.trim(),
+        }))
+        .filter((definition) => Number.isInteger(definition.id) && definition.id > 0);
+
+      const details = await Promise.all(
+        definitions.map(async (definition) => {
+          const releasesUrl = `${releaseBase}/releases?definitionId=${definition.id}&$top=1&$expand=environments&api-version=${encodeURIComponent(apiVersion)}`;
+          const releasesResponse = await fetchJsonWithAction<ADOListResponse<Record<string, unknown>>>(
+            releasesUrl,
+            settings.patToken.trim(),
+            'load release availability',
+            signal,
+          );
+          const latestRelease = (releasesResponse.value ?? [])[0];
+          const environments = Array.isArray(latestRelease?.environments)
+            ? latestRelease.environments as Array<Record<string, unknown>>
+            : [];
+          const primaryEnvironment = environments[0] ?? {};
+          const environmentStatus = normalizeFieldText(primaryEnvironment.status).trim();
+          const releaseId = Number(latestRelease?.id);
+          const latestReleaseId = Number.isInteger(releaseId) && releaseId > 0 ? releaseId : null;
+          return {
+            definitionId: definition.id,
+            definitionName: definition.name,
+            environmentStatus,
+            latestReleaseId,
+            isAvailable: !environmentStatus || !isReleaseEnvironmentBusy(environmentStatus),
+          } satisfies ADOReleaseDefinitionAvailability;
+        }),
+      );
+
+      const byId = new Map(details.map((item) => [item.definitionId, item]));
+      return uniqueDefinitionIds.map((definitionId) => (
+        byId.get(definitionId) ?? {
+          definitionId,
+          definitionName: `CD ${definitionId}`,
+          environmentStatus: '',
+          latestReleaseId: null,
+          isAvailable: true,
+        }
+      ));
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('load release definitions', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load release definitions', lastError);
+  }
+  throw new Error("We couldn't load release definition availability. Please try again.");
+}
+
+/**
+ * Fetch work items containing test suite mapping XML
+ */
+export async function fetchTestSuiteMappings(
+  settings: WorkspaceConnectionSettings,
+  workItemIds: number[],
+  signal?: AbortSignal,
+): Promise<Record<number, string>> {
+  if (!workItemIds.length) {
+    return {};
+  }
+
+  const urlCandidates = getUrlCandidates(settings);
+  let lastError: unknown;
+
+  for (const baseUrl of urlCandidates) {
+    try {
+      const mappings: Record<number, string> = {};
+
+      await Promise.all(
+        workItemIds.map(async (workItemId) => {
+          const url = `${baseUrl}/_apis/wit/workitems/${workItemId}?api-version=${encodeURIComponent(settings.apiVersion)}`;
+          const response = await fetchJsonWithAction<ADOWorkItem>(
+            url,
+            settings.patToken.trim(),
+            'load work item mapping',
+            signal,
+          );
+
+          const parametersField = response.fields?.['Microsoft.VSTS.TCM.Parameters'];
+          if (typeof parametersField === 'string') {
+            mappings[workItemId] = parametersField;
+          }
+        }),
+      );
+
+      return mappings;
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('load work item mappings', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load work item mappings', lastError);
+  }
+  throw new Error("We couldn't load work item mappings. Please try again.");
+}
+
+/**
+ * Fetch detailed information about a test run (pass/fail counts)
+ */
+export async function fetchTestRunDetails(
+  settings: WorkspaceConnectionSettings,
+  runId: number,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  const urlCandidates = getUrlCandidates(settings);
+  let lastError: unknown;
+
+  for (const baseUrl of urlCandidates) {
+    try {
+      const testBase = `${baseUrl}/_apis/test`;
+      const url = `${testBase}/Runs/${runId}?api-version=${encodeURIComponent(settings.apiVersion)}`;
+      return await fetchJsonWithAction<Record<string, unknown>>(
+        url,
+        settings.patToken.trim(),
+        'load test run details',
+        signal,
+      );
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('load test run details', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load test run details', lastError);
+  }
+  throw new Error("We couldn't load test run details. Please try again.");
+}
+
+/**
+ * Fetch detailed information about a release
+ */
+export async function fetchReleaseDetails(
+  settings: WorkspaceConnectionSettings,
+  releaseId: number,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  const urlCandidates = getUrlCandidates(settings);
+  let lastError: unknown;
+
+  for (const baseUrl of urlCandidates) {
+    try {
+      const releaseBase = `${baseUrl}/_apis/release`;
+      const url = `${releaseBase}/releases/${releaseId}?$expand=environments&api-version=${encodeURIComponent(settings.apiVersion)}`;
+      return await fetchJsonWithAction<Record<string, unknown>>(
+        url,
+        settings.patToken.trim(),
+        'load release details',
+        signal,
+      );
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('load release details', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load release details', lastError);
+  }
+  throw new Error("We couldn't load release details. Please try again.");
+}
+
+/**
+ * Create a test run with selected test point IDs
+ */
+export async function createTestRun(
+  settings: WorkspaceConnectionSettings,
+  planId: number,
+  suiteId: number,
+  pointIds: number[],
+  _configurationId: number,
+  _signal?: AbortSignal,
+): Promise<{ id: number }> {
+  const urlCandidates = getUrlCandidates(settings);
+  let lastError: unknown;
+
+  for (const baseUrl of urlCandidates) {
+    try {
+      const testBase = `${baseUrl}/_apis/test`;
+      const url = `${testBase}/runs?api-version=${encodeURIComponent(settings.apiVersion)}`;
+
+      const payload = {
+        name: `Run for suite ${suiteId}`,
+        automated: true,
+        testPlanId: planId,
+        testSuiteId: suiteId,
+        pointIds,
+      };
+
+      const response = await postJson<{ id: number }>(
+        url,
+        settings.patToken.trim(),
+        payload,
+        'application/json',
+        'create test run',
+      );
+
+      return { id: response.id };
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('create test run', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('create test run', lastError);
+  }
+  throw new Error("We couldn't create the test run. Please try again.");
+}
+
+/**
+ * Create a release from a release definition
+ */
+export async function createRelease(
+  settings: WorkspaceConnectionSettings,
+  definitionId: number,
+  buildId: number,
+  buildNumber: string,
+  _signal?: AbortSignal,
+): Promise<{ id: number }> {
+  const urlCandidates = getUrlCandidates(settings);
+  let lastError: unknown;
+
+  for (const baseUrl of urlCandidates) {
+    try {
+      const releaseBase = `${baseUrl}/_apis/release`;
+      const url = `${releaseBase}/releases?api-version=${encodeURIComponent(settings.apiVersion)}`;
+
+      const payload = {
+        definitionId,
+        description: `Release for build ${buildNumber}`,
+        artifacts: [
+          {
+            alias: 'drop',
+            instanceReference: {
+              id: buildId,
+            },
+          },
+        ],
+        isDraft: false,
+        reason: 'continuousIntegration',
+      };
+
+      const response = await postJson<{ id: number }>(
+        url,
+        settings.patToken.trim(),
+        payload,
+        'application/json',
+        'create release',
+      );
+
+      return { id: response.id };
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('create release', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('create release', lastError);
+  }
+  throw new Error("We couldn't create the release. Please try again.");
+}
+
+/**
+ * Attach a test run ID to a release environment by updating release variables
+ */
+export async function attachTestRunToRelease(
+  settings: WorkspaceConnectionSettings,
+  releaseId: number,
+  _environmentId: number,
+  testRunId: number,
+  _signal?: AbortSignal,
+): Promise<void> {
+  const urlCandidates = getUrlCandidates(settings);
+  let lastError: unknown;
+
+  for (const baseUrl of urlCandidates) {
+    try {
+      const releaseBase = `${baseUrl}/_apis/release`;
+      const url = `${releaseBase}/releases/${releaseId}?api-version=${encodeURIComponent(settings.apiVersion)}`;
+
+      // Fetch current release to get its structure
+      const currentRelease = await fetchJsonWithAction<Record<string, unknown>>(
+        url,
+        settings.patToken.trim(),
+        'fetch release for attachment',
+      );
+
+      // Update with test run ID in variables
+      const payload = {
+        ...currentRelease,
+        variables: {
+          ...((currentRelease.variables as Record<string, unknown>) || {}),
+          RunId: { value: String(testRunId) },
+        },
+      };
+
+      await putJson<Record<string, unknown>>(
+        url,
+        settings.patToken.trim(),
+        payload,
+        'application/json',
+        'attach test run to release',
+      );
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('attach test run to release', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('attach test run to release', lastError);
+  }
+  throw new Error("We couldn't attach the test run to the release. Please try again.");
+}
+
+/**
+ * Start a release environment deployment
+ */
+export async function startReleaseEnvironment(
+  settings: WorkspaceConnectionSettings,
+  releaseId: number,
+  environmentId: number,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _signal?: AbortSignal,
+): Promise<void> {
+  const urlCandidates = getUrlCandidates(settings);
+  let lastError: unknown;
+
+  for (const baseUrl of urlCandidates) {
+    try {
+      const releaseBase = `${baseUrl}/_apis/release`;
+      const url = `${releaseBase}/releases/${releaseId}/environments/${environmentId}?api-version=${encodeURIComponent(settings.apiVersion)}`;
+
+      // Convert operations object to array of patches for patchJson
+      const operations = [
+        {
+          op: 'replace',
+          path: '/variables/ReleaseStatus',
+          value: { value: 'InProgress' },
+        },
+      ];
+      await patchJson<Record<string, unknown>>(
+        url,
+        settings.patToken.trim(),
+        operations,
+        'start release environment',
+      );
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('start release environment', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('start release environment', lastError);
+  }
+  throw new Error("We couldn't start the release environment. Please try again.");
 }

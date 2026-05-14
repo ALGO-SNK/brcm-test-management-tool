@@ -143,6 +143,42 @@ contextBridge.exposeInMainWorld('desktop', {
       ipcRenderer.removeListener('desktop:db-updater-progress', listener);
     };
   },
+  getSchedulerConfig() {
+    return ipcRenderer.invoke('desktop:get-scheduler-config');
+  },
+  syncSchedulerConfig(config) {
+    return ipcRenderer.invoke('desktop:sync-scheduler-config', config);
+  },
+  listSchedulerSchedules() {
+    return ipcRenderer.invoke('desktop:list-scheduler-schedules');
+  },
+  createSchedulerSchedule(payload) {
+    return ipcRenderer.invoke('desktop:create-scheduler-schedule', payload);
+  },
+  updateSchedulerSchedule(scheduleId, payload) {
+    return ipcRenderer.invoke('desktop:update-scheduler-schedule', scheduleId, payload);
+  },
+  deleteSchedulerSchedule(scheduleId) {
+    return ipcRenderer.invoke('desktop:delete-scheduler-schedule', scheduleId);
+  },
+  runSchedulerScheduleNow(scheduleId) {
+    return ipcRenderer.invoke('desktop:run-scheduler-schedule-now', scheduleId);
+  },
+  listSchedulerRunLogs(limit) {
+    return ipcRenderer.invoke('desktop:list-scheduler-run-logs', limit);
+  },
+  queueSchedulerRunRequest(payload) {
+    return ipcRenderer.invoke('desktop:queue-scheduler-run-request', payload);
+  },
+  upsertReleaseLog(payload) {
+    return ipcRenderer.invoke('desktop:upsert-release-log', payload);
+  },
+  listReleaseLogs(limit) {
+    return ipcRenderer.invoke('desktop:list-release-logs', limit);
+  },
+  listPendingReleaseLogs() {
+    return ipcRenderer.invoke('desktop:list-pending-release-logs');
+  },
   readTextFile(targetPath) {
     return ipcRenderer.invoke('desktop:read-text-file', targetPath);
   },

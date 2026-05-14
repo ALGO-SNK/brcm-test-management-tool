@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
   IconArrowDownward,
   IconArrowUpward,
@@ -9,9 +9,9 @@ import {
   IconError,
   IconInfo,
   IconMotionPlay,
+  IconAnalytics,
   IconMoreHoriz,
   IconRefresh,
-  IconRuleSettings,
   IconSearch,
   IconSort,
   IconTimelapse,
@@ -22,7 +22,7 @@ import type { ADOTestCase } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import { EmptyTestCases } from './EmptyTestCases';
 import { CreateTestCaseForm } from './CreateTestCaseForm';
-import { buildWorkItemAdoUrl, deleteTestCase, fetchTestCasesForSuite, getCachedTestCasesForSuite, createTestCase } from '../../services/adoApi';
+import { buildWorkItemAdoUrl, deleteTestCase, fetchTestCaseDetail, fetchTestCasesForSuite, getCachedTestCasesForSuite, createTestCase } from '../../services/adoApi';
 import { buildTestCaseData } from '../../utils/testCaseBuilder';
 import { useNotification } from '../../context/useNotification';
 import azureLogo from '../../assets/azure.png';
@@ -53,7 +53,7 @@ interface CaseTableProps {
   refreshToken?: number;
 }
 
-type SortField = 'order' | 'id' | 'name' | 'state' | 'configuration' | 'outcome';
+type SortField = 'order' | 'id' | 'name' | 'state';
 type SortOrder = 'asc' | 'desc';
 
 interface SortOption {
@@ -66,8 +66,6 @@ const SORT_OPTIONS: SortOption[] = [
   { label: 'TC Id', field: 'id' },
   { label: 'Test Case Title', field: 'name' },
   { label: 'State', field: 'state' },
-  { label: 'Config', field: 'configuration' },
-  { label: 'Outcome', field: 'outcome' },
 ];
 
 function getStatusBadgeClass(status: string): string {
@@ -94,7 +92,7 @@ function toTitleCaseOutcomeLabel(value: string): string {
 function getOutcomeBadgeModel(outcome?: string): {
   label: string;
   badgeClass: string;
-  icon: JSX.Element;
+  icon: ReactElement;
 } {
   const normalized = (outcome ?? '').trim().toLowerCase();
 
@@ -143,6 +141,101 @@ function getOutcomeBadgeModel(outcome?: string): {
     badgeClass: 'badge badge--primary cases-table__outcome-badge',
     icon: <IconInfo size={12} />,
   };
+}
+
+interface OutcomeChartSlice {
+  key: string;
+  label: string;
+  count: number;
+  badgeClass: string;
+  color: string;
+}
+
+interface DonutSegment {
+  key: string;
+  startAngle: number;
+  endAngle: number;
+  value: number;
+  label: string;
+  count: number;
+  color: string;
+  percentage: number;
+  path: string;
+}
+
+interface OutcomeDetailRow {
+  rowKey: string;
+  order: number | null;
+  id: number;
+  title: string;
+  configurationName?: string;
+  outcome?: string;
+}
+
+interface OutcomePointRow {
+  configurationName?: string;
+  outcome?: string;
+}
+
+function polarToCartesian(cx: number, cy: number, radius: number, angleInDegrees: number) {
+  const radians = (angleInDegrees * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians),
+  };
+}
+
+function describeDonutArc(
+  cx: number,
+  cy: number,
+  innerRadius: number,
+  outerRadius: number,
+  startAngle: number,
+  endAngle: number,
+): string {
+  const outerStart = polarToCartesian(cx, cy, outerRadius, startAngle);
+  const outerEnd = polarToCartesian(cx, cy, outerRadius, endAngle);
+  const innerEnd = polarToCartesian(cx, cy, innerRadius, endAngle);
+  const innerStart = polarToCartesian(cx, cy, innerRadius, startAngle);
+  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerStart.x} ${innerStart.y}`,
+    'Z',
+  ].join(' ');
+}
+
+function getOutcomeChartColor(badgeClass: string): string {
+  if (badgeClass.includes('badge--success')) return 'var(--color-success)';
+  if (badgeClass.includes('badge--danger')) return 'var(--color-danger)';
+  if (badgeClass.includes('badge--warning')) return 'var(--color-warning)';
+  if (badgeClass.includes('badge--info')) return 'var(--color-info, var(--color-primary))';
+  if (badgeClass.includes('badge--primary')) return 'var(--color-primary)';
+  return 'var(--color-text-muted)';
+}
+
+function getUniqueOutcomePointRows(testCase: ADOTestCase): OutcomePointRow[] {
+  const sourceRows = Array.isArray(testCase.pointBreakdown) && testCase.pointBreakdown.length > 0
+    ? testCase.pointBreakdown
+    : [{ configurationName: testCase.configurationName, outcome: testCase.outcome }];
+
+  const seen = new Set<string>();
+  return sourceRows.reduce<OutcomePointRow[]>((rows, row) => {
+    const configurationName = (row.configurationName ?? '').trim();
+    const outcome = (row.outcome ?? '').trim();
+    const key = `${configurationName.toLowerCase()}::${outcome.toLowerCase()}`;
+
+    if (seen.has(key)) return rows;
+    seen.add(key);
+    rows.push({
+      configurationName: configurationName || undefined,
+      outcome: outcome || undefined,
+    });
+    return rows;
+  }, []);
 }
 
 /*function normalizeFieldText(value: unknown): string {
@@ -194,6 +287,9 @@ export function CaseTable({
   const [rowActionMenuCoords, setRowActionMenuCoords] = useState<{ top: number; left: number } | null>(null);
   const [rowCloneDraft, setRowCloneDraft] = useState<CreateTestCaseDraft | null>(null);
   const [rowCloneSourceCase, setRowCloneSourceCase] = useState<CloneSourceMeta | null>(null);
+  const [cloningCaseId, setCloningCaseId] = useState<number | null>(null);
+  const [isOutcomeChartOpen, setIsOutcomeChartOpen] = useState(false);
+  const [activeOutcomeKey, setActiveOutcomeKey] = useState<string | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const { addNotification } = useNotification();
 
@@ -210,17 +306,31 @@ export function CaseTable({
     setIsCreateMode(true);
   };
 
-  const handleCloneFromRow = (testCase: ADOTestCase) => {
+  const handleCloneFromRow = async (testCase: ADOTestCase) => {
+    if (!workspaceReady) {
+      addNotification('error', 'Configure Organization, Project, and PAT in Settings before cloning.');
+      return;
+    }
+
+    setOpenRowActionCaseId(null);
+    setCloningCaseId(testCase.id);
     try {
-      const draft = buildCloneDraftFromTestCase(testCase);
+      const detailedCase = await fetchTestCaseDetail(
+        workspaceSettings,
+        testCase.id,
+        testCase._links?.workItem?.href ?? testCase._links?.self?.href,
+        testCase,
+      );
+      const draft = buildCloneDraftFromTestCase(detailedCase);
       setRowCloneDraft(draft);
-      setRowCloneSourceCase({ id: testCase.id, title: testCase.name });
-      setOpenRowActionCaseId(null);
+      setRowCloneSourceCase({ id: detailedCase.id, title: detailedCase.name });
       setIsCreateMode(true);
       onCreateTitleChange?.(draft.formData.title ?? '');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to prepare clone draft.';
       addNotification('error', message);
+    } finally {
+      setCloningCaseId(null);
     }
   };
 
@@ -361,6 +471,21 @@ export function CaseTable({
     };
   }, [openRowActionCaseId]);
 
+  useEffect(() => {
+    if (!isOutcomeChartOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOutcomeChartOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOutcomeChartOpen]);
+
   const filteredCases = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -398,14 +523,6 @@ export function CaseTable({
           aVal = a.state.toLowerCase();
           bVal = b.state.toLowerCase();
           break;
-        case 'configuration':
-          aVal = (a.configurationName ?? '').toLowerCase();
-          bVal = (b.configurationName ?? '').toLowerCase();
-          break;
-        case 'outcome':
-          aVal = (a.outcome ?? '').toLowerCase();
-          bVal = (b.outcome ?? '').toLowerCase();
-          break;
       }
 
       if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
@@ -413,6 +530,79 @@ export function CaseTable({
       return 0;
     });
   }, [filteredCases, sortField, sortOrder]);
+
+  const outcomeChartSlices = useMemo<OutcomeChartSlice[]>(() => {
+    const grouped = new Map<string, OutcomeChartSlice>();
+
+    filteredCases.forEach((testCase) => {
+      getUniqueOutcomePointRows(testCase).forEach((row) => {
+        const normalizedOutcome = (row.outcome ?? '').trim().toLowerCase() || 'unspecified';
+        const outcomeBadge = getOutcomeBadgeModel(row.outcome);
+        const existing = grouped.get(normalizedOutcome);
+        if (existing) {
+          existing.count += 1;
+          return;
+        }
+        grouped.set(normalizedOutcome, {
+          key: normalizedOutcome,
+          label: outcomeBadge.label,
+          count: 1,
+          badgeClass: outcomeBadge.badgeClass,
+          color: getOutcomeChartColor(outcomeBadge.badgeClass),
+        });
+      });
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [filteredCases]);
+
+  const outcomeChartTotal = useMemo(
+    () => outcomeChartSlices.reduce((sum, slice) => sum + slice.count, 0),
+    [outcomeChartSlices],
+  );
+
+  const donutSegments = useMemo<DonutSegment[]>(() => {
+    if (outcomeChartTotal <= 0) return [];
+    let cursor = -90;
+    return outcomeChartSlices.map((slice) => {
+      const percentage = slice.count / outcomeChartTotal;
+      const angleSpan = percentage * 360;
+      const startAngle = cursor;
+      const endAngle = cursor + angleSpan;
+      cursor = endAngle;
+
+      return {
+        key: slice.key,
+        startAngle,
+        endAngle,
+        value: percentage,
+        label: slice.label,
+        count: slice.count,
+        color: slice.color,
+        percentage,
+        path: describeDonutArc(120, 120, 58, 92, startAngle, endAngle),
+      };
+    });
+  }, [outcomeChartSlices, outcomeChartTotal]);
+
+  const activeOutcomeSlice = useMemo(() => {
+    if (outcomeChartSlices.length === 0) return null;
+    const fallbackKey = outcomeChartSlices[0]?.key;
+    const resolvedKey = activeOutcomeKey ?? fallbackKey;
+    return outcomeChartSlices.find((slice) => slice.key === resolvedKey) ?? outcomeChartSlices[0];
+  }, [activeOutcomeKey, outcomeChartSlices]);
+  const outcomeDetailRows = useMemo<OutcomeDetailRow[]>(() => {
+    return sortedCases.flatMap((testCase) => {
+      return getUniqueOutcomePointRows(testCase).map((row, index) => ({
+        rowKey: `${testCase.id}-${index}-${(row.configurationName ?? '').trim()}-${(row.outcome ?? '').trim()}`,
+        order: typeof testCase.order === 'number' ? testCase.order : null,
+        id: testCase.id,
+        title: testCase.name,
+        configurationName: row.configurationName,
+        outcome: row.outcome,
+      }));
+    });
+  }, [sortedCases]);
 
   const hasActiveFilter = searchTerm.trim().length > 0;
   const noFilteredData = cases.length > 0 && sortedCases.length === 0;
@@ -495,6 +685,12 @@ export function CaseTable({
 
     setSortField(field);
     setSortOrder(field === 'order' ? 'asc' : 'desc');
+  };
+
+  const openOutcomeChart = () => {
+    if (outcomeChartSlices.length === 0) return;
+    setActiveOutcomeKey(outcomeChartSlices[0].key);
+    setIsOutcomeChartOpen(true);
   };
 
   // Computes both the placement (up/down) and the absolute viewport coords
@@ -720,6 +916,17 @@ export function CaseTable({
 
           <button
             type="button"
+            className="btn btn--secondary btn--sm btn--icon cases-toolbar__outcome-btn"
+            onClick={openOutcomeChart}
+            title="Overall outcome chart"
+            aria-label="Open overall outcome chart"
+            disabled={sortedCases.length === 0}
+          >
+            <IconAnalytics size={16} />
+          </button>
+
+          <button
+            type="button"
             className="btn btn--primary btn--sm"
             onClick={handleStartCreate}
             title="Add a new test case to this suite"
@@ -755,8 +962,6 @@ export function CaseTable({
               {renderSortableHeader(SORT_OPTIONS[1], 88)}
               {renderSortableHeader(SORT_OPTIONS[2])}
               {renderSortableHeader(SORT_OPTIONS[3], 140)}
-              {renderSortableHeader(SORT_OPTIONS[4], 180)}
-              {renderSortableHeader(SORT_OPTIONS[5], 140)}
               <th style={{ width: 220 }}>
                 <span>Assigned To</span>
               </th>
@@ -766,7 +971,7 @@ export function CaseTable({
           <tbody>
             {noFilteredData ? (
               <tr>
-                <td colSpan={showSelectionColumn ? 9 : 8}>
+                <td colSpan={showSelectionColumn ? 7 : 6}>
                   <div className="cases-table__no-data">
                     <strong>No data</strong>
                     <span>
@@ -813,27 +1018,6 @@ export function CaseTable({
                     <span className={getStatusBadgeClass(testCase.state || 'Unknown')}>
                       {testCase.state || 'Unknown'}
                     </span>
-                  </td>
-                  <td>
-                    <span className="badge badge--neutral cases-table__config-badge">
-                      <span className="cases-table__config-icon" aria-hidden="true">
-                        <IconRuleSettings size={12} />
-                      </span>
-                      <span>{testCase.configurationName || 'Default'}</span>
-                    </span>
-                  </td>
-                  <td>
-                    {(() => {
-                      const outcomeBadge = getOutcomeBadgeModel(testCase.outcome);
-                      return (
-                        <span className={outcomeBadge.badgeClass}>
-                          <span className="cases-table__outcome-icon" aria-hidden="true">
-                            {outcomeBadge.icon}
-                          </span>
-                          <span>{outcomeBadge.label}</span>
-                        </span>
-                      );
-                    })()}
                   </td>
                   <td>
                     <div className="cases-table__assigned-to">
@@ -915,12 +1099,13 @@ export function CaseTable({
                               type="button"
                               role="menuitem"
                               className="action-menu__item"
+                              disabled={cloningCaseId !== null}
                               onClick={() => {
-                                handleCloneFromRow(testCase);
+                                void handleCloneFromRow(testCase);
                               }}
                             >
                               <IconCopy size={16} />
-                              <span>Clone / Copy</span>
+                              <span>{cloningCaseId === testCase.id ? 'Preparing clone...' : 'Clone / Copy'}</span>
                             </button>
                             <button
                               type="button"
@@ -945,6 +1130,170 @@ export function CaseTable({
           </tbody>
         </table>
       </div>
+
+      {isOutcomeChartOpen && (
+        <div className="modal-overlay" role="presentation">
+          <button
+            type="button"
+            className="modal-overlay__backdrop"
+            onClick={() => setIsOutcomeChartOpen(false)}
+            aria-label="Close overall outcome chart"
+          />
+          <div className="modal cases-outcome-modal" role="dialog" aria-modal="true" aria-labelledby="overallOutcomeChartTitle">
+            <div className="modal__header">
+              <div>
+                <h3 className="modal__title" id="overallOutcomeChartTitle">Overall Outcome</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon"
+                onClick={() => setIsOutcomeChartOpen(false)}
+                aria-label="Close outcome chart dialog"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <div className="modal__body cases-outcome-modal__body">
+              <section className="cases-outcome-modal__track" aria-label="Outcome distribution bar">
+                {outcomeChartSlices.map((slice) => (
+                  <span
+                    key={slice.key}
+                    className={`cases-outcome-modal__track-segment${activeOutcomeSlice?.key === slice.key ? ' is-active' : ''}`}
+                    style={{ width: `${(slice.count / outcomeChartTotal) * 100}%`, backgroundColor: slice.color }}
+                    onMouseEnter={() => setActiveOutcomeKey(slice.key)}
+                    onFocus={() => setActiveOutcomeKey(slice.key)}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`${slice.label}: ${slice.count}`}
+                  />
+                ))}
+              </section>
+
+              <div className="cases-outcome-modal__grid">
+                <section className="cases-outcome-modal__chart-shell" aria-label="Outcome distribution donut chart">
+                  <svg
+                    viewBox="0 0 240 240"
+                    className="cases-outcome-modal__chart"
+                    role="img"
+                    aria-label="Overall outcome distribution chart"
+                  >
+                    {donutSegments.length === 1 ? (
+                      <circle
+                        cx="120"
+                        cy="120"
+                        r="92"
+                        fill="none"
+                        stroke={donutSegments[0].color}
+                        strokeWidth="34"
+                      />
+                    ) : (
+                      donutSegments.map((segment) => (
+                        <path
+                          key={segment.key}
+                          d={segment.path}
+                          className={`cases-outcome-modal__segment${activeOutcomeSlice?.key === segment.key ? ' is-active' : ''}`}
+                          fill={segment.color}
+                          onMouseEnter={() => setActiveOutcomeKey(segment.key)}
+                          onFocus={() => setActiveOutcomeKey(segment.key)}
+                          tabIndex={0}
+                        />
+                      ))
+                    )}
+                  </svg>
+                  {activeOutcomeSlice && (
+                    <div className="cases-outcome-modal__center">
+                      <strong>{activeOutcomeSlice.label}</strong>
+                      <span>{activeOutcomeSlice.count}</span>
+                      <small>{Math.round((activeOutcomeSlice.count / outcomeChartTotal) * 100)}%</small>
+                    </div>
+                  )}
+                </section>
+
+                <section className="cases-outcome-modal__legend" aria-label="Outcome breakdown">
+                  {outcomeChartSlices.map((slice) => {
+                    const percentage = outcomeChartTotal > 0
+                      ? Math.round((slice.count / outcomeChartTotal) * 100)
+                      : 0;
+                    return (
+                      <button
+                        key={slice.key}
+                        type="button"
+                        className={`cases-outcome-modal__legend-item${activeOutcomeSlice?.key === slice.key ? ' is-active' : ''}`}
+                        onMouseEnter={() => setActiveOutcomeKey(slice.key)}
+                        onFocus={() => setActiveOutcomeKey(slice.key)}
+                        onClick={() => setActiveOutcomeKey(slice.key)}
+                      >
+                        <span
+                          className="cases-outcome-modal__legend-dot"
+                          style={{ backgroundColor: slice.color }}
+                          aria-hidden="true"
+                        />
+                        <span className="cases-outcome-modal__legend-label">{slice.label}</span>
+                        <span className="cases-outcome-modal__legend-count">{slice.count}</span>
+                        <span className="cases-outcome-modal__legend-percent">{percentage}%</span>
+                      </button>
+                    );
+                  })}
+                </section>
+              </div>
+
+              <section className="cases-outcome-modal__details" aria-label="Test case breakdown">
+                <div className="cases-outcome-modal__details-head">
+                  <strong>Test Case Breakdown</strong>
+                  <span>{outcomeDetailRows.length} row{outcomeDetailRows.length === 1 ? '' : 's'}</span>
+                </div>
+                <div className="cases-outcome-modal__details-table-wrap">
+                  <table className="cases-outcome-modal__details-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 72 }}>Order</th>
+                        <th style={{ width: 92 }}>TC ID</th>
+                        <th>Title</th>
+                        <th style={{ width: 170 }}>Config</th>
+                        <th style={{ width: 160 }}>Outcome</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {outcomeDetailRows.map((row) => {
+                        const outcomeBadge = getOutcomeBadgeModel(row.outcome);
+                        return (
+                          <tr key={row.rowKey}>
+                            <td>{row.order ?? '-'}</td>
+                            <td className="cases-outcome-modal__details-id">{row.id}</td>
+                            <td className="cases-outcome-modal__details-title" title={row.title}>{row.title}</td>
+                            <td title={row.configurationName || 'Unspecified'}>
+                              {row.configurationName || 'Unspecified'}
+                            </td>
+                            <td>
+                              <span className={outcomeBadge.badgeClass}>
+                                <span className="cases-table__outcome-icon" aria-hidden="true">
+                                  {outcomeBadge.icon}
+                                </span>
+                                <span>{outcomeBadge.label}</span>
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <div className="modal__footer">
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => setIsOutcomeChartOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteTargetCase && (
         <div className="steps-editor__confirm-overlay" role="dialog" aria-modal="true" aria-label="Remove test case from suite confirmation">

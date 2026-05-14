@@ -16,6 +16,8 @@ interface SearchableSelectProps {
   placeholder?: string;
   emptyLabel?: string;
   className?: string;
+  allowCustomValue?: boolean;
+  customValueHeading?: string;
 }
 
 export function SearchableSelect({
@@ -25,25 +27,49 @@ export function SearchableSelect({
   placeholder = 'Select…',
   emptyLabel = NOT_SELECTED_LABEL,
   className = '',
+  allowCustomValue = false,
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [hasUserEditedSearch, setHasUserEditedSearch] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const selectedOption = options.find((opt) => opt.value === value);
+  const selectedLabel = selectedOption?.label ?? (allowCustomValue ? value : '');
+  const effectiveSearchTerm = hasUserEditedSearch ? searchTerm : '';
+  const optionsWithCustomValue = useMemo(() => {
+    const trimmedValue = value.trim();
+    const hasSelectedCustomValue = allowCustomValue
+      && Boolean(trimmedValue)
+      && !options.some((opt) => (
+        opt.value.trim().toLowerCase() === trimmedValue.toLowerCase()
+        || opt.label.trim().toLowerCase() === trimmedValue.toLowerCase()
+      ));
+
+    if (!hasSelectedCustomValue) return options;
+    return [...options, { value: trimmedValue, label: trimmedValue }];
+  }, [allowCustomValue, options, value]);
   const filteredOptions = useMemo(
     () =>
-      options.filter(
+      optionsWithCustomValue.filter(
         (opt) =>
-          opt.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          opt.value.toLowerCase().includes(searchTerm.toLowerCase()),
+          opt.label.toLowerCase().includes(effectiveSearchTerm.toLowerCase()) ||
+          opt.value.toLowerCase().includes(effectiveSearchTerm.toLowerCase()),
       ),
-    [options, searchTerm],
+    [effectiveSearchTerm, optionsWithCustomValue],
   );
-
-  const selectedOption = options.find((opt) => opt.value === value);
+  const trimmedSearchTerm = searchTerm.trim();
+  const hasExactOptionMatch = optionsWithCustomValue.some((opt) => {
+    const normalizedSearchTerm = trimmedSearchTerm.toLowerCase();
+    return (
+      opt.label.trim().toLowerCase() === normalizedSearchTerm
+      || opt.value.trim().toLowerCase() === normalizedSearchTerm
+    );
+  });
+  const canUseCustomValue = allowCustomValue && Boolean(trimmedSearchTerm) && !hasExactOptionMatch;
   const groupedOptions = useMemo(() => {
     const groups: Array<{ label: string | null; options: SearchableSelectOption[] }> = [];
     filteredOptions.forEach((option) => {
@@ -58,6 +84,21 @@ export function SearchableSelect({
     return groups;
   }, [filteredOptions]);
 
+  const openSelect = () => {
+    setSearchTerm(selectedLabel || '');
+    setHasUserEditedSearch(false);
+    setIsOpen(true);
+  };
+
+  const closeSelect = (commitCustomValue = false) => {
+    if (commitCustomValue && canUseCustomValue) {
+      onChange(trimmedSearchTerm);
+    }
+    setIsOpen(false);
+    setSearchTerm('');
+    setHasUserEditedSearch(false);
+  };
+
   // Close on outside click; focus input when opening
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -65,8 +106,7 @@ export function SearchableSelect({
       const clickedInsideTrigger = containerRef.current?.contains(target) ?? false;
       const clickedInsideDropdown = dropdownRef.current?.contains(target) ?? false;
       if (!clickedInsideTrigger && !clickedInsideDropdown) {
-        setIsOpen(false);
-        setSearchTerm('');
+        closeSelect(true);
       }
     };
 
@@ -76,7 +116,7 @@ export function SearchableSelect({
     }
 
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
+  }, [canUseCustomValue, isOpen, trimmedSearchTerm]);
 
   useLayoutEffect(() => {
     if (!isOpen) return;
@@ -89,15 +129,17 @@ export function SearchableSelect({
       const viewportHeight = window.innerHeight;
       const viewportWidth = window.innerWidth;
       const margin = 8;
-      const estimatedMenuHeight = Math.min(240, Math.max(56, filteredOptions.length * 40 + 16));
+      const optionCount = filteredOptions.length || (canUseCustomValue ? 1 : 1);
+      const estimatedMenuHeight = Math.min(240, Math.max(44, optionCount * 32 + 10));
       const spaceBelow = viewportHeight - rect.bottom - margin;
       const spaceAbove = rect.top - margin;
       const shouldOpenUp = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
-      const availableHeight = Math.max(56, Math.min(estimatedMenuHeight, shouldOpenUp ? spaceAbove : spaceBelow));
+      const availableHeight = Math.max(44, Math.min(estimatedMenuHeight, shouldOpenUp ? spaceAbove : spaceBelow));
       const left = Math.min(Math.max(margin, rect.left), Math.max(margin, viewportWidth - rect.width - margin));
+      const dropdownGap = 2;
       const top = shouldOpenUp
-        ? Math.max(margin, rect.top - 4 - availableHeight)
-        : rect.bottom + 4;
+        ? Math.max(margin, rect.top - dropdownGap - availableHeight)
+        : rect.bottom + dropdownGap;
 
       setDropdownStyle({
         position: 'fixed',
@@ -121,17 +163,23 @@ export function SearchableSelect({
 
   const handleSelect = (optionValue: string) => {
     onChange(optionValue);
-    setIsOpen(false);
-    setSearchTerm('');
+    closeSelect(false);
   };
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
     onChange('');
     setSearchTerm('');
+    setHasUserEditedSearch(false);
   };
 
-  const toggleOpen = () => setIsOpen((v) => !v);
+  const toggleOpen = () => {
+    if (isOpen) {
+      closeSelect(true);
+      return;
+    }
+    openSelect();
+  };
 
   return (
     // Flat structure — no inner trigger wrapper
@@ -140,25 +188,34 @@ export function SearchableSelect({
         ref={inputRef}
         type="text"
         className="searchable-select__input"
-        placeholder={isOpen ? placeholder : (selectedOption?.label || emptyLabel)}
-        value={isOpen ? searchTerm : selectedOption?.label ?? ''}
-        onChange={(e) => setSearchTerm(e.target.value)}
+        placeholder={isOpen ? placeholder : (selectedLabel || emptyLabel)}
+        value={isOpen ? searchTerm : selectedLabel}
+        onChange={(e) => {
+          setSearchTerm(e.target.value);
+          setHasUserEditedSearch(true);
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
-            setIsOpen(false);
-            setSearchTerm('');
+            closeSelect(false);
           }
           if (e.key === 'Enter' && filteredOptions.length > 0) {
-            handleSelect(filteredOptions[0].value);
+            if (canUseCustomValue) {
+              handleSelect(trimmedSearchTerm);
+            } else {
+              handleSelect(filteredOptions[0].value);
+            }
+          }
+          if (e.key === 'Enter' && filteredOptions.length === 0 && canUseCustomValue) {
+            handleSelect(trimmedSearchTerm);
           }
           if (e.key === 'ArrowDown') {
             e.preventDefault();
-            setIsOpen(true);
+            openSelect();
           }
         }}
         onClick={(e) => {
           e.stopPropagation();
-          setIsOpen(true);
+          openSelect();
         }}
         readOnly={!isOpen}
         aria-expanded={isOpen}
@@ -225,7 +282,24 @@ export function SearchableSelect({
               ))}
             </ul>
           ) : (
-            <div className="searchable-select__empty">No options found</div>
+            canUseCustomValue ? (
+              <ul className="searchable-select__options">
+                <li role="option" aria-selected={trimmedSearchTerm === value}>
+                  <button
+                    type="button"
+                    className="searchable-select__option searchable-select__option--custom"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelect(trimmedSearchTerm);
+                    }}
+                  >
+                    {trimmedSearchTerm}
+                  </button>
+                </li>
+              </ul>
+            ) : (
+              <div className="searchable-select__empty">No options found</div>
+            )
           )}
         </div>,
         document.body,

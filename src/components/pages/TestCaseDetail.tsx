@@ -2255,7 +2255,7 @@ export function TestCaseDetail({
           generatedMethodName={generatedAutomationMethodName}
           associatedMethodName={associatedAutomationMethodName || null}
           associatedClassName={parsedAutomationAssociation?.className ?? null}
-          onWriteCode={(filePath) => { void handleWriteAutomationCode(filePath); }}
+          onWriteCode={handleWriteAutomationCode}
           onAddAssociation={(filePath, methodName) => { void handleAddAutomationAssociation(filePath, methodName); }}
           onRemoveAssociation={requestRemoveAutomationAssociation}
           actionBusy={isAutomationActionBusy}

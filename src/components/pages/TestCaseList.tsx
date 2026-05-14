@@ -165,15 +165,20 @@ export function TestCaseList({
   const handleNavigateBack = useCallback(() => {
     if (selectedCase) {
       onBackToCases();
+    } else if (isCreateMode) {
+      setIsCreateMode(false);
+      setCreateDraft(null);
+      setCreateSourceCase(null);
+      setLiveCreateTitle('');
     } else {
       onBackToPlan();
     }
-  }, [onBackToCases, onBackToPlan, selectedCase]);
+  }, [isCreateMode, onBackToCases, onBackToPlan, selectedCase]);
 
-  const backButtonLabel = selectedCase
+  const backButtonLabel = selectedCase || isCreateMode
     ? 'Test Case List'
     : 'Plan List';
-  const backButtonTitle = selectedCase
+  const backButtonTitle = selectedCase || isCreateMode
     ? 'Back to test case list'
     : 'Back to plan list';
 
@@ -275,6 +280,10 @@ export function TestCaseList({
                       });
                     }}
                     onTestCaseCreated={(newCase) => {
+                      setIsCreateMode(false);
+                      setCreateDraft(null);
+                      setCreateSourceCase(null);
+                      setLiveCreateTitle('');
                       // Update case count
                       setSuiteCaseCountBySuiteId((prev) => {
                         const current = prev[suite.id] ?? 0;

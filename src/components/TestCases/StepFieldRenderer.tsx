@@ -13,7 +13,8 @@
  * Optional fields are hidden until added from the per-step popup, then remain
  * visible if they contain data. Required fields always show.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { SearchableSelect } from '../Common/SearchableSelect';
 import { getElementAuthoringFields } from '../../utils/actionRegistry';
 import { ACTION_REGISTRY } from '../../utils/actionRegistry';
 import { supportsDynamicLocatorControls } from '../../utils/actionRegistry';
@@ -178,11 +179,15 @@ export function StepFieldRenderer({
   const showKey        = shouldRenderField('key',                 contract, visibleOptionalFields);
   const showHeaders    = shouldRenderField('headers',             contract, visibleOptionalFields);
   const showConcat     = shouldRenderField('isConcatenated',      contract, visibleOptionalFields);
-  // Default Expected Value to 'true' once the field becomes visible and is empty
+  const wasExpectedVisibleRef = useRef(false);
+
+  // Default Expected Value to 'true' only when the field first becomes visible.
+  // Do not force it back while the user is editing/clearing.
   useEffect(() => {
-    if (showExpected && !step.expectedValue) {
+    if (showExpected && !wasExpectedVisibleRef.current && !step.expectedValue) {
       onFieldChange('expectedValue', 'true');
     }
+    wasExpectedVisibleRef.current = showExpected;
   }, [showExpected, step.expectedValue, onFieldChange]);
 
   return (
@@ -320,15 +325,19 @@ export function StepFieldRenderer({
           <label className={labelClass(isFieldRequired('expectedValue', contract))}>
             {renderFieldLabel('expectedValue', contract)}
           </label>
-          <select
-            className={`steps-editor__select${invalidFields.has('expectedValue') ? ' steps-editor__select--invalid' : ''}`}
-            value={step.expectedValue === 'false' ? 'false' : 'true'}
-            onChange={(e) => onFieldChange('expectedValue', e.target.value)}
-            aria-invalid={invalidFields.has('expectedValue')}
-          >
-            <option value="true">True</option>
-            <option value="false">False</option>
-          </select>
+          <SearchableSelect
+            options={[
+              { value: 'true', label: 'true' },
+              { value: 'false', label: 'false' },
+            ]}
+            value={step.expectedValue || ''}
+            onChange={(value) => onFieldChange('expectedValue', value)}
+            placeholder={getFieldPlaceholder('expectedValue')}
+            emptyLabel={getFieldPlaceholder('expectedValue')}
+            allowCustomValue
+            customValueHeading="Use custom value"
+            className={`steps-editor__input${invalidFields.has('expectedValue') ? ' steps-editor__searchable-select--invalid' : ''}`}
+          />
         </div>
       )}
 

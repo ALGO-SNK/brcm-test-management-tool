@@ -1,4 +1,4 @@
-import {useState, useMemo, type ReactNode} from 'react';
+import {useEffect, useMemo, useState, type ReactNode} from 'react';
 import {ThemeProvider, createTheme} from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import {ThemeContextProvider} from './context/ThemeContext';
@@ -9,6 +9,7 @@ import {TestCaseList} from './components/pages/TestCaseList';
 import {HelpGuide} from './components/pages/HelpGuide';
 import {MainWorkspace, type MainWorkspaceSection} from './components/pages/MainWorkspace';
 import {SeleniumRepoBrowserModal} from './components/TestCases/SeleniumRepoBrowserModal';
+import {AppScheduler} from './components/AppScheduler';
 import {
     DEFAULT_DB_MAPPINGS,
     WorkspaceSettings,
@@ -39,6 +40,24 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
         testRunSettingsPath: 'BromCom.Tests\\Bromcom.runsettings',
         testRunLogger: 'console;verbosity=detailed',
         testRunUsePatAsEnv: true,
+        schedulerEnabled: true,
+        schedulerTimezone: 'Asia/Kolkata',
+        schedulerPollSeconds: 30,
+        schedulerDefaultCron: '0 0 1 * * *',
+        schedulerDefaultMode: 'nightly_full',
+        schedulerDefaultBatchSize: 10,
+        schedulerMaxHistoryRows: 500,
+        schedulerBuildDefinitionId: 260,
+        schedulerDefaultConfigurationId: 34,
+        schedulerDefaultPointConfigurationId: 33,
+        schedulerReleaseDefinitionIdsCsv: Array.from({ length: 30 }, (_, index) => String(24 + index)).join(','),
+        schedulerWorldPayRegressionBranch: 'refs/heads/regression_worldpay',
+        schedulerWorldPayKanbanBranch: 'refs/heads/kanban_worldpay',
+        schedulerSagePayTestPlanId: 78806,
+        schedulerWorldPayTestPlanId: 139145,
+        schedulerMappingWorkItemIds: '136838,147829',
+        schedulerExcludedSuiteIdsCsv: '',
+        schedulerExcludedSuiteNamePatterns: 'initial,intial',
     };
     try {
         const raw = localStorage.getItem(WORKSPACE_SETTINGS_KEY);
@@ -315,6 +334,23 @@ export function App() {
         localStorage.setItem(WORKSPACE_SETTINGS_KEY, JSON.stringify(values));
     };
 
+    useEffect(() => {
+        if (!window.desktop?.syncSchedulerConfig) {
+            return;
+        }
+        void window.desktop.syncSchedulerConfig({
+            enabled: workspaceSettings.schedulerEnabled,
+            timezone: workspaceSettings.schedulerTimezone,
+            pollSeconds: workspaceSettings.schedulerPollSeconds,
+            defaultCron: workspaceSettings.schedulerDefaultCron,
+            defaultMode: workspaceSettings.schedulerDefaultMode,
+            defaultBatchSize: workspaceSettings.schedulerDefaultBatchSize,
+            maxHistoryRows: workspaceSettings.schedulerMaxHistoryRows,
+        }).catch(() => {
+            // Ignore optional desktop bridge failures.
+        });
+    }, [workspaceSettings]);
+
 
     const isSettingsOpen = currentPage === 'settings';
     const isHelpOpen = currentPage === 'help';
@@ -327,6 +363,7 @@ export function App() {
             <MuiThemeAdapter>
                 <NotificationContextProvider>
                     <Toast/>
+                    <AppScheduler workspaceSettings={workspaceSettings} />
 
                     {activeContentPage === 'landing' && (
                         <MainWorkspace

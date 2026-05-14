@@ -187,6 +187,104 @@ declare global {
     targets: Record<string, DesktopDbUpdaterOverviewTarget>;
   }
 
+  type DesktopSchedulerMode = 'nightly_full' | 'selected_suite' | 'failed_only_rerun';
+
+  interface DesktopSchedulerConfig {
+    enabled: boolean;
+    timezone: string;
+    pollSeconds: number;
+    defaultCron: string;
+    defaultMode: DesktopSchedulerMode;
+    defaultBatchSize: number;
+    maxHistoryRows: number;
+  }
+
+  interface DesktopSchedulerSchedulePayload {
+    name: string;
+    cron: string;
+    timezone: string;
+    mode: DesktopSchedulerMode;
+    selectedConfigurationId: number;
+    planId?: number | null;
+    suiteIds?: number[];
+    batchSize: number;
+    enabled: boolean;
+    metadata?: Record<string, unknown>;
+  }
+
+  interface DesktopSchedulerSchedule {
+    id: number;
+    name: string;
+    cron: string;
+    timezone: string;
+    mode: DesktopSchedulerMode;
+    selectedConfigurationId: number;
+    planId: number | null;
+    suiteIds: number[];
+    batchSize: number;
+    enabled: boolean;
+    metadata: Record<string, unknown>;
+    createdAt: string;
+    updatedAt: string;
+    lastTriggeredAt?: string | null;
+  }
+
+  interface DesktopSchedulerRunLog {
+    id: number;
+    scheduleId: number | null;
+    scheduleName: string;
+    triggerType: 'manual' | 'scheduled';
+    status: 'queued' | 'active' | 'in_progress' | 'completed' | 'failed' | 'skipped';
+    triggeredAt: string;
+    finishedAt?: string | null;
+    message: string;
+    payload: Record<string, unknown>;
+  }
+
+  interface DesktopSchedulerRunRequestPayload {
+    mode: DesktopSchedulerMode;
+    selectedConfigurationId: number;
+    suiteIds: number[];
+    batchSize: number;
+    planId?: number | null;
+    selectedWorldPayServer?: string;
+    selectedBuildRef?: string;
+    selectedBuildId?: number | null;
+    selectedWorldPayBuildId?: number | null;
+    selectedReleaseDefinitionId?: number | null;
+    notes?: string;
+  }
+
+  interface DesktopReleaseLog {
+    releaseId: number;
+    releaseName: string;
+    releaseDefinitionId: number;
+    releaseDefinitionName: string;
+    testSuiteId: number;
+    isFailedRerun: boolean;
+    totalTests: number | null;
+    passedTests: number | null;
+    failedTests: number | null;
+    releaseStartTime: string;
+    releaseRunTime: string;
+    releaseLogModifiedTime: string;
+  }
+
+  interface DesktopReleaseLogUpsertPayload {
+    releaseId: number;
+    releaseName?: string | null;
+    releaseDefinitionId: number;
+    releaseDefinitionName?: string | null;
+    testSuiteId: number;
+    isFailedRerun?: boolean;
+    totalTests?: number | null;
+    passedTests?: number | null;
+    failedTests?: number | null;
+    releaseStartTime?: string | null;
+    releaseRunTime?: string | null;
+    releaseLogModifiedTime?: string | null;
+  }
+
   type DesktopTestRunLevel = 'info' | 'error';
   type DesktopTestRunStatus = 'running' | 'complete' | 'failed' | 'cancelled';
   type DesktopTestRunMode = 'run' | 'debug';
@@ -407,6 +505,23 @@ declare global {
       }>;
     }) => Promise<DesktopDbUpdaterOverview>;
     onDbUpdaterProgress?: (callback: (progress: DesktopDbUpdaterProgress) => void) => (() => void);
+    getSchedulerConfig?: () => Promise<DesktopSchedulerConfig>;
+    syncSchedulerConfig?: (config: Partial<DesktopSchedulerConfig>) => Promise<DesktopSchedulerConfig>;
+    listSchedulerSchedules?: () => Promise<DesktopSchedulerSchedule[]>;
+    createSchedulerSchedule?: (payload: DesktopSchedulerSchedulePayload) => Promise<{ id: number }>;
+    updateSchedulerSchedule?: (scheduleId: number, payload: DesktopSchedulerSchedulePayload) => Promise<{ ok: boolean }>;
+    deleteSchedulerSchedule?: (scheduleId: number) => Promise<{ ok: boolean }>;
+    runSchedulerScheduleNow?: (scheduleId: number) => Promise<{ ok: boolean }>;
+    listSchedulerRunLogs?: (limit?: number) => Promise<DesktopSchedulerRunLog[]>;
+    queueSchedulerRunRequest?: (payload: DesktopSchedulerRunRequestPayload) => Promise<{
+      ok: boolean;
+      suiteCount: number;
+      batchCount: number;
+      batches: number[][];
+    }>;
+    upsertReleaseLog?: (payload: DesktopReleaseLogUpsertPayload) => Promise<DesktopReleaseLog>;
+    listReleaseLogs?: (limit?: number) => Promise<DesktopReleaseLog[]>;
+    listPendingReleaseLogs?: () => Promise<DesktopReleaseLog[]>;
     readTextFile?: (targetPath: string) => Promise<string>;
     readImageBase64?: (targetPath: string) => Promise<string | null>;
     writeTextFile?: (targetPath: string, content: string) => Promise<void>;

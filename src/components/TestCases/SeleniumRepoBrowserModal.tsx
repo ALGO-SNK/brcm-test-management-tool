@@ -30,7 +30,7 @@ interface SeleniumRepoBrowserModalProps {
   generatedMethodName?: string;
   associatedMethodName?: string | null;
   associatedClassName?: string | null;
-  onWriteCode?: (filePath: string) => void;
+  onWriteCode?: (filePath: string) => void | Promise<void>;
   onAddAssociation?: (filePath: string, methodName: string) => void;
   onRemoveAssociation?: (filePath: string, methodName: string) => void;
   actionBusy?: boolean;
@@ -595,6 +595,44 @@ export function SeleniumRepoBrowserModal({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const focusMethodInEditor = async (filePath: string, methodName: string) => {
+    pendingJumpRef.current = { path: filePath, line: 1, column: 1 };
+    getAncestorDirectoryPaths(repoPath, filePath).forEach((ancestorPath) => {
+      if (ancestorPath !== filePath) {
+        void loadPath(ancestorPath, true);
+      }
+    });
+    setExpandedPaths((current) => {
+      const next = new Set(current);
+      getAncestorDirectoryPaths(repoPath, filePath).forEach((ancestorPath) => next.add(ancestorPath));
+      return next;
+    });
+    await loadFilePreview(filePath, { force: true });
+    await loadFileTestNames(filePath, true);
+
+    const editor = monacoEditorRef.current;
+    const content = editor?.getModel()?.getValue() ?? previewFile?.content ?? '';
+    if (!editor || !content) return;
+
+    const safeName = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const methodPattern = new RegExp(`\\b${safeName}\\s*\\(`);
+    const lines = content.split('\n');
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!methodPattern.test(lines[index])) continue;
+      const column = Math.max(lines[index].search(methodPattern) + 1, 1);
+      editor.revealLineInCenter(index + 1);
+      editor.setPosition({ lineNumber: index + 1, column });
+      editor.focus();
+      pendingJumpRef.current = null;
+      return;
+    }
+  };
+
+  const handleWriteCodeAndFocus = async (filePath: string, methodName: string) => {
+    await onWriteCode?.(filePath);
+    await focusMethodInEditor(filePath, methodName);
   };
 
   // ---------- Auto-save (debounced) ----------
@@ -2646,7 +2684,7 @@ export function SeleniumRepoBrowserModal({
                                   className="repo-browser__assoc-btn repo-browser__assoc-btn--primary"
                                   onClick={() => {
                                     freezeSnapshot();
-                                    onWriteCode?.(view.previewFilePath);
+                                    void handleWriteCodeAndFocus(view.previewFilePath, view.generatedMethodName);
                                   }}
                                   disabled={isFrozen || !view.generatedMethodName}
                                   title={`Inject ${view.generatedMethodName} into this class and associate`}

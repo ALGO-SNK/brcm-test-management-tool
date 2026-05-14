@@ -98,6 +98,10 @@ export interface ADOTestCase {
   tester?: ADOIdentity;
   lastUpdatedDate: string;
   lastUpdatedBy?: ADOIdentity;
+  pointBreakdown?: Array<{
+    configurationName?: string;
+    outcome?: string;
+  }>;
   fields: Record<string, unknown>;
   _links: {
     self?: { href: string };
@@ -108,8 +112,8 @@ export interface ADOTestCase {
 }
 
 export interface ADOTestCaseListItem {
-  order?: number;
-  sequenceNumber?: number;
+  order?: number | string;
+  sequenceNumber?: number | string;
   testPlan?: {
     id: number;
     name: string;
@@ -150,6 +154,92 @@ export interface ADOGlobalSearchResult {
   plan: ADOTestPlan;
   suite?: ADOTestSuite;
   testCase?: ADOTestCase;
+}
+
+/**
+ * Scheduler Domain Models
+ */
+
+export interface TestSuiteMapping {
+  testSuiteId: number;
+  testSuiteName: string;
+  releaseDefinitionId: number;
+  releaseDefinitionName: string;
+  assignedPerson?: string;
+  tag?: string;
+  priority?: number | null;
+}
+
+export interface SchedulerSuiteModel {
+  planId: number;
+  planName: string;
+  suiteId: number;
+  suiteName: string;
+  testPointIds: number[];
+  automatedPointIds: number[];
+  releaseDefinitionId: number;
+  priority?: number | null;
+  tag?: string;
+  isSelected: boolean;
+  didRun?: boolean;
+}
+
+export interface ReleaseLogRecord {
+  id?: string;
+  releaseId: number;
+  releaseDefinitionId?: number;
+  releaseDefinitionName?: string;
+  testRunId?: number | null;
+  suiteId: number;
+  suiteName: string;
+  planId: number;
+  buildNumber: string;
+  buildId: number;
+  configurationId: number;
+  batchIndex: number;
+  releaseCutoffTime: number;
+  createdAt: number;
+  modifiedAt: number;
+  runtime?: number | null;
+  passCount?: number | null;
+  failCount?: number | null;
+  notes: string;
+}
+
+export interface ADOTestPoint {
+  id: number;
+  configurationId: number;
+  configurationName?: string;
+  testCaseId?: number;
+  outcome?: string;
+  state?: string;
+  isAutomated?: boolean;
+}
+
+export interface ADOBuildSummary {
+  id: number;
+  buildNumber: string;
+  status: string;
+  result?: string;
+  sourceBranch?: string;
+  queueTime: string;
+  repository?: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface ADOTestConfigurationSummary {
+  id: number;
+  name: string;
+  isDefault?: boolean;
+}
+
+export interface ADOReleaseDefinitionAvailability {
+  definitionId: number;
+  definitionName: string;
+  isAvailable: boolean;
+  environmentStatus: string;
 }
 
 // export interface ConnectionConfig {

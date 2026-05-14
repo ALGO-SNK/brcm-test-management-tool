@@ -132,6 +132,14 @@ export function IconInfo(props: IconProps) {
   return <MaterialIcon name="info" {...props} />;
 }
 
+export function IconPieChart(props: IconProps) {
+  return <MaterialIcon name="pie_chart" {...props} />;
+}
+
+export function IconAnalytics(props: IconProps) {
+  return <MaterialIcon name="analytics" {...props} />;
+}
+
 export function IconWarning(props: IconProps) {
   return <MaterialIcon name="warning" {...props} />;
 }
@@ -194,4 +202,8 @@ export function IconSchedule(props: IconProps) {
 
 export function IconBolt(props: IconProps) {
   return <MaterialIcon name="bolt" {...props} />;
+}
+
+export function IconDownload(props: IconProps) {
+  return <MaterialIcon name="download" {...props} />;
 }

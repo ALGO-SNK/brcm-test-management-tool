@@ -40,6 +40,20 @@ const DB_UPDATER_WORK_ITEM_FIELDS = [
 ];
 const DB_UPDATER_FETCH_CONCURRENCY = 5;
 const DB_UPDATER_FETCH_DELAY_MS = 250;
+const SCHEDULER_DEFAULT_CONFIG = {
+  enabled: true,
+  timezone: 'Asia/Kolkata',
+  pollSeconds: 30,
+  defaultCron: '0 0 1 * * *',
+  defaultMode: 'nightly_full',
+  defaultBatchSize: 10,
+  maxHistoryRows: 500,
+};
+const SCHEDULER_ALLOWED_MODES = new Set([
+  'nightly_full',
+  'selected_suite',
+  'failed_only_rerun',
+]);
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 const version = app.getVersion();
 
@@ -52,6 +66,9 @@ const confirmedCloseContentsIds = new Set();
 let cachedGitExecutable = undefined;
 const activeTestRuns = new Map();
 const activeDebugSessions = new Map();
+let schedulerTickTimer = null;
+let schedulerLastTickAt = 0;
+const schedulerExecutionMarkers = new Map();
 
 function resolveAssetFile(fileNames) {
   const names = Array.isArray(fileNames) ? fileNames : [fileNames];
@@ -3963,6 +3980,1001 @@ async function runDebuggerCommand(runId, command) {
   return { ok: true };
 }
 
+function getSchedulerDatabasePath() {
+  const schedulerDir = path.join(app.getPath('userData'), 'scheduler');
+  fs.mkdirSync(schedulerDir, { recursive: true });
+  return path.join(schedulerDir, 'scheduler.sqlite');
+}
+
+async function openSchedulerDatabase() {
+  const dbPath = getSchedulerDatabasePath();
+  const db = await open({
+    filename: dbPath,
+    driver: sqlite3.Database,
+  });
+  await db.exec('PRAGMA journal_mode = WAL;');
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS scheduler_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS scheduler_schedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      cron TEXT NOT NULL,
+      timezone TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      selected_configuration_id INTEGER NOT NULL,
+      plan_id INTEGER,
+      suite_ids_json TEXT NOT NULL,
+      batch_size INTEGER NOT NULL,
+      enabled INTEGER NOT NULL,
+      metadata_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS scheduler_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      schedule_id INTEGER,
+      schedule_name TEXT NOT NULL,
+      trigger_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      triggered_at TEXT NOT NULL,
+      finished_at TEXT,
+      message TEXT,
+      payload_json TEXT NOT NULL
+    );
+  `);
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_scheduler_runs_triggered_at ON scheduler_runs(triggered_at DESC);');
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_scheduler_runs_schedule_id ON scheduler_runs(schedule_id);');
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS release_logs (
+      release_id INTEGER PRIMARY KEY,
+      release_name TEXT,
+      release_definition_id INTEGER NOT NULL,
+      release_definition_name TEXT,
+      test_suite_id INTEGER NOT NULL,
+      is_failed_rerun INTEGER NOT NULL DEFAULT 0,
+      total_tests INTEGER,
+      passed_tests INTEGER,
+      failed_tests INTEGER,
+      release_start_time TEXT,
+      release_run_time TEXT,
+      release_log_modified_time TEXT
+    );
+  `);
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_release_logs_modified_time ON release_logs(release_log_modified_time DESC);');
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_release_logs_test_suite_id ON release_logs(test_suite_id);');
+  return db;
+}
+
+function parseSchedulerInteger(value, fallback, min, max) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  const rounded = Math.round(parsed);
+  if (rounded < min) return min;
+  if (rounded > max) return max;
+  return rounded;
+}
+
+function normalizeSchedulerMode(value, fallback = SCHEDULER_DEFAULT_CONFIG.defaultMode) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!SCHEDULER_ALLOWED_MODES.has(normalized)) {
+    return fallback;
+  }
+  return normalized;
+}
+
+function normalizeSchedulerConfig(input) {
+  const next = input && typeof input === 'object' ? input : {};
+  return {
+    enabled: next.enabled !== false,
+    timezone: typeof next.timezone === 'string' && next.timezone.trim()
+      ? next.timezone.trim()
+      : SCHEDULER_DEFAULT_CONFIG.timezone,
+    pollSeconds: parseSchedulerInteger(next.pollSeconds, SCHEDULER_DEFAULT_CONFIG.pollSeconds, 10, 3600),
+    defaultCron: typeof next.defaultCron === 'string' && next.defaultCron.trim()
+      ? next.defaultCron.trim()
+      : SCHEDULER_DEFAULT_CONFIG.defaultCron,
+    defaultMode: normalizeSchedulerMode(next.defaultMode),
+    defaultBatchSize: parseSchedulerInteger(next.defaultBatchSize, SCHEDULER_DEFAULT_CONFIG.defaultBatchSize, 1, 200),
+    maxHistoryRows: parseSchedulerInteger(next.maxHistoryRows, SCHEDULER_DEFAULT_CONFIG.maxHistoryRows, 50, 5000),
+  };
+}
+
+function getCronFieldBounds(index) {
+  if (index === 0) return { min: 0, max: 59 };
+  if (index === 1) return { min: 0, max: 59 };
+  if (index === 2) return { min: 0, max: 23 };
+  if (index === 3) return { min: 1, max: 31 };
+  if (index === 4) return { min: 1, max: 12 };
+  return { min: 0, max: 6 };
+}
+
+function isCronNumericInRange(value, min, max) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= min && parsed <= max;
+}
+
+function isValidCronField(field, min, max) {
+  const token = String(field || '').trim();
+  if (!token) return false;
+  if (token === '*') return true;
+  if (token.includes(',')) {
+    return token.split(',').every((part) => isValidCronField(part, min, max));
+  }
+  if (token.includes('/')) {
+    const [base, stepText] = token.split('/');
+    const step = Number(stepText);
+    if (!Number.isInteger(step) || step <= 0) return false;
+    if (base === '*') return true;
+    if (base.includes('-')) {
+      const [startText, endText] = base.split('-');
+      return isCronNumericInRange(startText, min, max) && isCronNumericInRange(endText, min, max);
+    }
+    return isCronNumericInRange(base, min, max);
+  }
+  if (token.includes('-')) {
+    const [startText, endText] = token.split('-');
+    const start = Number(startText);
+    const end = Number(endText);
+    return Number.isInteger(start) && Number.isInteger(end) && start >= min && end <= max && start <= end;
+  }
+  return isCronNumericInRange(token, min, max);
+}
+
+function isValidCronExpression(cron) {
+  const parts = String(cron || '').trim().split(/\s+/);
+  if (parts.length !== 6) {
+    return false;
+  }
+  return parts.every((field, index) => {
+    const bounds = getCronFieldBounds(index);
+    return isValidCronField(field, bounds.min, bounds.max);
+  });
+}
+
+function validateTimeZone(timezone) {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeSchedulePayload(input) {
+  const payload = input && typeof input === 'object' ? input : {};
+  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+  if (!name) {
+    throw new Error('Schedule name is required.');
+  }
+  const cron = typeof payload.cron === 'string' ? payload.cron.trim() : '';
+  if (!isValidCronExpression(cron)) {
+    throw new Error('Cron expression must have 6 valid fields: sec min hour day month weekday.');
+  }
+  const timezone = typeof payload.timezone === 'string' ? payload.timezone.trim() : '';
+  if (!timezone || !validateTimeZone(timezone)) {
+    throw new Error('A valid IANA timezone is required (for example: Asia/Kolkata).');
+  }
+  const mode = normalizeSchedulerMode(payload.mode, '');
+  if (!mode) {
+    throw new Error('Scheduler mode is invalid.');
+  }
+  const selectedConfigurationId = Number(payload.selectedConfigurationId);
+  if (!Number.isInteger(selectedConfigurationId) || selectedConfigurationId <= 0) {
+    throw new Error('Configuration id must be a positive number.');
+  }
+  const batchSize = parseSchedulerInteger(payload.batchSize, SCHEDULER_DEFAULT_CONFIG.defaultBatchSize, 1, 200);
+  const enabled = payload.enabled !== false;
+  const planId = Number(payload.planId);
+  const normalizedPlanId = Number.isInteger(planId) && planId > 0 ? planId : null;
+  const suiteIds = Array.isArray(payload.suiteIds)
+    ? Array.from(new Set(payload.suiteIds
+      .map((suiteId) => Number(suiteId))
+      .filter((suiteId) => Number.isInteger(suiteId) && suiteId > 0)))
+    : [];
+  if (mode === 'selected_suite' && suiteIds.length === 0) {
+    throw new Error('Suite mode requires at least one suite id.');
+  }
+  const metadata = payload.metadata && typeof payload.metadata === 'object' && !Array.isArray(payload.metadata)
+    ? payload.metadata
+    : {};
+
+  return {
+    name,
+    cron,
+    timezone,
+    mode,
+    selectedConfigurationId,
+    planId: normalizedPlanId,
+    suiteIds,
+    batchSize,
+    enabled,
+    metadata,
+  };
+}
+
+function parseSchedulerJson(value, fallback) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return fallback;
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+async function readSchedulerConfig() {
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    const rows = await db.all('SELECT key, value FROM scheduler_settings;');
+    const fromDb = {};
+    for (const row of rows) {
+      fromDb[row.key] = parseSchedulerJson(row.value, row.value);
+    }
+    return normalizeSchedulerConfig(fromDb);
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+async function saveSchedulerConfig(input) {
+  const normalized = normalizeSchedulerConfig(input);
+  const now = new Date().toISOString();
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    await db.exec('BEGIN IMMEDIATE TRANSACTION;');
+    try {
+      for (const [key, value] of Object.entries(normalized)) {
+        await db.run(
+          `
+            INSERT INTO scheduler_settings (key, value, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+              value = excluded.value,
+              updated_at = excluded.updated_at;
+          `,
+          key,
+          JSON.stringify(value),
+          now,
+        );
+      }
+      await db.exec('COMMIT;');
+    } catch (error) {
+      await db.exec('ROLLBACK;');
+      throw error;
+    }
+    return normalized;
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+async function ensureSchedulerDatabase() {
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+  await saveSchedulerConfig(await readSchedulerConfig());
+}
+
+async function insertSchedulerRunLog(input) {
+  const now = new Date().toISOString();
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    await db.run(
+      `
+        INSERT INTO scheduler_runs (
+          schedule_id,
+          schedule_name,
+          trigger_type,
+          status,
+          triggered_at,
+          finished_at,
+          message,
+          payload_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+      `,
+      input.scheduleId ?? null,
+      input.scheduleName || 'Scheduler',
+      input.triggerType || 'manual',
+      input.status || 'queued',
+      now,
+      input.finishedAt ?? null,
+      input.message || '',
+      JSON.stringify(input.payload || {}),
+    );
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+async function listSchedulerRunLogs(limit = 120) {
+  const normalizedLimit = parseSchedulerInteger(limit, 120, 10, 2000);
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    const rows = await db.all(
+      `
+        SELECT
+          id,
+          schedule_id AS scheduleId,
+          schedule_name AS scheduleName,
+          trigger_type AS triggerType,
+          status,
+          triggered_at AS triggeredAt,
+          finished_at AS finishedAt,
+          message,
+          payload_json AS payloadJson
+        FROM scheduler_runs
+        ORDER BY id DESC
+        LIMIT ?;
+      `,
+      normalizedLimit,
+    );
+    return rows.map((row) => ({
+      ...row,
+      payload: parseSchedulerJson(row.payloadJson, {}),
+    }));
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+const RELEASE_LOG_SELECT = `
+  SELECT
+    release_id AS releaseId,
+    release_name AS releaseName,
+    release_definition_id AS releaseDefinitionId,
+    release_definition_name AS releaseDefinitionName,
+    test_suite_id AS testSuiteId,
+    is_failed_rerun AS isFailedRerunInt,
+    total_tests AS totalTests,
+    passed_tests AS passedTests,
+    failed_tests AS failedTests,
+    release_start_time AS releaseStartTime,
+    release_run_time AS releaseRunTime,
+    release_log_modified_time AS releaseLogModifiedTime
+  FROM release_logs
+`;
+
+function mapReleaseLogRow(row) {
+  if (!row) return null;
+  return {
+    releaseId: row.releaseId,
+    releaseName: row.releaseName || '',
+    releaseDefinitionId: row.releaseDefinitionId,
+    releaseDefinitionName: row.releaseDefinitionName || '',
+    testSuiteId: row.testSuiteId,
+    isFailedRerun: row.isFailedRerunInt === 1,
+    totalTests: row.totalTests,
+    passedTests: row.passedTests,
+    failedTests: row.failedTests,
+    releaseStartTime: row.releaseStartTime || '',
+    releaseRunTime: row.releaseRunTime || '',
+    releaseLogModifiedTime: row.releaseLogModifiedTime || '',
+  };
+}
+
+async function insertOrReplaceReleaseLog(input) {
+  if (!input || typeof input !== 'object') {
+    throw new Error('Release log payload is required');
+  }
+  const releaseId = Number(input.releaseId);
+  if (!Number.isFinite(releaseId) || releaseId <= 0) {
+    throw new Error('releaseId must be a positive number');
+  }
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    const existing = await db.get(
+      'SELECT release_definition_id, test_suite_id FROM release_logs WHERE release_id = ?;',
+      releaseId,
+    );
+
+    const releaseDefinitionIdInput = Number(input.releaseDefinitionId);
+    const releaseDefinitionId = Number.isFinite(releaseDefinitionIdInput) && releaseDefinitionIdInput > 0
+      ? releaseDefinitionIdInput
+      : existing?.release_definition_id;
+    if (!Number.isFinite(releaseDefinitionId) || releaseDefinitionId <= 0) {
+      throw new Error('releaseDefinitionId must be a positive number for new release logs');
+    }
+
+    const testSuiteIdInput = Number(input.testSuiteId);
+    const testSuiteId = Number.isFinite(testSuiteIdInput) && testSuiteIdInput > 0
+      ? testSuiteIdInput
+      : existing?.test_suite_id;
+    if (!Number.isFinite(testSuiteId) || testSuiteId <= 0) {
+      throw new Error('testSuiteId must be a positive number for new release logs');
+    }
+
+    await db.run(
+      `
+        INSERT INTO release_logs (
+          release_id, release_name, release_definition_id, release_definition_name,
+          test_suite_id, is_failed_rerun, total_tests, passed_tests, failed_tests,
+          release_start_time, release_run_time, release_log_modified_time
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(release_id) DO UPDATE SET
+          release_name = COALESCE(excluded.release_name, release_logs.release_name),
+          release_definition_id = excluded.release_definition_id,
+          release_definition_name = COALESCE(excluded.release_definition_name, release_logs.release_definition_name),
+          test_suite_id = excluded.test_suite_id,
+          is_failed_rerun = excluded.is_failed_rerun,
+          total_tests = COALESCE(excluded.total_tests, release_logs.total_tests),
+          passed_tests = COALESCE(excluded.passed_tests, release_logs.passed_tests),
+          failed_tests = COALESCE(excluded.failed_tests, release_logs.failed_tests),
+          release_start_time = COALESCE(excluded.release_start_time, release_logs.release_start_time),
+          release_run_time = COALESCE(excluded.release_run_time, release_logs.release_run_time),
+          release_log_modified_time = COALESCE(excluded.release_log_modified_time, release_logs.release_log_modified_time);
+      `,
+      releaseId,
+      input.releaseName ?? null,
+      releaseDefinitionId,
+      input.releaseDefinitionName ?? null,
+      testSuiteId,
+      input.isFailedRerun ? 1 : 0,
+      input.totalTests ?? null,
+      input.passedTests ?? null,
+      input.failedTests ?? null,
+      input.releaseStartTime ?? null,
+      input.releaseRunTime ?? null,
+      input.releaseLogModifiedTime ?? null,
+    );
+    const row = await db.get(`${RELEASE_LOG_SELECT} WHERE release_id = ?;`, releaseId);
+    return mapReleaseLogRow(row);
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+async function listReleaseLogs(limit = 200) {
+  const normalizedLimit = parseSchedulerInteger(limit, 200, 10, 5000);
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    const rows = await db.all(
+      `${RELEASE_LOG_SELECT} ORDER BY release_id DESC LIMIT ?;`,
+      normalizedLimit,
+    );
+    return rows.map(mapReleaseLogRow);
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+async function getPendingReleaseLogs() {
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    const rows = await db.all(
+      `${RELEASE_LOG_SELECT} WHERE release_run_time IS NULL OR release_run_time = '';`,
+    );
+    return rows.map(mapReleaseLogRow);
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+function getTimePartsByZone(date, timezone) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    weekday: 'short',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date).reduce((acc, part) => {
+    if (part.type !== 'literal') {
+      acc[part.type] = part.value;
+    }
+    return acc;
+  }, {});
+  const weekdayMap = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  return {
+    second: Number(parts.second || '0'),
+    minute: Number(parts.minute || '0'),
+    hour: Number(parts.hour || '0'),
+    dayOfMonth: Number(parts.day || '1'),
+    month: Number(parts.month || '1'),
+    dayOfWeek: weekdayMap[parts.weekday] ?? 0,
+    marker: `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`,
+  };
+}
+
+function isCronValueMatch(field, value) {
+  if (field === '*') return true;
+  if (field.includes(',')) {
+    return field.split(',').some((part) => isCronValueMatch(part.trim(), value));
+  }
+  if (field.includes('/')) {
+    const [base, stepText] = field.split('/');
+    const step = Number(stepText);
+    if (!Number.isInteger(step) || step <= 0) return false;
+    if (base === '*') {
+      return value % step === 0;
+    }
+    if (base.includes('-')) {
+      const [startText, endText] = base.split('-');
+      const start = Number(startText);
+      const end = Number(endText);
+      if (!Number.isInteger(start) || !Number.isInteger(end) || value < start || value > end) {
+        return false;
+      }
+      return (value - start) % step === 0;
+    }
+    const start = Number(base);
+    if (!Number.isInteger(start) || value < start) return false;
+    return (value - start) % step === 0;
+  }
+  if (field.includes('-')) {
+    const [startText, endText] = field.split('-');
+    const start = Number(startText);
+    const end = Number(endText);
+    return Number.isInteger(start) && Number.isInteger(end) && value >= start && value <= end;
+  }
+  return Number(field) === value;
+}
+
+function isCronDueNow(cron, timezone, date) {
+  const parts = String(cron || '').trim().split(/\s+/);
+  if (parts.length !== 6) {
+    return { due: false, marker: '' };
+  }
+  const local = getTimePartsByZone(date, timezone);
+  const due = (
+    isCronValueMatch(parts[0], local.second)
+    && isCronValueMatch(parts[1], local.minute)
+    && isCronValueMatch(parts[2], local.hour)
+    && isCronValueMatch(parts[3], local.dayOfMonth)
+    && isCronValueMatch(parts[4], local.month)
+    && isCronValueMatch(parts[5], local.dayOfWeek)
+  );
+  return { due, marker: local.marker };
+}
+
+async function listSchedulerSchedules() {
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    const rows = await db.all(`
+      SELECT
+        s.id,
+        s.name,
+        s.cron,
+        s.timezone,
+        s.mode,
+        s.selected_configuration_id AS selectedConfigurationId,
+        s.plan_id AS planId,
+        s.suite_ids_json AS suiteIdsJson,
+        s.batch_size AS batchSize,
+        s.enabled,
+        s.metadata_json AS metadataJson,
+        s.created_at AS createdAt,
+        s.updated_at AS updatedAt,
+        (
+          SELECT MAX(r.triggered_at)
+          FROM scheduler_runs r
+          WHERE r.schedule_id = s.id
+        ) AS lastTriggeredAt
+      FROM scheduler_schedules s
+      ORDER BY s.name ASC;
+    `);
+    return rows.map((row) => ({
+      ...row,
+      enabled: Number(row.enabled) === 1,
+      suiteIds: parseSchedulerJson(row.suiteIdsJson, []),
+      metadata: parseSchedulerJson(row.metadataJson, {}),
+    }));
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+async function createSchedulerSchedule(input) {
+  const payload = normalizeSchedulePayload(input);
+  const now = new Date().toISOString();
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    const result = await db.run(
+      `
+        INSERT INTO scheduler_schedules (
+          name,
+          cron,
+          timezone,
+          mode,
+          selected_configuration_id,
+          plan_id,
+          suite_ids_json,
+          batch_size,
+          enabled,
+          metadata_json,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      `,
+      payload.name,
+      payload.cron,
+      payload.timezone,
+      payload.mode,
+      payload.selectedConfigurationId,
+      payload.planId,
+      JSON.stringify(payload.suiteIds),
+      payload.batchSize,
+      payload.enabled ? 1 : 0,
+      JSON.stringify(payload.metadata),
+      now,
+      now,
+    );
+    return { id: Number(result.lastID) };
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+async function updateSchedulerSchedule(scheduleId, input) {
+  const id = Number(scheduleId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('Schedule id is invalid.');
+  }
+  const payload = normalizeSchedulePayload(input);
+  const now = new Date().toISOString();
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    const existing = await db.get('SELECT id FROM scheduler_schedules WHERE id = ?;', id);
+    if (!existing) {
+      throw new Error('Schedule was not found.');
+    }
+    await db.run(
+      `
+        UPDATE scheduler_schedules
+        SET
+          name = ?,
+          cron = ?,
+          timezone = ?,
+          mode = ?,
+          selected_configuration_id = ?,
+          plan_id = ?,
+          suite_ids_json = ?,
+          batch_size = ?,
+          enabled = ?,
+          metadata_json = ?,
+          updated_at = ?
+        WHERE id = ?;
+      `,
+      payload.name,
+      payload.cron,
+      payload.timezone,
+      payload.mode,
+      payload.selectedConfigurationId,
+      payload.planId,
+      JSON.stringify(payload.suiteIds),
+      payload.batchSize,
+      payload.enabled ? 1 : 0,
+      JSON.stringify(payload.metadata),
+      now,
+      id,
+    );
+    schedulerExecutionMarkers.delete(String(id));
+    return { ok: true };
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+async function deleteSchedulerSchedule(scheduleId) {
+  const id = Number(scheduleId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('Schedule id is invalid.');
+  }
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    await db.run('DELETE FROM scheduler_schedules WHERE id = ?;', id);
+    schedulerExecutionMarkers.delete(String(id));
+    return { ok: true };
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+async function runSchedulerScheduleNow(scheduleId) {
+  const id = Number(scheduleId);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error('Schedule id is invalid.');
+  }
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    const schedule = await db.get(
+      `
+        SELECT
+          id,
+          name,
+          mode,
+          selected_configuration_id AS selectedConfigurationId,
+          plan_id AS planId,
+          suite_ids_json AS suiteIdsJson,
+          batch_size AS batchSize
+        FROM scheduler_schedules
+        WHERE id = ?;
+      `,
+      id,
+    );
+    if (!schedule) {
+      throw new Error('Schedule was not found.');
+    }
+    await db.close();
+    db = null;
+    await queueSchedulerRunRequest(
+      {
+        mode: schedule.mode,
+        selectedConfigurationId: schedule.selectedConfigurationId,
+        planId: schedule.planId,
+        suiteIds: parseSchedulerJson(schedule.suiteIdsJson, []),
+        batchSize: schedule.batchSize,
+      },
+      {
+        triggerType: 'manual',
+        scheduleId: id,
+        scheduleName: schedule.name,
+      },
+    );
+    return { ok: true };
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+function splitIntoBalancedBatches(items, maxItemsPerBatch = 10) {
+  if (!Array.isArray(items)) {
+    throw new Error('items must be an array');
+  }
+  const normalizedMax = parseSchedulerInteger(maxItemsPerBatch, 10, 1, 500);
+  if (items.length === 0) {
+    return [];
+  }
+  const numberOfBatches = Math.ceil(items.length / normalizedMax);
+  const baseSize = Math.floor(items.length / numberOfBatches);
+  const extraItems = items.length % numberOfBatches;
+  const result = [];
+  let start = 0;
+  for (let index = 0; index < numberOfBatches; index += 1) {
+    const currentSize = baseSize + (index < extraItems ? 1 : 0);
+    result.push(items.slice(start, start + currentSize));
+    start += currentSize;
+  }
+  return result;
+}
+
+function normalizeSchedulerRunRequest(input) {
+  const payload = input && typeof input === 'object' ? input : {};
+  const mode = normalizeSchedulerMode(payload.mode, '');
+  if (!mode) {
+    throw new Error('Run mode is invalid.');
+  }
+  const selectedConfigurationId = Number(payload.selectedConfigurationId);
+  if (!Number.isInteger(selectedConfigurationId) || selectedConfigurationId <= 0) {
+    throw new Error('Configuration id must be a positive number.');
+  }
+  const suiteIds = Array.isArray(payload.suiteIds)
+    ? Array.from(new Set(payload.suiteIds
+      .map((suiteId) => Number(suiteId))
+      .filter((suiteId) => Number.isInteger(suiteId) && suiteId > 0)))
+    : [];
+  if (mode === 'selected_suite' && suiteIds.length === 0) {
+    throw new Error('Selected Suites mode requires at least one suite.');
+  }
+  const batchSize = parseSchedulerInteger(payload.batchSize, SCHEDULER_DEFAULT_CONFIG.defaultBatchSize, 1, 200);
+  const planId = Number(payload.planId);
+  const normalizedPlanId = Number.isInteger(planId) && planId > 0 ? planId : null;
+  const selectedBuildId = Number(payload.selectedBuildId);
+  const selectedWorldPayBuildId = Number(payload.selectedWorldPayBuildId);
+  const selectedReleaseDefinitionId = Number(payload.selectedReleaseDefinitionId);
+  return {
+    mode,
+    selectedConfigurationId,
+    suiteIds,
+    batchSize,
+    planId: normalizedPlanId,
+    selectedWorldPayServer: typeof payload.selectedWorldPayServer === 'string'
+      ? payload.selectedWorldPayServer.trim()
+      : '',
+    selectedBuildRef: typeof payload.selectedBuildRef === 'string'
+      ? payload.selectedBuildRef.trim()
+      : '',
+    selectedBuildId: Number.isInteger(selectedBuildId) && selectedBuildId > 0 ? selectedBuildId : null,
+    selectedWorldPayBuildId: Number.isInteger(selectedWorldPayBuildId) && selectedWorldPayBuildId > 0 ? selectedWorldPayBuildId : null,
+    selectedReleaseDefinitionId: Number.isInteger(selectedReleaseDefinitionId) && selectedReleaseDefinitionId > 0
+      ? selectedReleaseDefinitionId
+      : null,
+    notes: typeof payload.notes === 'string'
+      ? payload.notes.trim()
+      : '',
+  };
+}
+
+async function queueSchedulerRunRequest(
+  input,
+  options = { triggerType: 'manual', scheduleId: null, scheduleName: '' },
+) {
+  const payload = normalizeSchedulerRunRequest(input);
+  const suiteBatches = splitIntoBalancedBatches(payload.suiteIds, payload.batchSize);
+  const now = new Date().toISOString();
+  const triggerType = options?.triggerType === 'scheduled' ? 'scheduled' : 'manual';
+  const scheduleId = Number.isInteger(Number(options?.scheduleId)) ? Number(options.scheduleId) : null;
+  const scheduleName = typeof options?.scheduleName === 'string' && options.scheduleName.trim()
+    ? options.scheduleName.trim()
+    : `${triggerType === 'scheduled' ? 'Scheduled' : 'Manual'} ${payload.mode}`;
+  await insertSchedulerRunLog({
+    scheduleId,
+    scheduleName,
+    triggerType,
+    status: 'queued',
+    message: payload.mode === 'selected_suite'
+      ? `Queued ${payload.suiteIds.length} suites across ${suiteBatches.length} balanced batches.`
+      : `Queued ${triggerType} run for mode ${payload.mode}.`,
+    payload: {
+      ...payload,
+      createdAt: now,
+      batches: suiteBatches,
+      batchCount: suiteBatches.length,
+    },
+  });
+  return {
+    ok: true,
+    suiteCount: payload.suiteIds.length,
+    batchCount: suiteBatches.length,
+    batches: suiteBatches,
+  };
+}
+
+async function trimSchedulerHistory(maxRows) {
+  const keepRows = parseSchedulerInteger(maxRows, SCHEDULER_DEFAULT_CONFIG.maxHistoryRows, 50, 5000);
+  let db = null;
+  try {
+    db = await openSchedulerDatabase();
+    await db.run(
+      `
+        DELETE FROM scheduler_runs
+        WHERE id NOT IN (
+          SELECT id
+          FROM scheduler_runs
+          ORDER BY id DESC
+          LIMIT ?
+        );
+      `,
+      keepRows,
+    );
+  } finally {
+    if (db) {
+      await db.close();
+    }
+  }
+}
+
+async function processDueSchedulerSchedules() {
+  const config = await readSchedulerConfig();
+  if (!config.enabled) {
+    return;
+  }
+  const nowMs = Date.now();
+  if (nowMs - schedulerLastTickAt < config.pollSeconds * 1000) {
+    return;
+  }
+  schedulerLastTickAt = nowMs;
+
+  const schedules = await listSchedulerSchedules();
+  const now = new Date();
+  for (const schedule of schedules) {
+    if (!schedule.enabled) {
+      continue;
+    }
+    const dueState = isCronDueNow(schedule.cron, schedule.timezone, now);
+    if (!dueState.due) {
+      continue;
+    }
+    const marker = `${schedule.id}:${dueState.marker}`;
+    if (schedulerExecutionMarkers.get(String(schedule.id)) === marker) {
+      continue;
+    }
+    schedulerExecutionMarkers.set(String(schedule.id), marker);
+    const suiteIds = Array.isArray(schedule.suiteIds) ? schedule.suiteIds : [];
+    await queueSchedulerRunRequest(
+      {
+        mode: schedule.mode,
+        selectedConfigurationId: schedule.selectedConfigurationId,
+        planId: schedule.planId,
+        suiteIds,
+        batchSize: schedule.batchSize,
+      },
+      {
+        triggerType: 'scheduled',
+        scheduleId: Number(schedule.id),
+        scheduleName: schedule.name,
+      },
+    );
+  }
+
+  await trimSchedulerHistory(config.maxHistoryRows);
+}
+
+function startSchedulerTickLoop() {
+  if (schedulerTickTimer) {
+    clearInterval(schedulerTickTimer);
+  }
+  schedulerTickTimer = setInterval(() => {
+    void processDueSchedulerSchedules().catch((error) => {
+      console.error('Scheduler tick failed:', error);
+    });
+  }, 1000);
+  void processDueSchedulerSchedules().catch((error) => {
+    console.error('Scheduler warmup tick failed:', error);
+  });
+}
+
+function stopSchedulerTickLoop() {
+  if (!schedulerTickTimer) {
+    return;
+  }
+  clearInterval(schedulerTickTimer);
+  schedulerTickTimer = null;
+}
+
 app.setAppUserModelId(APP_ID);
 
 app.whenReady().then(() => {
@@ -3974,6 +4986,13 @@ app.whenReady().then(() => {
 
   createSplashWindow();
   createWindow();
+  void ensureSchedulerDatabase()
+    .then(() => {
+      startSchedulerTickLoop();
+    })
+    .catch((error) => {
+      console.error('Scheduler initialization failed:', error);
+    });
 
   setupAutoUpdate();
   autoUpdater.checkForUpdatesAndNotify().catch((error) => {
@@ -3988,6 +5007,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  stopSchedulerTickLoop();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -4236,6 +5256,54 @@ ipcMain.handle('desktop:delete-db-updater-test-case', (_event, settings, payload
 
 ipcMain.handle('desktop:get-db-updater-overview', (_event, settings) => {
   return getDbUpdaterOverview(settings);
+});
+
+ipcMain.handle('desktop:get-scheduler-config', () => {
+  return readSchedulerConfig();
+});
+
+ipcMain.handle('desktop:sync-scheduler-config', (_event, config) => {
+  return saveSchedulerConfig(config);
+});
+
+ipcMain.handle('desktop:list-scheduler-schedules', () => {
+  return listSchedulerSchedules();
+});
+
+ipcMain.handle('desktop:create-scheduler-schedule', (_event, payload) => {
+  return createSchedulerSchedule(payload);
+});
+
+ipcMain.handle('desktop:update-scheduler-schedule', (_event, scheduleId, payload) => {
+  return updateSchedulerSchedule(scheduleId, payload);
+});
+
+ipcMain.handle('desktop:delete-scheduler-schedule', (_event, scheduleId) => {
+  return deleteSchedulerSchedule(scheduleId);
+});
+
+ipcMain.handle('desktop:run-scheduler-schedule-now', (_event, scheduleId) => {
+  return runSchedulerScheduleNow(scheduleId);
+});
+
+ipcMain.handle('desktop:list-scheduler-run-logs', (_event, limit) => {
+  return listSchedulerRunLogs(limit);
+});
+
+ipcMain.handle('desktop:queue-scheduler-run-request', (_event, payload) => {
+  return queueSchedulerRunRequest(payload);
+});
+
+ipcMain.handle('desktop:upsert-release-log', (_event, payload) => {
+  return insertOrReplaceReleaseLog(payload);
+});
+
+ipcMain.handle('desktop:list-release-logs', (_event, limit) => {
+  return listReleaseLogs(limit);
+});
+
+ipcMain.handle('desktop:list-pending-release-logs', () => {
+  return getPendingReleaseLogs();
 });
 
 ipcMain.handle('desktop:read-text-file', (_event, targetPath) => {
