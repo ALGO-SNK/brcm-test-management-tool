@@ -163,7 +163,8 @@ export interface ADOGlobalSearchResult {
 export interface TestSuiteMapping {
   testSuiteId: number;
   testSuiteName: string;
-  releaseDefinitionId: number;
+  // ADO XML rows may omit a release definition; null when absent.
+  releaseDefinitionId: number | null;
   releaseDefinitionName: string;
   assignedPerson?: string;
   tag?: string;

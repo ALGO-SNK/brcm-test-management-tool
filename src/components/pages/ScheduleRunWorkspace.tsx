@@ -198,6 +198,8 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
   const [isFailedBatchInProgress, setIsFailedBatchInProgress] = useState(false);
   const [isQueueRunModalOpen, setIsQueueRunModalOpen] = useState(false);
   const [isCdModalOpen, setIsCdModalOpen] = useState(false);
+  const [pageSize, setPageSize] = useState(20);
+  const [pageIndex, setPageIndex] = useState(0);
   const buildDropdownRef = useRef<HTMLDivElement | null>(null);
   const suiteSelectAllRef = useRef<HTMLInputElement | null>(null);
 
@@ -276,7 +278,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
           return {
             ...suite,
             tag: mapping?.tag,
-            releaseDefinitionId: mapping?.releaseDefinitionId,
+            releaseDefinitionId: mapping?.releaseDefinitionId ?? undefined,
           };
         })
         .sort((left, right) => left.suiteName.localeCompare(right.suiteName));
@@ -507,14 +509,48 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     return sorted;
   }, [tagFilteredSuiteIds, suiteRows, suiteSearchText, suiteSort]);
 
+  // Set wrapper for O(1) membership checks. Without this, rendering 1,000+ suite
+  // rows triggers Array.includes() per row on every state change → O(N²).
+  const selectedSuiteIdSet = useMemo(() => new Set(selectedSuiteIds), [selectedSuiteIds]);
+
+  // Pagination: page-size options grow with the result set. Always includes 20 (min)
+  // and "All (N)" at the end so the user can opt into the full list.
+  const pageSizeOptions = useMemo(() => {
+    const total = visibleSuites.length;
+    const tiers = [20, 50, 100, 200, 500, 1000];
+    const opts: Array<{ value: number; label: string }> = tiers
+      .filter((t) => t === 20 || total >= t)
+      .map((v) => ({ value: v, label: v.toLocaleString() }));
+    if (total > 20) {
+      opts.push({ value: total, label: `All (${total.toLocaleString()})` });
+    }
+    return opts;
+  }, [visibleSuites.length]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleSuites.length / Math.max(1, pageSize)));
+  const safePageIndex = Math.min(pageIndex, totalPages - 1);
+
+  const pageSlice = useMemo(
+    () => visibleSuites.slice(safePageIndex * pageSize, (safePageIndex + 1) * pageSize),
+    [visibleSuites, safePageIndex, pageSize],
+  );
+
+  const pageRangeStart = visibleSuites.length === 0 ? 0 : safePageIndex * pageSize + 1;
+  const pageRangeEnd = Math.min(visibleSuites.length, (safePageIndex + 1) * pageSize);
+
+  // Reset to page 0 when the filtered set or page size changes
+  useEffect(() => {
+    setPageIndex(0);
+  }, [planFilter, selectedTag, suiteSearchText, pageSize]);
+
   const visibleSuiteIds = useMemo(
     () => Array.from(new Set(visibleSuites.map((suite) => suite.suiteId))),
     [visibleSuites],
   );
 
   const selectedVisibleSuiteCount = useMemo(
-    () => visibleSuiteIds.filter((suiteId) => selectedSuiteIds.includes(suiteId)).length,
-    [selectedSuiteIds, visibleSuiteIds],
+    () => visibleSuiteIds.filter((suiteId) => selectedSuiteIdSet.has(suiteId)).length,
+    [selectedSuiteIdSet, visibleSuiteIds],
   );
 
   const areAllVisibleSuitesSelected = visibleSuiteIds.length > 0 && selectedVisibleSuiteCount === visibleSuiteIds.length;
@@ -525,10 +561,9 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     suiteSelectAllRef.current.indeterminate = areSomeVisibleSuitesSelected;
   }, [areSomeVisibleSuitesSelected]);
 
-
   const selectedSuiteRows = useMemo(
-    () => suiteRows.filter((suite) => selectedSuiteIds.includes(suite.suiteId)),
-    [selectedSuiteIds, suiteRows],
+    () => suiteRows.filter((suite) => selectedSuiteIdSet.has(suite.suiteId)),
+    [selectedSuiteIdSet, suiteRows],
   );
 
   const worldPayPlanIds = useMemo(() => {
@@ -939,10 +974,16 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
             Operations workspace for suite-based run planning, build/CD preflight, batching, and scheduler-backed activity.
           </p>
         </div>
-        <div className="workspace-hub__plans-meta">
-          <button type="button" className="btn btn--secondary btn--sm" onClick={openCdModal}>
-            View Available CDs
+        <div className="workspace-hub__plans-meta scheduler-run-screen__actions">
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={openCdModal}
+            title="Inspect release definition (CD) availability"
+          >
+            View CDs
           </button>
+          <span className="scheduler-run-screen__action-divider" aria-hidden="true" />
           <button
             type="button"
             className="btn btn--secondary btn--sm"
@@ -955,7 +996,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
           </button>
           <button
             type="button"
-            className="btn btn--secondary btn--sm"
+            className="btn btn--warning btn--sm"
             onClick={() => { void handleFailedBatchRerun(); }}
             disabled={isFailedBatchInProgress}
             title="Re-run suites that failed in the last execution"
@@ -963,6 +1004,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
             <IconMotionPlay size={14} />
             {isFailedBatchInProgress ? 'Queueing…' : 'Failed Batch Rerun'}
           </button>
+          <span className="scheduler-run-screen__action-divider" aria-hidden="true" />
           <button
             type="button"
             className="btn btn--primary btn--sm"
@@ -976,65 +1018,77 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
       </div>
 
       <div className="workspace-hub__plans-body scheduler-run-screen">
-        <div className="settings-panel">
-          <div className="settings-panel__head scheduler-run-screen__suite-head">
-            <div className="scheduler-run-screen__suite-toolbar-shell">
-              <div className="scheduler-run-screen__suite-tools">
-                <div className="scheduler-run-screen__suite-filters">
-                  <select
-                    className="settings-input scheduler-run-screen__plan-filter"
-                    value={planFilter}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setPlanFilter(value === 'all' ? 'all' : Number(value));
-                    }}
-                    disabled={isLoadingPlans}
-                    title="Test Plan"
-                  >
-                    <option value="all">All plans</option>
-                    {plans.map((plan) => (
-                      <option key={plan.id} value={plan.id}>{plan.name} ({plan.id})</option>
-                    ))}
-                  </select>
-                  {requiresWorldPayBuild && (
-                    <select
-                      className="settings-input scheduler-run-screen__plan-filter"
-                      value={selectedWorldPayServer}
-                      onChange={(event) => setSelectedWorldPayServer(event.target.value as WorldPayServer)}
-                      title="World Pay server"
-                    >
-                      <option value="Regression World Pay">Regression World Pay</option>
-                      <option value="Kanban World Pay">Kanban World Pay</option>
-                    </select>
-                  )}
-                  <select
-                    className="settings-input scheduler-run-screen__plan-filter"
-                    value={selectedTag}
-                    onChange={(event) => setSelectedTag(event.target.value)}
-                    disabled={isLoadingSuites || availableTags.length === 0}
-                    title="Tag filter (from work item mappings)"
-                  >
-                    <option value="all">All tags</option>
-                    {availableTags.map((tag) => (
-                      <option key={tag} value={tag}>{tag}</option>
-                    ))}
-                  </select>
-                  <input
-                    className="settings-input scheduler-run-screen__search"
-                    value={suiteSearchText}
-                    onChange={(event) => setSuiteSearchText(event.target.value)}
-                    placeholder="Search suite (name / id / plan)"
-                  />
-                </div>
-                <div className="scheduler-run-screen__suite-actions">
-                  <button type="button" className="btn btn--secondary" onClick={() => { void loadSuites(); }} disabled={isLoadingSuites}>
-                    <IconRefresh size={14} />
-                    Refresh Suites
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="scheduler-run-screen__filterbar">
+          <select
+            className="settings-input scheduler-run-screen__filter-control scheduler-run-screen__filter-plan"
+            value={planFilter}
+            onChange={(event) => {
+              const value = event.target.value;
+              setPlanFilter(value === 'all' ? 'all' : Number(value));
+            }}
+            disabled={isLoadingPlans}
+            title="Test Plan"
+            aria-label="Filter by test plan"
+          >
+            <option value="all">All plans</option>
+            {plans.map((plan) => (
+              <option key={plan.id} value={plan.id}>{plan.name} ({plan.id})</option>
+            ))}
+          </select>
+          <select
+            className="settings-input scheduler-run-screen__filter-control scheduler-run-screen__filter-tag"
+            value={selectedTag}
+            onChange={(event) => setSelectedTag(event.target.value)}
+            disabled={isLoadingSuites || availableTags.length === 0}
+            title="Tag filter (from work item mappings)"
+            aria-label="Filter by tag"
+          >
+            <option value="all">All tags</option>
+            {availableTags.map((tag) => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </select>
+          <input
+            className="settings-input scheduler-run-screen__filter-search"
+            value={suiteSearchText}
+            onChange={(event) => setSuiteSearchText(event.target.value)}
+            placeholder="Search by name, ID or plan…"
+            aria-label="Search suites"
+          />
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon btn--sm"
+            onClick={() => { void loadSuites(); }}
+            disabled={isLoadingSuites}
+            title="Refresh suite list"
+            aria-label="Refresh suite list"
+          >
+            <IconRefresh size={15} />
+          </button>
+        </div>
+
+        <div className="scheduler-run-screen__statusbar">
+          <span className="scheduler-run-screen__status-count">
+            <strong>{visibleSuites.length.toLocaleString()}</strong>
+            {visibleSuites.length === suiteRows.length
+              ? ' suites'
+              : ` of ${suiteRows.length.toLocaleString()} suites`}
+          </span>
+          {selectedSuiteIds.length > 0 && (
+            <>
+              <span className="scheduler-run-screen__status-sep" aria-hidden="true">·</span>
+              <span className="scheduler-run-screen__status-selected">
+                <strong>{selectedSuiteIds.length.toLocaleString()}</strong> selected
+              </span>
+              <button
+                type="button"
+                className="scheduler-run-screen__status-clear"
+                onClick={() => setSelectedSuiteIds([])}
+              >
+                Clear
+              </button>
+            </>
+          )}
         </div>
 
         <div className="settings-panel scheduler-run-screen__table-panel">
@@ -1049,7 +1103,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
                       </th>
                       <th className="suite-col--id" style={{ width: 120 }}>Suite ID</th>
                       <th className="suite-col--suite">Name</th>
-                      <th className="suite-col--plan" style={{ width: 260 }}>Plan</th>
+                      <th className="suite-col--plan" style={{ width: 220 }}>Plan</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1116,7 +1170,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
                       </th>
                       <th
                         className="suite-col--plan"
-                        style={{ width: 260 }}
+                        style={{ width: 220 }}
                         aria-sort={suiteSort.key === 'planName' ? (suiteSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
                       >
                         <button
@@ -1131,8 +1185,8 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleSuites.map((suite) => {
-                      const isChecked = selectedSuiteIds.includes(suite.suiteId);
+                    {pageSlice.map((suite) => {
+                      const isChecked = selectedSuiteIdSet.has(suite.suiteId);
                       return (
                         <tr key={`${suite.planId}-${suite.suiteId}`}>
                           <td className="suite-col--run">
@@ -1158,6 +1212,72 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
             )}
           </div>
         </div>
+
+        {!isLoadingSuites && visibleSuites.length > 0 && (
+          <nav className="scheduler-run-screen__pagination" aria-label="Suite pagination">
+            <div className="scheduler-run-screen__pagination-range">
+              {pageRangeStart.toLocaleString()}–{pageRangeEnd.toLocaleString()} of {visibleSuites.length.toLocaleString()}
+            </div>
+            <div className="scheduler-run-screen__pagination-controls">
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon btn--sm"
+                onClick={() => setPageIndex(0)}
+                disabled={safePageIndex === 0}
+                title="First page"
+                aria-label="First page"
+              >
+                «
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon btn--sm"
+                onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+                disabled={safePageIndex === 0}
+                title="Previous page"
+                aria-label="Previous page"
+              >
+                ‹
+              </button>
+              <span className="scheduler-run-screen__pagination-page">
+                Page <strong>{safePageIndex + 1}</strong> of {totalPages.toLocaleString()}
+              </span>
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon btn--sm"
+                onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePageIndex >= totalPages - 1}
+                title="Next page"
+                aria-label="Next page"
+              >
+                ›
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon btn--sm"
+                onClick={() => setPageIndex(totalPages - 1)}
+                disabled={safePageIndex >= totalPages - 1}
+                title="Last page"
+                aria-label="Last page"
+              >
+                »
+              </button>
+            </div>
+            <label className="scheduler-run-screen__pagination-size">
+              Rows per page
+              <select
+                className="settings-input"
+                value={pageSize}
+                onChange={(event) => setPageSize(Number(event.target.value))}
+                aria-label="Rows per page"
+              >
+                {pageSizeOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </label>
+          </nav>
+        )}
       </div>
 
       {isCdModalOpen && (
@@ -1329,6 +1449,19 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
                     )}
                   </select>
                 </label>
+                {requiresWorldPayBuild && (
+                  <label className="scheduler-run-screen__field">
+                    <span>World Pay Server</span>
+                    <select
+                      className="settings-input"
+                      value={selectedWorldPayServer}
+                      onChange={(event) => setSelectedWorldPayServer(event.target.value as WorldPayServer)}
+                    >
+                      <option value="Regression World Pay">Regression World Pay</option>
+                      <option value="Kanban World Pay">Kanban World Pay</option>
+                    </select>
+                  </label>
+                )}
               </div>
 
               <div className="scheduler-run-modal__availability">

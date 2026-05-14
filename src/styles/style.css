@@ -11211,8 +11211,8 @@ input[type="radio"] {
 
 .scheduler-run-screen {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: 12px;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    gap: 8px;
     align-content: start;
     height: 100%;
     min-height: 0;
@@ -21530,4 +21530,240 @@ input[type="radio"] {
         height: 180px;
         min-height: 0;
     }
+}
+
+/* Schedule Run — compact filter + status bar */
+.scheduler-run-screen__filterbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+
+.scheduler-run-screen__filter-control {
+    flex: 0 0 auto;
+    min-width: 180px;
+    max-width: 280px;
+}
+
+.scheduler-run-screen__filter-plan {
+    min-width: 200px;
+    max-width: 320px;
+}
+
+.scheduler-run-screen__filter-tag {
+    min-width: 160px;
+    max-width: 220px;
+}
+
+.scheduler-run-screen__filter-search {
+    flex: 1 1 auto;
+    min-width: 200px;
+}
+
+.scheduler-run-screen__statusbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0 var(--space-1);
+    min-height: 22px;
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+}
+
+.scheduler-run-screen__status-count strong,
+.scheduler-run-screen__status-selected strong {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.scheduler-run-screen__status-sep {
+    color: var(--color-text-muted);
+    opacity: 0.5;
+}
+
+.scheduler-run-screen__status-clear {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--color-primary);
+    font-size: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-left: auto;
+}
+
+.scheduler-run-screen__status-clear:hover {
+    text-decoration: none;
+}
+
+/* Schedule Run — action toolbar hierarchy */
+.scheduler-run-screen__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.scheduler-run-screen__action-divider {
+    width: 1px;
+    height: 22px;
+    background: var(--color-border);
+    margin: 0 var(--space-1);
+}
+
+/* Warning button variant for cautionary actions (e.g. Failed Batch Rerun).
+   Uses explicit amber-600 (Tailwind) so it stays consistent across all themes
+   and reads as "caution" rather than the muddy brown from --color-warning. */
+.btn--warning {
+    background: #d97706;
+    color: #ffffff;
+    border: 1px solid transparent;
+    font-weight: 500;
+}
+
+.btn--warning:hover:not(:disabled) {
+    background: #b45309;
+    color: #ffffff;
+}
+
+.btn--warning:active:not(:disabled) {
+    background: #92400e;
+}
+
+.btn--warning:focus-visible {
+    outline: 2px solid #fbbf24;
+    outline-offset: 2px;
+}
+
+.btn--warning:disabled {
+    background: #d97706;
+    color: #ffffff;
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.btn--warning .app-icon {
+    color: #ffffff;
+}
+
+/* Modern checkbox — replaces native browser checkbox inside data tables.
+   Scoped to .data-table so other forms keep their default behavior. */
+.data-table input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-surface);
+    position: relative;
+    transition: background-color 0.12s ease, border-color 0.12s ease,
+                box-shadow 0.12s ease;
+    flex-shrink: 0;
+    margin: 0;
+    vertical-align: middle;
+    display: inline-block;
+}
+
+.data-table input[type="checkbox"]:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    background: var(--color-surface-hover, var(--color-surface));
+}
+
+.data-table input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.data-table input[type="checkbox"]:checked,
+.data-table input[type="checkbox"]:indeterminate {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 14px 14px;
+}
+
+/* Inline SVG checkmark — crisp at any pixel ratio, theme-agnostic white stroke. */
+.data-table input[type="checkbox"]:checked {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.5 L6.8 11.8 L12.5 5.2'/></svg>");
+}
+
+/* Inline SVG dash for indeterminate state. */
+.data-table input[type="checkbox"]:indeterminate {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='%23ffffff' stroke-width='2.4' stroke-linecap='round' d='M4 8 L12 8'/></svg>");
+}
+
+.data-table input[type="checkbox"]:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Subtle highlight on rows containing a checked checkbox */
+.data-table tbody tr:has(input[type="checkbox"]:checked) {
+    background: var(--color-surface-hover, rgba(0, 0, 0, 0.03));
+}
+
+/* Suite table pagination footer */
+.scheduler-run-screen__pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    flex-wrap: wrap;
+}
+
+.scheduler-run-screen__pagination-range {
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.scheduler-run-screen__pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
+}
+
+.scheduler-run-screen__pagination-controls .btn--icon {
+    min-width: 28px;
+    height: 28px;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.scheduler-run-screen__pagination-page {
+    padding: 0 var(--space-2);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.scheduler-run-screen__pagination-page strong {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.scheduler-run-screen__pagination-size {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: var(--space-3);
+    white-space: nowrap;
+}
+
+.scheduler-run-screen__pagination-size select {
+    height: 28px;
+    padding: 0 var(--space-2);
+    min-width: 96px;
+    font-size: var(--text-xs);
 }
