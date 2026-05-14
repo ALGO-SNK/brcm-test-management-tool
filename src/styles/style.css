@@ -11211,10 +11211,22 @@ input[type="radio"] {
 
 .scheduler-run-screen {
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr);
     gap: 8px;
     align-content: start;
     height: 100%;
+    min-height: 0;
+}
+
+/* Table panel hosts both the table-shell and the pagination footer */
+.scheduler-run-screen__table-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.scheduler-run-screen__table-panel > .scheduler-run-screen__suite-table-shell {
+    flex: 1 1 auto;
     min-height: 0;
 }
 
@@ -21708,18 +21720,18 @@ input[type="radio"] {
     background: var(--color-surface-hover, rgba(0, 0, 0, 0.03));
 }
 
-/* Suite table pagination footer */
+/* Suite table pagination footer — lives inside the table panel, separated by a thin top border */
 .scheduler-run-screen__pagination {
     display: flex;
     align-items: center;
     gap: var(--space-3);
     padding: var(--space-2) var(--space-3);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface-raised, transparent);
     font-size: var(--text-xs);
     color: var(--color-text-muted);
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .scheduler-run-screen__pagination-range {
@@ -21766,4 +21778,109 @@ input[type="radio"] {
     padding: 0 var(--space-2);
     min-width: 96px;
     font-size: var(--text-xs);
+}
+
+/* Inline checkbox row inside settings — checkbox left, label + hint right */
+.settings-field.settings-field--inline {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: var(--space-2);
+}
+
+.settings-field.settings-field--inline input[type="checkbox"] {
+    margin-top: 2px;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+    width: 16px;
+    height: 16px;
+}
+
+.settings-field.settings-field--inline > span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Multi-select with checkboxes inside settings panel */
+.settings-multiselect {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    overflow: hidden;
+}
+
+.settings-multiselect__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface-raised, var(--color-surface));
+    border-bottom: 1px solid var(--color-border);
+}
+
+.settings-multiselect__actions {
+    display: flex;
+    gap: var(--space-1);
+}
+
+.settings-multiselect__list {
+    max-height: 220px;
+    overflow-y: auto;
+    padding: var(--space-1) 0;
+}
+
+.settings-multiselect__option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 6px var(--space-3);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    transition: background-color 0.12s ease;
+}
+
+.settings-multiselect__option:hover {
+    background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.settings-multiselect__option input[type="checkbox"] {
+    accent-color: var(--color-primary);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.settings-multiselect__option-label {
+    flex: 1;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.settings-multiselect__option-id {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.settings-multiselect__empty {
+    padding: var(--space-3);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    text-align: center;
+}
+
+.btn--xs {
+    padding: 2px 8px;
+    font-size: var(--text-xs);
+    min-height: 22px;
 }

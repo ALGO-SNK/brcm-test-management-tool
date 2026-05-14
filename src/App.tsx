@@ -55,6 +55,7 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
         schedulerWorldPayKanbanBranch: 'refs/heads/kanban_worldpay',
         schedulerSagePayTestPlanId: 78806,
         schedulerWorldPayTestPlanId: 139145,
+        schedulerEnabledPlanIds: [],
         schedulerMappingWorkItemIds: '136838,147829',
         schedulerExcludedSuiteIdsCsv: '',
         schedulerExcludedSuiteNamePatterns: 'initial,intial',

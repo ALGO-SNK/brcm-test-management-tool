@@ -12,7 +12,12 @@ import {
   type ADOTestConfigurationSummary,
   type ADOReleaseDefinitionAvailability,
 } from '../../services/adoApi';
-import { parseWorkItemIdsCsv } from '../../services/mappingParser';
+import {
+  isSuiteNameExcluded,
+  parseExcludedSuiteIdsCsv,
+  parseExcludedSuiteNamePatterns,
+  parseWorkItemIdsCsv,
+} from '../../services/mappingParser';
 import { updatePendingReleaseLogs } from '../../services/releaseLogUpdater';
 import type { ADOTestPlan, ADOTestSuite, ReleaseLogRecord, TestSuiteMapping } from '../../types';
 import {
@@ -226,17 +231,26 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     }
   }, [addNotification, isConnectionConfigured, workspaceSettings]);
 
+  // Plans enabled for Schedule Run (from settings).
+  // Empty array = all plans enabled; otherwise only the listed plan IDs.
+  const enabledPlans = useMemo(() => {
+    const enabledIds = workspaceSettings.schedulerEnabledPlanIds ?? [];
+    if (enabledIds.length === 0) return plans;
+    const idSet = new Set(enabledIds);
+    return plans.filter((plan) => idSet.has(plan.id));
+  }, [plans, workspaceSettings.schedulerEnabledPlanIds]);
+
   const loadSuites = useCallback(async () => {
-    if (!isConnectionConfigured || plans.length === 0) {
+    if (!isConnectionConfigured || enabledPlans.length === 0) {
       setSuiteRows([]);
       return;
     }
 
-    // Plan dropdown lists all plans (same source as the Plans page).
-    // 'all' loads suites for every plan; a specific id loads that plan only.
+    // Plan dropdown lists only enabled plans (filtered by settings).
+    // 'all' loads suites for every enabled plan; a specific id loads that plan only.
     const planScope = planFilter === 'all'
-      ? plans
-      : plans.filter((plan) => plan.id === planFilter);
+      ? enabledPlans
+      : enabledPlans.filter((plan) => plan.id === planFilter);
 
     if (planScope.length === 0) {
       setSuiteRows([]);
@@ -270,9 +284,27 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
       );
       const allSuites = suiteResponses.flat();
 
+      // Exclusion filters (mirror C# SyncPageViewModel.cs:678-683 + Constants.cs ExcludedTestSuites):
+      //  1. Name-pattern exclusion — `schedulerExcludedSuiteNamePatterns` (CSV)
+      //  2. ID exclusion — `schedulerExcludedSuiteIdsCsv` (CSV of suite IDs)
+      // Both active whenever their CSV has any entries.
+      const namePatterns = parseExcludedSuiteNamePatterns(
+        workspaceSettings.schedulerExcludedSuiteNamePatterns || '',
+      );
+      const excludedIds = parseExcludedSuiteIdsCsv(
+        workspaceSettings.schedulerExcludedSuiteIdsCsv || '',
+      );
+      const filteredSuites = (namePatterns.length === 0 && excludedIds.size === 0)
+        ? allSuites
+        : allSuites.filter((suite) => {
+          if (excludedIds.has(suite.suiteId)) return false;
+          if (namePatterns.length > 0 && isSuiteNameExcluded(suite.suiteName, namePatterns)) return false;
+          return true;
+        });
+
       // Enrich every suite with mapping data (tag + release definition).
       // Test point counts are NOT fetched here — only at run-time via buildSuitePointPlan.
-      const enrichedSuites: SuiteRow[] = allSuites
+      const enrichedSuites: SuiteRow[] = filteredSuites
         .map((suite) => {
           const mapping = mappingBySuiteId.get(suite.suiteId);
           return {
@@ -292,7 +324,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     } finally {
       setIsLoadingSuites(false);
     }
-  }, [addNotification, isConnectionConfigured, planFilter, plans, workspaceSettings]);
+  }, [addNotification, enabledPlans, isConnectionConfigured, planFilter, workspaceSettings]);
 
   const releaseDefinitionPool = useMemo(
     () => parseDefinitionIdsCsv(workspaceSettings.schedulerReleaseDefinitionIdsCsv),
@@ -1031,7 +1063,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
             aria-label="Filter by test plan"
           >
             <option value="all">All plans</option>
-            {plans.map((plan) => (
+            {enabledPlans.map((plan) => (
               <option key={plan.id} value={plan.id}>{plan.name} ({plan.id})</option>
             ))}
           </select>
@@ -1211,73 +1243,73 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
               </div>
             )}
           </div>
-        </div>
 
-        {!isLoadingSuites && visibleSuites.length > 0 && (
-          <nav className="scheduler-run-screen__pagination" aria-label="Suite pagination">
-            <div className="scheduler-run-screen__pagination-range">
-              {pageRangeStart.toLocaleString()}–{pageRangeEnd.toLocaleString()} of {visibleSuites.length.toLocaleString()}
-            </div>
-            <div className="scheduler-run-screen__pagination-controls">
-              <button
-                type="button"
-                className="btn btn--ghost btn--icon btn--sm"
-                onClick={() => setPageIndex(0)}
-                disabled={safePageIndex === 0}
-                title="First page"
-                aria-label="First page"
-              >
-                «
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost btn--icon btn--sm"
-                onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
-                disabled={safePageIndex === 0}
-                title="Previous page"
-                aria-label="Previous page"
-              >
-                ‹
-              </button>
-              <span className="scheduler-run-screen__pagination-page">
-                Page <strong>{safePageIndex + 1}</strong> of {totalPages.toLocaleString()}
-              </span>
-              <button
-                type="button"
-                className="btn btn--ghost btn--icon btn--sm"
-                onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={safePageIndex >= totalPages - 1}
-                title="Next page"
-                aria-label="Next page"
-              >
-                ›
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost btn--icon btn--sm"
-                onClick={() => setPageIndex(totalPages - 1)}
-                disabled={safePageIndex >= totalPages - 1}
-                title="Last page"
-                aria-label="Last page"
-              >
-                »
-              </button>
-            </div>
-            <label className="scheduler-run-screen__pagination-size">
-              Rows per page
-              <select
-                className="settings-input"
-                value={pageSize}
-                onChange={(event) => setPageSize(Number(event.target.value))}
-                aria-label="Rows per page"
-              >
-                {pageSizeOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </label>
-          </nav>
-        )}
+          {!isLoadingSuites && visibleSuites.length > 0 && (
+            <nav className="scheduler-run-screen__pagination" aria-label="Suite pagination">
+              <div className="scheduler-run-screen__pagination-range">
+                {pageRangeStart.toLocaleString()}–{pageRangeEnd.toLocaleString()} of {visibleSuites.length.toLocaleString()}
+              </div>
+              <div className="scheduler-run-screen__pagination-controls">
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--icon btn--sm"
+                  onClick={() => setPageIndex(0)}
+                  disabled={safePageIndex === 0}
+                  title="First page"
+                  aria-label="First page"
+                >
+                  «
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--icon btn--sm"
+                  onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+                  disabled={safePageIndex === 0}
+                  title="Previous page"
+                  aria-label="Previous page"
+                >
+                  ‹
+                </button>
+                <span className="scheduler-run-screen__pagination-page">
+                  Page <strong>{safePageIndex + 1}</strong> of {totalPages.toLocaleString()}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--icon btn--sm"
+                  onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={safePageIndex >= totalPages - 1}
+                  title="Next page"
+                  aria-label="Next page"
+                >
+                  ›
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--icon btn--sm"
+                  onClick={() => setPageIndex(totalPages - 1)}
+                  disabled={safePageIndex >= totalPages - 1}
+                  title="Last page"
+                  aria-label="Last page"
+                >
+                  »
+                </button>
+              </div>
+              <label className="scheduler-run-screen__pagination-size">
+                Rows per page
+                <select
+                  className="settings-input"
+                  value={pageSize}
+                  onChange={(event) => setPageSize(Number(event.target.value))}
+                  aria-label="Rows per page"
+                >
+                  {pageSizeOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+            </nav>
+          )}
+        </div>
       </div>
 
       {isCdModalOpen && (

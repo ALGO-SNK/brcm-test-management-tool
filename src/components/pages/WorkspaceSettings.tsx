@@ -51,6 +51,7 @@ export interface WorkspaceSettingsValues {
   schedulerWorldPayKanbanBranch: string;
   schedulerSagePayTestPlanId: number;
   schedulerWorldPayTestPlanId: number;
+  schedulerEnabledPlanIds: number[];
   schedulerMappingWorkItemIds: string;
   schedulerExcludedSuiteIdsCsv: string;
   schedulerExcludedSuiteNamePatterns: string;
@@ -1511,9 +1512,81 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
 
                     <div className="settings-panel">
                       <div className="settings-panel__head">
-                        <h3 className="settings-panel__title">Failed Suite Rerun Exclusions</h3>
+                        <h3 className="settings-panel__title">Enabled Plans for Schedule Run</h3>
                         <p className="settings-panel__sub">
-                          Exclude specific suites and suite name patterns from the 5 AM failed-suite rerun.
+                          Pick which test plans appear in the Schedule Run plan filter. Leave empty to enable all plans.
+                        </p>
+                      </div>
+                      <div className="settings-field-grid">
+                        <div className="settings-field settings-field--full">
+                          <div className="settings-multiselect">
+                            <div className="settings-multiselect__head">
+                              <span className="settings-field__label">
+                                {form.schedulerEnabledPlanIds.length === 0
+                                  ? `All plans enabled (${planOptions.length})`
+                                  : `${form.schedulerEnabledPlanIds.length} of ${planOptions.length} plans enabled`}
+                              </span>
+                              <div className="settings-multiselect__actions">
+                                <button
+                                  type="button"
+                                  className="btn btn--ghost btn--xs"
+                                  onClick={() => setForm((prev) => ({ ...prev, schedulerEnabledPlanIds: planOptions.map((plan) => plan.id) }))}
+                                  disabled={planOptions.length === 0 || form.schedulerEnabledPlanIds.length === planOptions.length}
+                                >
+                                  Select all
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn--ghost btn--xs"
+                                  onClick={() => setForm((prev) => ({ ...prev, schedulerEnabledPlanIds: [] }))}
+                                  disabled={form.schedulerEnabledPlanIds.length === 0}
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            </div>
+                            {planOptions.length === 0 ? (
+                              <div className="settings-multiselect__empty">
+                                {plansLoading ? 'Loading plans…' : 'No plans available. Configure connection above and validate.'}
+                              </div>
+                            ) : (
+                              <div className="settings-multiselect__list">
+                                {planOptions.map((plan) => {
+                                  const isChecked = form.schedulerEnabledPlanIds.includes(plan.id);
+                                  return (
+                                    <label key={plan.id} className="settings-multiselect__option">
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={(event) => {
+                                          const checked = event.target.checked;
+                                          setForm((prev) => {
+                                            const current = new Set(prev.schedulerEnabledPlanIds);
+                                            if (checked) current.add(plan.id);
+                                            else current.delete(plan.id);
+                                            return { ...prev, schedulerEnabledPlanIds: Array.from(current) };
+                                          });
+                                        }}
+                                      />
+                                      <span className="settings-multiselect__option-label">
+                                        {plan.name}
+                                      </span>
+                                      <span className="settings-multiselect__option-id">#{plan.id}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="settings-panel">
+                      <div className="settings-panel__head">
+                        <h3 className="settings-panel__title">Exclude suites from Schedule Run</h3>
+                        <p className="settings-panel__sub">
+                          Exclude specific suites and suite name patterns from the Schedule Run list and the 5 AM failed-suite rerun.
                         </p>
                       </div>
                       <div className="settings-field-grid">
