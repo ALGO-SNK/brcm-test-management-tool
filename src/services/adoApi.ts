@@ -1790,6 +1790,10 @@ export interface ADOTestPointSummary {
   caseId: number | null;
   outcome: string;
   state: string;
+  /** Last result state from ADO ("completed" | "pending" | …). */
+  lastResultState?: string;
+  /** Whether the test point is currently active (run pending/in-flight). */
+  isActive?: boolean;
   configurationId: number | null;
   configurationName: string;
   automationStatus: string;
@@ -2044,9 +2048,8 @@ export async function fetchBuilds(
             status: normalizeFieldText(build.status).trim(),
             result: normalizeFieldText(build.result).trim(),
             queueTime: normalizeFieldText(build.queueTime).trim(),
-            repository: repositoryId
-              ? { id: repositoryId, type: repositoryType || undefined }
-              : undefined,
+            repositoryId,
+            repositoryType,
           } satisfies ADOBuildSummary;
         })
         .filter((build) => Number.isInteger(build.id) && build.id > 0);
@@ -2063,6 +2066,150 @@ export async function fetchBuilds(
     throw humanizeUnexpectedError('load builds', lastError);
   }
   throw new Error("We couldn't load builds. Please try again.");
+}
+
+export interface QueueBuildParams {
+  /** Classic build definition (pipeline) id, e.g. 762. */
+  definitionId: number;
+  /** Full ref to build, e.g. "refs/heads/master". Omit for the definition default. */
+  sourceBranch?: string;
+  /** Agent pool override identifier, e.g. "windows-latest". Omit for the definition default. */
+  agentSpecification?: string;
+  /** Queue-time variables. Serialized to the `parameters` JSON string ADO expects. */
+  parameters?: Record<string, string>;
+  /** Optional agent demands (e.g. "Agent.OS -equals Windows_NT"). */
+  demands?: string[];
+}
+
+export interface QueuedBuildResult {
+  id: number;
+  buildNumber: string;
+  status: string;
+  definitionName?: string;
+  webUrl?: string;
+}
+
+/**
+ * Queue a classic build for a build definition — the REST equivalent of clicking
+ * "Run pipeline" in the Azure DevOps UI.
+ *
+ *   POST {base}/_apis/build/builds?api-version=...
+ *   { definition:{id}, sourceBranch, agentSpecification:{identifier},
+ *     parameters: "<json string of queue-time vars>", demands:[...] }
+ *
+ * `parameters` MUST be a JSON-encoded STRING (not an object) for classic builds.
+ */
+export async function queueBuild(
+  settings: WorkspaceConnectionSettings,
+  params: QueueBuildParams,
+): Promise<QueuedBuildResult> {
+  assertSettings(settings);
+  if (!Number.isInteger(params.definitionId) || params.definitionId <= 0) {
+    throw new Error('A valid pipeline (build definition) id is required to queue a build.');
+  }
+
+  const apiVersion = normalizeApiVersion(settings.apiVersion);
+  const urlCandidates = getUrlCandidates(settings);
+  let lastError: unknown;
+
+  const body: Record<string, unknown> = {
+    definition: { id: params.definitionId },
+  };
+  const sourceBranch = params.sourceBranch?.trim();
+  if (sourceBranch) body.sourceBranch = sourceBranch;
+  const agentSpecification = params.agentSpecification?.trim();
+  if (agentSpecification) body.agentSpecification = { identifier: agentSpecification };
+  if (params.parameters && Object.keys(params.parameters).length > 0) {
+    body.parameters = JSON.stringify(params.parameters);
+  }
+  if (params.demands && params.demands.length > 0) {
+    body.demands = params.demands;
+  }
+
+  for (const baseUrl of urlCandidates) {
+    try {
+      const url = `${baseUrl}/_apis/build/builds?api-version=${encodeURIComponent(apiVersion)}`;
+      const response = await postJson<{
+        id: number;
+        buildNumber?: string;
+        status?: string;
+        definition?: { name?: string };
+        _links?: { web?: { href?: string } };
+      }>(url, settings.patToken.trim(), body, 'application/json', 'queue the build');
+
+      return {
+        id: Number(response.id),
+        buildNumber: normalizeFieldText(response.buildNumber).trim() || String(response.id),
+        status: normalizeFieldText(response.status).trim() || 'queued',
+        definitionName: normalizeFieldText(response.definition?.name).trim() || undefined,
+        webUrl: normalizeFieldText(response._links?.web?.href).trim() || undefined,
+      };
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('queue the build', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('queue the build', lastError);
+  }
+  throw new Error("We couldn't queue the build. Please try again.");
+}
+
+export interface BuildDefinitionSummary {
+  id: number;
+  name: string;
+}
+
+/**
+ * List all build definitions (pipelines) so the UI can offer a picker showing
+ * "Name (#id)" instead of asking the user to type a bare id.
+ *
+ *   GET {base}/_apis/build/definitions?api-version=...&queryOrder=definitionNameAscending
+ */
+export async function fetchBuildDefinitions(
+  settings: WorkspaceConnectionSettings,
+  signal?: AbortSignal,
+): Promise<BuildDefinitionSummary[]> {
+  assertSettings(settings);
+  const apiVersion = normalizeApiVersion(settings.apiVersion);
+  const urlCandidates = getUrlCandidates(settings);
+  let lastError: unknown;
+
+  for (const baseUrl of urlCandidates) {
+    try {
+      const url = `${baseUrl}/_apis/build/definitions`
+        + `?queryOrder=definitionNameAscending`
+        + `&$top=2000`
+        + `&api-version=${encodeURIComponent(apiVersion)}`;
+      const response = await fetchJsonWithAction<ADOListResponse<{ id: number; name?: string }>>(
+        url,
+        settings.patToken.trim(),
+        'load pipelines',
+        signal,
+      );
+      return (response.value ?? [])
+        .map((def) => ({
+          id: Number(def.id),
+          name: normalizeFieldText(def.name).trim(),
+        }))
+        .filter((def) => Number.isInteger(def.id) && def.id > 0);
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('load pipelines', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load pipelines', lastError);
+  }
+  throw new Error("We couldn't load pipelines. Please try again.");
 }
 
 export async function fetchTestConfigurations(
@@ -2179,6 +2326,91 @@ export async function fetchTestPointsForSuite(
     throw humanizeUnexpectedError('load test points', lastError);
   }
   throw new Error("We couldn't load test points. Please try again.");
+}
+
+/** IDs for one folder name (with vsrm host fallback). */
+async function fetchReleaseDefinitionIdsForSingleFolder(
+  settings: WorkspaceConnectionSettings,
+  folder: string,
+  apiVersion: string,
+  signal?: AbortSignal,
+): Promise<number[]> {
+  let lastError: unknown = null;
+  for (const releaseBase of buildReleaseBaseApiUrls(settings)) {
+    try {
+      const url = `${releaseBase}/definitions`
+        + `?searchText=${encodeURIComponent(folder)}`
+        + `&searchTextContainsFolderName=true`
+        + `&api-version=${encodeURIComponent(apiVersion)}`;
+      const response = await fetchJsonWithAction<ADOListResponse<Record<string, unknown>>>(
+        url,
+        settings.patToken.trim(),
+        'load release definitions by folder',
+        signal,
+      );
+      return (response.value ?? [])
+        .map((definition) => Number(definition.id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('load release definitions by folder', error);
+    }
+  }
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('load release definitions by folder', lastError);
+  }
+  throw new Error("We couldn't load release definitions for that folder. Please try again.");
+}
+
+/**
+ * Resolve the CD pool from one OR MORE release-definition FOLDER names instead
+ * of a hand-maintained id list. The input may be a comma- or newline-separated
+ * list (e.g. "Overnight CDs A, Overnight CDs B"); each folder is queried
+ * separately and the ids are unioned.
+ *
+ *   GET {vsrm}/release/definitions?searchText={folder}
+ *       &searchTextContainsFolderName=true&api-version=...
+ *
+ * `searchTextContainsFolderName=true` makes ADO match the folder/path rather
+ * than the definition name, so every CD inside the folder is returned.
+ * Returns the definition ids (deduped, ascending).
+ */
+export async function fetchReleaseDefinitionIdsByFolder(
+  settings: WorkspaceConnectionSettings,
+  folderName: string,
+  signal?: AbortSignal,
+): Promise<number[]> {
+  assertSettings(settings);
+
+  // Split on commas / newlines, trim, drop blanks, de-dupe (case-insensitive).
+  const seenFolders = new Set<string>();
+  const folders = folderName
+    .split(/[\n,]+/)
+    .map((part) => part.trim())
+    .filter((part) => {
+      if (!part) return false;
+      const key = part.toLowerCase();
+      if (seenFolders.has(key)) return false;
+      seenFolders.add(key);
+      return true;
+    });
+  if (folders.length === 0) return [];
+
+  const apiVersion = normalizeApiVersion(settings.apiVersion);
+  const idSets = await Promise.all(
+    folders.map((folder) =>
+      fetchReleaseDefinitionIdsForSingleFolder(settings, folder, apiVersion, signal),
+    ),
+  );
+
+  const unioned = new Set<number>();
+  for (const ids of idSets) {
+    for (const id of ids) unioned.add(id);
+  }
+  return Array.from(unioned).sort((a, b) => a - b);
 }
 
 export async function fetchReleaseDefinitionAvailability(
@@ -2573,8 +2805,8 @@ export async function createRelease(
               name: build.buildNumber,
               sourceBranch: build.sourceBranch || undefined,
               sourceVersion: build.sourceVersion || undefined,
-              sourceRepositoryId: build.repository?.id || undefined,
-              sourceRepositoryType: build.repository?.type || undefined,
+              sourceRepositoryId: build.repositoryId || undefined,
+              sourceRepositoryType: build.repositoryType || undefined,
             },
           },
         ],

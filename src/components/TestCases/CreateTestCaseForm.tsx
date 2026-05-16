@@ -294,6 +294,7 @@ export function CreateTestCaseForm({
               showValidationSummary={false}
               invalidFields={invalidMainFields}
               titlePlaceholder="Enter test case title"
+              workspaceSettings={workspaceSettings}
             />
 
             {/* Steps Editor - Identical to Edit Mode */}

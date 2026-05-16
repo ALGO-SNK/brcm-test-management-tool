@@ -204,6 +204,10 @@ export function IconBolt(props: IconProps) {
   return <MaterialIcon name="bolt" {...props} />;
 }
 
+export function IconRocketLaunch(props: IconProps) {
+  return <MaterialIcon name="rocket_launch" {...props} />;
+}
+
 export function IconDownload(props: IconProps) {
   return <MaterialIcon name="download" {...props} />;
 }

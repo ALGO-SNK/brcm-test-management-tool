@@ -935,6 +935,15 @@ export function StepsEditor({
     publishChanges(insertStepAfter(steps, stepIndex, copy));
   };
 
+  const handleInsertStepAt = (insertIndex: number) => {
+    const safeIndex = Math.max(0, Math.min(insertIndex, steps.length));
+    publishChanges([
+      ...steps.slice(0, safeIndex),
+      createBlankStep(safeIndex + 1),
+      ...steps.slice(safeIndex),
+    ]);
+  };
+
   const handleDeleteStep = (stepIndex: number) => {
     if (!steps[stepIndex]) return;
     setDeleteTargetIndex(stepIndex);
@@ -1055,29 +1064,45 @@ export function StepsEditor({
 
       <div className="steps-editor__list">
         {steps.map((step, stepIndex) => (
-          <StepItem
-            key={step.uiId}
-            step={step}
-            actionOptions={actionOptions}
-            isSearchActive={activeMatchedStepIndex === stepIndex}
-            invalidFields={stepFieldErrors?.get(step.index) ?? new Set()}
-            onFieldChange={(field, value) => handleStepFieldChange(stepIndex, field, value)}
-            onOptionalFieldToggle={(field, checked) => handleOptionalFieldToggle(stepIndex, field, checked)}
-            onCopy={() => handleCopyStep(stepIndex)}
-            onDelete={() => handleDeleteStep(stepIndex)}
-            onDragStart={(event) => handleDragStart(stepIndex, event)}
-            onDragOver={(event) => handleDragOver(stepIndex, event)}
-            onDrop={(event) => handleDrop(stepIndex, event)}
-            onDragEnd={handleDragEnd}
-            onMoveUp={() => handleMoveStep(stepIndex, -1)}
-            onMoveDown={() => handleMoveStep(stepIndex, 1)}
-            canMoveUp={stepIndex > 0}
-            canMoveDown={stepIndex < steps.length - 1}
-            containerRef={(element) => {
-              stepRefs.current[step.uiId] = element;
-            }}
-            onPreviewSharedStep={onPreviewSharedStep}
-          />
+          <div className="steps-editor__row" key={step.uiId}>
+            {stepIndex > 0 && (
+              <button
+                type="button"
+                className="steps-editor__inserter-btn"
+                onClick={() => handleInsertStepAt(stepIndex)}
+                aria-label={`Insert a step before step ${stepIndex + 1}`}
+                title="Insert step here"
+              >
+                <span className="steps-editor__inserter-line" aria-hidden="true" />
+                <span className="steps-editor__inserter-plus" aria-hidden="true">
+                  <IconPlus size={13} />
+                </span>
+                <span className="steps-editor__inserter-line" aria-hidden="true" />
+              </button>
+            )}
+            <StepItem
+              step={step}
+              actionOptions={actionOptions}
+              isSearchActive={activeMatchedStepIndex === stepIndex}
+              invalidFields={stepFieldErrors?.get(step.index) ?? new Set()}
+              onFieldChange={(field, value) => handleStepFieldChange(stepIndex, field, value)}
+              onOptionalFieldToggle={(field, checked) => handleOptionalFieldToggle(stepIndex, field, checked)}
+              onCopy={() => handleCopyStep(stepIndex)}
+              onDelete={() => handleDeleteStep(stepIndex)}
+              onDragStart={(event) => handleDragStart(stepIndex, event)}
+              onDragOver={(event) => handleDragOver(stepIndex, event)}
+              onDrop={(event) => handleDrop(stepIndex, event)}
+              onDragEnd={handleDragEnd}
+              onMoveUp={() => handleMoveStep(stepIndex, -1)}
+              onMoveDown={() => handleMoveStep(stepIndex, 1)}
+              canMoveUp={stepIndex > 0}
+              canMoveDown={stepIndex < steps.length - 1}
+              containerRef={(element) => {
+                stepRefs.current[step.uiId] = element;
+              }}
+              onPreviewSharedStep={onPreviewSharedStep}
+            />
+          </div>
         ))}
 
         {steps.length === 0 && (

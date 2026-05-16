@@ -4,9 +4,7 @@ import {
   IconFolder,
   IconFolderOpen,
   IconMoreHoriz,
-  IconMotionPlay,
   IconPlus,
-  IconRefresh,
 } from '../Common/Icons';
 import type { ADOTestSuite } from '../../types';
 import azureLogo from '../../assets/azure.png';

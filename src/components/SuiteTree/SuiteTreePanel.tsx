@@ -15,6 +15,7 @@ import {
   buildSuiteAdoUrl,
   fetchBuilds,
   fetchReleaseDefinitionAvailability,
+  fetchReleaseDefinitionIdsByFolder,
   createStaticSuite,
   fetchTestConfigurations,
   fetchSuitesForPlan,
@@ -30,10 +31,8 @@ import {
   formatCdLabel,
   getConfiguration,
   getWorldPayPlanIds,
-  parseDefinitionIdsCsv,
   runOnDemandSuite,
   toBuildOptionLabel,
-  toLatestUniqueBuilds,
   type OnDemandSuiteRunMode,
 } from '../../services/onDemandSuiteRunner';
 
@@ -208,6 +207,7 @@ export function SuiteTreePanel({
     workspaceSettings.schedulerDefaultConfigurationId,
   );
   const [releaseDefinitions, setReleaseDefinitions] = useState<ADOReleaseDefinitionAvailability[]>([]);
+  const [releaseDefinitionPool, setReleaseDefinitionPool] = useState<number[]>([]);
   const [isLoadingBuilds, setIsLoadingBuilds] = useState(false);
   const [isLoadingConfigurations, setIsLoadingConfigurations] = useState(false);
   const [isLoadingCdPool, setIsLoadingCdPool] = useState(false);
@@ -286,10 +286,29 @@ export function SuiteTreePanel({
     return extractSuites(response);
   }, [plan, workspaceSettings]);
 
-  const releaseDefinitionPool = useMemo(
-    () => parseDefinitionIdsCsv(workspaceSettings.schedulerReleaseDefinitionIdsCsv),
-    [workspaceSettings.schedulerReleaseDefinitionIdsCsv],
-  );
+  // Resolve the CD pool from the configured release-definition folder.
+  const releaseDefinitionFolder = workspaceSettings.schedulerReleaseDefinitionFolder;
+  useEffect(() => {
+    if (!canCreateSuite || !releaseDefinitionFolder.trim()) {
+      setReleaseDefinitionPool([]);
+      return undefined;
+    }
+    let cancelled = false;
+    void fetchReleaseDefinitionIdsByFolder(workspaceSettings, releaseDefinitionFolder)
+      .then((ids) => {
+        if (!cancelled) setReleaseDefinitionPool(ids);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : 'Could not resolve the CD folder.';
+        addNotification('error', message);
+        setReleaseDefinitionPool([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canCreateSuite, releaseDefinitionFolder]);
 
   // Show all fetched builds (no branch dedup) sorted newest-first.
   const sortedBuilds = useMemo(

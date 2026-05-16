@@ -17,7 +17,6 @@ export interface OnDemandSuiteRunSettings extends WorkspaceConnectionSettings {
   schedulerBuildDefinitionId: number;
   schedulerDefaultConfigurationId: number;
   schedulerDefaultPointConfigurationId: number;
-  schedulerReleaseDefinitionIdsCsv: string;
   schedulerPollSeconds: number;
   schedulerArtifactAlias: string;
   schedulerManualEnvironmentsCsv: string;
@@ -202,11 +201,9 @@ export async function runOnDemandSuite({
   onProgress = () => {},
 }: RunOnDemandSuiteOptions): Promise<OnDemandSuiteRunResult> {
   assertRunnableSettings(settings);
-  const releaseDefinitionIds = providedReleaseDefinitionIds?.length
-    ? providedReleaseDefinitionIds
-    : parseDefinitionIdsCsv(settings.schedulerReleaseDefinitionIdsCsv);
+  const releaseDefinitionIds = providedReleaseDefinitionIds ?? [];
   if (releaseDefinitionIds.length === 0) {
-    throw new Error('Add at least one scheduler release definition ID in Workspace Settings before running a suite.');
+    throw new Error('No CDs available in the configured release-definition folder. Check the folder name in Workspace Settings.');
   }
 
   const shouldFetchBuilds = !providedBuild || (getWorldPayPlanIds(settings).includes(plan.id) && !providedWorldPayBuild);

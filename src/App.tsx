@@ -51,7 +51,7 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
         schedulerBuildDefinitionId: 260,
         schedulerDefaultConfigurationId: 34,
         schedulerDefaultPointConfigurationId: 33,
-        schedulerReleaseDefinitionIdsCsv: Array.from({ length: 30 }, (_, index) => String(24 + index)).join(','),
+        schedulerReleaseDefinitionFolder: 'Schedule CDs',
         schedulerWorldPayRegressionBranch: 'refs/heads/regression_worldpay',
         schedulerWorldPayKanbanBranch: 'refs/heads/kanban_worldpay',
         schedulerSagePayTestPlanId: 78806,

@@ -187,6 +187,45 @@ declare global {
     targets: Record<string, DesktopDbUpdaterOverviewTarget>;
   }
 
+  interface DesktopInitialStepEntry {
+    testID?: number;
+    stepNumber?: number;
+    actionType?: string;
+    element?: string;
+    elementCategory?: string;
+    elementReplaceTextDataKey?: string;
+    isElementPathDynamic?: boolean;
+    value?: string;
+    description?: string;
+    expectedValue?: string;
+    key?: string;
+    type?: string;
+    headers?: string;
+    isConcatenated?: boolean;
+    stepDescription?: string;
+  }
+
+  interface DesktopInitialStepResult {
+    id: number;
+    title: string;
+    dbName: string;
+    label: string;
+    planId: number | null;
+    matchedName: string;
+    batchName: string;
+    testSuitId: string;
+    initialSteps: string[];
+    steps: DesktopInitialStepEntry[];
+  }
+
+  interface DesktopInitialStepSearchResult {
+    query: string[];
+    results: DesktopInitialStepResult[];
+    searchedDbs: string[];
+    missingDbs: string[];
+    error: string | null;
+  }
+
   type DesktopSchedulerMode = 'nightly_full' | 'selected_suite' | 'failed_only_rerun';
 
   interface DesktopSchedulerConfig {
@@ -510,6 +549,25 @@ declare global {
         enabled: boolean;
       }>;
     }) => Promise<DesktopDbUpdaterOverview>;
+    searchInitialSteps?: (
+      settings: {
+        organization: string;
+        projectName: string;
+        patToken: string;
+        apiVersion: string;
+        dbDirectory?: string;
+        mainDbName?: string;
+        worldPayDbName?: string;
+        dbMappings?: Array<{
+          id: string;
+          label: string;
+          planId: number;
+          dbName: string;
+          enabled: boolean;
+        }>;
+      },
+      payload: { names: string | string[]; planId?: number },
+    ) => Promise<DesktopInitialStepSearchResult>;
     onDbUpdaterProgress?: (callback: (progress: DesktopDbUpdaterProgress) => void) => (() => void);
     getSchedulerConfig?: () => Promise<DesktopSchedulerConfig>;
     syncSchedulerConfig?: (config: Partial<DesktopSchedulerConfig>) => Promise<DesktopSchedulerConfig>;

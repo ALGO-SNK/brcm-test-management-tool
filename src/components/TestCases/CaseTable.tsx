@@ -8,7 +8,6 @@ import {
   IconDescription,
   IconError,
   IconChevronDown,
-  IconInfo,
   IconMotionPlay,
   IconAnalytics,
   IconMoreHoriz,
@@ -16,7 +15,6 @@ import {
   IconSearch,
   IconSort,
   IconTimelapse,
-  IconWarning,
   IconX,
 } from '../Common/Icons';
 import type { ADOTestCase } from '../../types';
@@ -70,21 +68,6 @@ const SORT_OPTIONS: SortOption[] = [
   { label: 'Test Case Title', field: 'name' },
   { label: 'Outcome', field: 'state' },
 ];
-
-function getStatusBadgeClass(status: string): string {
-  switch (status.trim().toLowerCase()) {
-    case 'ready':
-      return 'badge badge--success';
-    case 'closed':
-      return 'badge badge--neutral';
-    case 'removed':
-      return 'badge badge--danger';
-    case 'design':
-      return 'badge badge--info';
-    default:
-      return 'badge badge--warning';
-  }
-}
 
 /**
  * Computed analytic state per test point, using EXACT property combinations:
@@ -170,66 +153,6 @@ function getAnalyticBadgeModel(state: AnalyticState): {
   }
 }
 
-function toTitleCaseOutcomeLabel(value: string): string {
-  const normalized = value.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
-  if (!normalized) return '';
-  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function getOutcomeBadgeModel(outcome?: string): {
-  label: string;
-  badgeClass: string;
-  icon: ReactElement;
-} {
-  const normalized = (outcome ?? '').trim().toLowerCase();
-
-  if (!normalized || normalized === 'unspecified') {
-    return {
-      label: 'Active',
-      badgeClass: 'badge badge--info cases-table__outcome-badge',
-      icon: <IconMotionPlay size={12} />,
-    };
-  }
-
-  if (normalized === 'none') {
-    return {
-      label: 'In Progress',
-      badgeClass: 'badge badge--warning cases-table__outcome-badge',
-      icon: <IconTimelapse size={12} />,
-    };
-  }
-
-  if (normalized === 'passed') {
-    return {
-      label: 'Passed',
-      badgeClass: 'badge badge--success cases-table__outcome-badge',
-      icon: <IconCheckCircle size={12} />,
-    };
-  }
-
-  if (normalized === 'failed') {
-    return {
-      label: 'Failed',
-      badgeClass: 'badge badge--danger cases-table__outcome-badge',
-      icon: <IconError size={12} />,
-    };
-  }
-
-  if (normalized === 'blocked') {
-    return {
-      label: 'Blocked',
-      badgeClass: 'badge badge--warning cases-table__outcome-badge',
-      icon: <IconWarning size={12} />,
-    };
-  }
-
-  return {
-    label: toTitleCaseOutcomeLabel(outcome ?? '') || 'Active',
-    badgeClass: 'badge badge--primary cases-table__outcome-badge',
-    icon: <IconInfo size={12} />,
-  };
-}
-
 interface OutcomeChartSlice {
   key: string;
   label: string;
@@ -248,20 +171,6 @@ interface DonutSegment {
   color: string;
   percentage: number;
   path: string;
-}
-
-interface OutcomeDetailRow {
-  rowKey: string;
-  order: number | null;
-  id: number;
-  title: string;
-  configurationName?: string;
-  outcome?: string;
-}
-
-interface OutcomePointRow {
-  configurationName?: string;
-  outcome?: string;
 }
 
 function polarToCartesian(cx: number, cy: number, radius: number, angleInDegrees: number) {
@@ -293,36 +202,6 @@ function describeDonutArc(
     `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerStart.x} ${innerStart.y}`,
     'Z',
   ].join(' ');
-}
-
-function getOutcomeChartColor(badgeClass: string): string {
-  if (badgeClass.includes('badge--success')) return 'var(--color-success)';
-  if (badgeClass.includes('badge--danger')) return 'var(--color-danger)';
-  if (badgeClass.includes('badge--warning')) return 'var(--color-warning)';
-  if (badgeClass.includes('badge--info')) return 'var(--color-info, var(--color-primary))';
-  if (badgeClass.includes('badge--primary')) return 'var(--color-primary)';
-  return 'var(--color-text-muted)';
-}
-
-function getUniqueOutcomePointRows(testCase: ADOTestCase): OutcomePointRow[] {
-  const sourceRows = Array.isArray(testCase.pointBreakdown) && testCase.pointBreakdown.length > 0
-    ? testCase.pointBreakdown
-    : [{ configurationName: testCase.configurationName, outcome: testCase.outcome }];
-
-  const seen = new Set<string>();
-  return sourceRows.reduce<OutcomePointRow[]>((rows, row) => {
-    const configurationName = (row.configurationName ?? '').trim();
-    const outcome = (row.outcome ?? '').trim();
-    const key = `${configurationName.toLowerCase()}::${outcome.toLowerCase()}`;
-
-    if (seen.has(key)) return rows;
-    seen.add(key);
-    rows.push({
-      configurationName: configurationName || undefined,
-      outcome: outcome || undefined,
-    });
-    return rows;
-  }, []);
 }
 
 /*function normalizeFieldText(value: unknown): string {

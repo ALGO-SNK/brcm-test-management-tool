@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { IconX } from '../Common/Icons';
+import { IconX, IconEdit, IconSave } from '../Common/Icons';
 import { fetchTestCaseDetail, buildWorkItemAdoUrl } from '../../services/adoApi';
 import { parseXMLSteps } from '../../utils/xmlParser';
+import { useNotification } from '../../context/useNotification';
+import { useTestCaseEditor } from './useTestCaseEditor';
+import { TestCaseEditorBody } from './TestCaseEditorBody';
 import type { ADOTestCase } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import azureLogo from '../../assets/azure.png';
@@ -70,6 +73,59 @@ export function SharedStepPreviewModal({
   const [testCase, setTestCase] = useState<ADOTestCase | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [discardPrompt, setDiscardPrompt] = useState<null | 'close' | 'cancel'>(null);
+  const { addNotification } = useNotification();
+
+  const editor = useTestCaseEditor({
+    workspaceSettings,
+    onSaved: (updated) => {
+      setTestCase(updated);
+      setIsEditing(false);
+      addNotification('success', `Shared step "${updated.name}" updated successfully.`);
+    },
+  });
+
+  const attemptClose = () => {
+    if (isEditing && editor.isDirty) {
+      setDiscardPrompt('close');
+      return;
+    }
+    onClose();
+  };
+
+  const startEditing = () => {
+    if (!testCase) return;
+    editor.beginEdit(testCase);
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    if (editor.isDirty) {
+      setDiscardPrompt('cancel');
+      return;
+    }
+    setIsEditing(false);
+  };
+
+  const keepEditing = () => setDiscardPrompt(null);
+
+  const confirmDiscard = () => {
+    const action = discardPrompt;
+    setDiscardPrompt(null);
+    if (action === 'close') {
+      onClose();
+    } else if (action === 'cancel') {
+      setIsEditing(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const result = await editor.save();
+    if (!result.ok && result.error) {
+      addNotification('error', result.error);
+    }
+  };
 
   useEffect(() => {
     const trimmed = testId.trim();
@@ -115,11 +171,17 @@ export function SharedStepPreviewModal({
 
   useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Escape') return;
+      if (discardPrompt) {
+        setDiscardPrompt(null);
+        return;
+      }
+      attemptClose();
     };
     document.addEventListener('keydown', handleKeydown);
     return () => document.removeEventListener('keydown', handleKeydown);
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, editor.isDirty, discardPrompt, onClose]);
 
   const parsedSteps = useMemo(() => {
     if (!testCase) return [];
@@ -168,30 +230,88 @@ export function SharedStepPreviewModal({
       <button
         type="button"
         className="settings-overlay__backdrop"
-        onClick={onClose}
+        onClick={attemptClose}
         aria-label="Close shared step preview"
       />
       <div className="settings-dock settings-dock--no-aside">
         <section className="settings-workbench">
           <header className="settings-workbench__header">
             <div className="shared-step-preview__heading-copy">
-              <p className="settings-workbench__crumb">Shared Step Preview</p>
+              <p className="settings-workbench__crumb">
+                {isEditing ? 'Edit Shared Step' : 'Shared Step Preview'}
+              </p>
               <h1 className="settings-workbench__title shared-step-preview__title" title={testCase?.name}>
-                {testCase?.name || `Test Case #${testId.trim() || '—'}`}
+                {(isEditing ? editor.formData.title : testCase?.name)
+                  || `Test Case #${testId.trim() || '—'}`}
               </h1>
               <p className="settings-workbench__subtitle">
-                Read-only preview of the referenced shared step test case.
+                {isEditing
+                  ? 'Editing this shared step — changes save to Azure DevOps.'
+                  : 'Read-only preview of the referenced shared step test case.'}
               </p>
             </div>
-            <button
-              type="button"
-              className="settings-workbench__close"
-              onClick={onClose}
-              aria-label="Close shared step preview"
-              title="Close"
-            >
-              <IconX size={18} />
-            </button>
+            <div className="shared-step-preview__actions">
+              {!isLoading && !errorMessage && testCase && adoUrl && (
+                <a
+                  href={adoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shared-step-preview__ado-link"
+                  title="Open in Azure DevOps"
+                >
+                  <img
+                    className="case-detail__azure-icon"
+                    src={azureLogo}
+                    alt=""
+                    width={16}
+                    height={16}
+                    aria-hidden="true"
+                  />
+                  <span>Open in ADO ↗</span>
+                </a>
+              )}
+              {!isLoading && !errorMessage && testCase && !isEditing && (
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={startEditing}
+                  title="Edit this shared step"
+                >
+                  <IconEdit size={14} />
+                  Edit
+                </button>
+              )}
+              {isEditing && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={cancelEditing}
+                    disabled={editor.isSaving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--primary btn--sm"
+                    onClick={() => { void handleSave(); }}
+                    disabled={editor.isSaving}
+                  >
+                    <IconSave size={14} />
+                    {editor.isSaving ? 'Saving…' : 'Save'}
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className="settings-workbench__close"
+                onClick={attemptClose}
+                aria-label="Close shared step preview"
+                title="Close"
+              >
+                <IconX size={18} />
+              </button>
+            </div>
           </header>
 
           <div className="settings-workbench__body">
@@ -208,6 +328,14 @@ export function SharedStepPreviewModal({
 
               {!isLoading && !errorMessage && testCase && (
                 <section className="settings-pane">
+                  {isEditing ? (
+                    <TestCaseEditorBody
+                      editor={editor}
+                      rawStepsXml={testCase.fields?.['Microsoft.VSTS.TCM.Steps']}
+                      workspaceSettings={workspaceSettings}
+                    />
+                  ) : (
+                  <>
                   {mainRows.length > 0 && (
                     <div className="case-detail-grid">
                       {mainRows.map((row) => (
@@ -217,27 +345,6 @@ export function SharedStepPreviewModal({
                         </article>
                       ))}
                     </div>
-                  )}
-
-                  {adoUrl && (
-                    <p className="text-sm text-secondary mt-sm">
-                      <a
-                        href={adoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shared-step-preview__ado-link"
-                      >
-                        <img
-                          className="case-detail__azure-icon"
-                          src={azureLogo}
-                          alt=""
-                          width={16}
-                          height={16}
-                          aria-hidden="true"
-                        />
-                        <span>Open in Azure DevOps ↗</span>
-                      </a>
-                    </p>
                   )}
 
                   <div className="case-detail-steps-container mt-md">
@@ -282,12 +389,58 @@ export function SharedStepPreviewModal({
                       )
                     )}
                   </div>
+                  </>
+                  )}
                 </section>
               )}
             </div>
           </div>
         </section>
       </div>
+
+      {discardPrompt && (
+        <div className="steps-editor__confirm-overlay" role="dialog" aria-modal="true" aria-label="Unsaved shared step changes">
+          <button
+            type="button"
+            className="steps-editor__confirm-backdrop"
+            onClick={keepEditing}
+            aria-label="Close unsaved changes confirmation"
+          />
+          <div className="steps-editor__confirm-card steps-editor__confirm-card--warning" role="document">
+            <div className="steps-editor__confirm-head">
+              <div>
+                <p className="steps-editor__confirm-kicker steps-editor__confirm-kicker--warning">Unsaved changes</p>
+                <h3 className="steps-editor__confirm-title steps-editor__confirm-title--warning">
+                  Discard edits on this shared step?
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="steps-editor__confirm-close"
+                onClick={keepEditing}
+                aria-label="Close unsaved changes confirmation"
+                title="Close"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <p className="steps-editor__confirm-copy">
+              You have unsaved changes to this shared step. Discarding now will remove your
+              updates to the title, fields, and steps.
+            </p>
+
+            <div className="steps-editor__confirm-actions">
+              <button type="button" className="btn btn--secondary btn--sm" onClick={keepEditing}>
+                Keep editing
+              </button>
+              <button type="button" className="btn btn--danger btn--sm" onClick={confirmDiscard}>
+                Discard changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

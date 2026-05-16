@@ -48,7 +48,8 @@ export interface WorkspaceSettingsValues {
   schedulerBuildDefinitionId: number;
   schedulerDefaultConfigurationId: number;
   schedulerDefaultPointConfigurationId: number;
-  schedulerReleaseDefinitionIdsCsv: string;
+  /** Release-definition folder name; the CD pool is resolved from ADO by folder. */
+  schedulerReleaseDefinitionFolder: string;
   schedulerWorldPayRegressionBranch: string;
   schedulerWorldPayKanbanBranch: string;
   schedulerSagePayTestPlanId: number;
@@ -176,17 +177,6 @@ function isValidTimezone(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function parseDefinitionIdsCsv(value: string): number[] {
-  return Array.from(
-    new Set(
-      value
-        .split(/[,\s]+/)
-        .map((token) => Number(token.trim()))
-        .filter((token) => Number.isInteger(token) && token > 0),
-    ),
-  );
 }
 
 async function scanDirectoryFiles(
@@ -616,8 +606,8 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
     if (!Number.isInteger(form.schedulerDefaultPointConfigurationId) || form.schedulerDefaultPointConfigurationId <= 0) {
       return 'Default point configuration ID must be a positive number.';
     }
-    if (parseDefinitionIdsCsv(form.schedulerReleaseDefinitionIdsCsv).length === 0) {
-      return 'Release definition pool must contain at least one numeric definition ID.';
+    if (!form.schedulerReleaseDefinitionFolder.trim()) {
+      return 'Release definition folder is required (CDs are resolved from this folder).';
     }
     if (!form.schedulerWorldPayRegressionBranch.trim() || !form.schedulerWorldPayKanbanBranch.trim()) {
       return 'WorldPay branch mappings are required.';
@@ -1450,15 +1440,19 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
                             }}
                           />
                         </label>
-                        <label className="settings-field settings-field--full" htmlFor="schedulerReleaseDefinitionIdsCsv">
-                          <span className="settings-field__label">Release definition pool (CSV)</span>
+                        <label className="settings-field settings-field--full" htmlFor="schedulerReleaseDefinitionFolder">
+                          <span className="settings-field__label">Release definition folder</span>
                           <input
-                            id="schedulerReleaseDefinitionIdsCsv"
+                            id="schedulerReleaseDefinitionFolder"
                             className="settings-input"
-                            value={form.schedulerReleaseDefinitionIdsCsv}
-                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerReleaseDefinitionIdsCsv: event.target.value }))}
-                            placeholder="24,25,26,27,..."
+                            value={form.schedulerReleaseDefinitionFolder}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerReleaseDefinitionFolder: event.target.value }))}
+                            placeholder="Schedule CDs, Overnight CDs A"
                           />
+                          <span className="settings-field__hint">
+                            Release definitions inside these ADO folders become the CD pool.
+                            Separate multiple folders with commas.
+                          </span>
                         </label>
                         <label className="settings-field settings-field--full" htmlFor="schedulerWorldPayRegressionBranch">
                           <span className="settings-field__label">WorldPay Regression branch</span>

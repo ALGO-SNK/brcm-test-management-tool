@@ -4,6 +4,7 @@ import {
   fetchBuilds,
   fetchPlans,
   fetchReleaseDefinitionAvailability,
+  fetchReleaseDefinitionIdsByFolder,
   fetchSuiteReleaseMappings,
   fetchSuitesForPlan,
   fetchTestConfigurations,
@@ -71,47 +72,6 @@ function toBuildOptionLabel(buildId: number, sourceBranch: string): string {
   return `${buildId} - ${toBranchLabel(sourceBranch)}`;
 }
 
-function getBuildSortTimestamp(build: ADOBuildSummary): number {
-  const parsed = Date.parse(build.queueTime);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function getBuildIdentityKey(build: ADOBuildSummary): string {
-  const branch = toBranchLabel(build.sourceBranch || '').trim();
-  if (branch) return `branch:${branch.toLowerCase()}`;
-  const buildNumber = build.buildNumber.trim();
-  if (buildNumber) return `build:${buildNumber.toLowerCase()}`;
-  return `id:${build.id}`;
-}
-
-function toLatestUniqueBuilds(builds: ADOBuildSummary[]): ADOBuildSummary[] {
-  const latestFirst = [...builds].sort((left, right) => {
-    const leftTs = getBuildSortTimestamp(left);
-    const rightTs = getBuildSortTimestamp(right);
-    if (leftTs !== rightTs) return rightTs - leftTs;
-    return right.id - left.id;
-  });
-  const seen = new Set<string>();
-  const unique: ADOBuildSummary[] = [];
-  for (const build of latestFirst) {
-    const key = getBuildIdentityKey(build);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(build);
-  }
-  return unique;
-}
-
-function parseDefinitionIdsCsv(value: string): number[] {
-  return Array.from(
-    new Set(
-      value
-        .split(/[,\s]+/)
-        .map((token) => Number(token.trim()))
-        .filter((token) => Number.isInteger(token) && token > 0),
-    ),
-  );
-}
 
 function normalizeSuite(raw: Record<string, unknown>): ADOTestSuite {
   const suite = raw as unknown as ADOTestSuite;
@@ -198,7 +158,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
   const [suiteRows, setSuiteRows] = useState<SuiteRow[]>([]);
   const [suiteMappings, setSuiteMappings] = useState<TestSuiteMapping[]>([]);
   const [selectedTag, setSelectedTag] = useState<string>('all');
-  const [selectedWorldPayServer, setSelectedWorldPayServer] = useState<WorldPayServer>('Regression World Pay');
+  const [selectedWorldPayServer] = useState<WorldPayServer>('Regression World Pay');
   const [selectedSuiteIds, setSelectedSuiteIds] = useState<number[]>([]);
   const [suiteSearchText, setSuiteSearchText] = useState('');
   const [suiteSort, setSuiteSort] = useState<{ key: SuiteSortKey; direction: 'asc' | 'desc' }>({
@@ -214,6 +174,8 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
   const [isBuildDropdownOpen, setIsBuildDropdownOpen] = useState(false);
   const [buildDropdownSearch, setBuildDropdownSearch] = useState('');
   const [releaseDefinitions, setReleaseDefinitions] = useState<ADOReleaseDefinitionAvailability[]>([]);
+  const [releaseDefinitionPool, setReleaseDefinitionPool] = useState<number[]>([]);
+  const [isResolvingCdPool, setIsResolvingCdPool] = useState(false);
   const [suitePointPlan, setSuitePointPlan] = useState<SuitePointPlan[]>([]);
   const batchSize = workspaceSettings.schedulerDefaultBatchSize;
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
@@ -375,10 +337,33 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     }
   }, [addNotification, enabledPlans, isConnectionConfigured, planFilter, workspaceSettings]);
 
-  const releaseDefinitionPool = useMemo(
-    () => parseDefinitionIdsCsv(workspaceSettings.schedulerReleaseDefinitionIdsCsv),
-    [workspaceSettings.schedulerReleaseDefinitionIdsCsv],
-  );
+  // Resolve the CD pool from the configured release-definition folder.
+  const releaseDefinitionFolder = workspaceSettings.schedulerReleaseDefinitionFolder;
+  useEffect(() => {
+    if (!isConnectionConfigured || !releaseDefinitionFolder.trim()) {
+      setReleaseDefinitionPool([]);
+      return undefined;
+    }
+    let cancelled = false;
+    setIsResolvingCdPool(true);
+    void fetchReleaseDefinitionIdsByFolder(workspaceSettings, releaseDefinitionFolder)
+      .then((ids) => {
+        if (!cancelled) setReleaseDefinitionPool(ids);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : 'Could not resolve the CD folder.';
+        addNotification('error', message);
+        setReleaseDefinitionPool([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsResolvingCdPool(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnectionConfigured, releaseDefinitionFolder]);
 
   const loadBuilds = useCallback(async () => {
     if (!isConnectionConfigured) {
@@ -744,11 +729,6 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
   const firstAvailableCd = useMemo(
     () => releaseDefinitions.find((definition) => definition.isAvailable) ?? null,
     [releaseDefinitions],
-  );
-
-  const eligiblePointTotal = useMemo(
-    () => suitePointPlan.reduce((total, suite) => total + suite.eligiblePointIds.length, 0),
-    [suitePointPlan],
   );
 
   const cdAvailabilityRows = useMemo(
@@ -1324,7 +1304,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
                   <thead>
                     <tr>
                       <th className="suite-col--run" style={{ width: 52 }}>
-                        <input type="checkbox" disabled aria-label="Select all suites" />
+                        <input type="checkbox" checked={false} readOnly disabled aria-label="Select all suites" />
                       </th>
                       <th className="suite-col--id" style={{ width: 120 }}>Suite ID</th>
                       <th className="suite-col--suite">Name</th>
@@ -1609,7 +1589,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
               )}
             </div>
             <div className="modal__footer">
-              <button type="button" className="btn btn--secondary" onClick={() => { void loadReleaseDefinitionAvailability(); }} disabled={isLoadingCdPool}>
+              <button type="button" className="btn btn--secondary" onClick={() => { void loadReleaseDefinitionAvailability(); }} disabled={isLoadingCdPool || isResolvingCdPool}>
                 <IconRefresh size={14} />
                 Refresh CDs
               </button>
@@ -1663,7 +1643,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
                     type="button"
                     className="btn btn--ghost btn--xs"
                     onClick={() => { void loadReleaseDefinitionAvailability(); }}
-                    disabled={isLoadingCdPool}
+                    disabled={isLoadingCdPool || isResolvingCdPool}
                   >
                     <IconRefresh size={13} />
                     Refresh

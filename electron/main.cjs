@@ -1048,6 +1048,134 @@ async function readDbUpdaterTarget(target) {
   }
 }
 
+function parseInitialStepSearchNames(input) {
+  const raw = Array.isArray(input) ? input.join(',') : String(input ?? '');
+  const seen = new Set();
+  return raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => {
+      if (!part) return false;
+      const key = part.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function safeParseJsonArray(value) {
+  const text = normalizeDbText(value).trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function searchInitialStepsInDb(settingsInput, payload) {
+  const names = parseInitialStepSearchNames(payload?.names);
+  const planId = Number(payload?.planId) || 0;
+  const result = {
+    query: names,
+    results: [],
+    searchedDbs: [],
+    missingDbs: [],
+    error: null,
+  };
+  if (names.length === 0) {
+    return result;
+  }
+
+  const dbConfig = getDbUpdaterRuntimeConfig(settingsInput);
+  const allTargets = dbConfig.targets;
+
+  // Plan-active resolution: if the active plan maps to a target, search only it.
+  // Otherwise fall back to the primary + WorldPay default DBs.
+  let chosenTargets = [];
+  if (planId > 0) {
+    chosenTargets = allTargets.filter((target) => Number(target.planId) === planId);
+  }
+  if (chosenTargets.length === 0) {
+    const fallbackPlanIds = new Set(
+      DB_UPDATER_CONFIG.defaultTargets.map((target) => Number(target.planId)),
+    );
+    chosenTargets = allTargets.filter(
+      (target) => target.key === 'main'
+        || target.key === 'worldPay'
+        || fallbackPlanIds.has(Number(target.planId)),
+    );
+  }
+  if (chosenTargets.length === 0) {
+    chosenTargets = allTargets;
+  }
+
+  const MAX_RESULTS = 200;
+  const seenIds = new Set();
+
+  for (const target of chosenTargets) {
+    const dbPath = getDbUpdaterTargetPath(target);
+    if (!fs.existsSync(dbPath)) {
+      result.missingDbs.push(target.dbName);
+      continue;
+    }
+    result.searchedDbs.push(target.dbName);
+
+    let db = null;
+    try {
+      db = await open({
+        filename: dbPath,
+        driver: sqlite3.Database,
+        mode: sqlite3.OPEN_READONLY,
+      });
+      const table = await db.get(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'TestCaseDao';",
+      );
+      if (!table) continue;
+
+      for (const name of names) {
+        if (result.results.length >= MAX_RESULTS) break;
+        const rows = await db.all(
+          `SELECT "Id" AS id, "Title" AS title, "InitialStepsJson" AS initialStepsJson,
+                  "TestStepsJson" AS testStepsJson, "BatchName" AS batchName,
+                  "TestSuitId" AS testSuitId
+             FROM TestCaseDao
+            WHERE "Title" LIKE ? COLLATE NOCASE
+            ORDER BY "Title"`,
+          `%${name}%`,
+        );
+        for (const row of rows) {
+          const id = Number(getDbRowValue(row, 'id', 'Id'));
+          const dedupeKey = `${id}`;
+          if (!Number.isFinite(id) || seenIds.has(dedupeKey)) continue;
+          seenIds.add(dedupeKey);
+          result.results.push({
+            id,
+            title: normalizeDbText(getDbRowValue(row, 'title', 'Title')),
+            dbName: target.dbName,
+            label: target.label,
+            planId: Number(target.planId) || null,
+            matchedName: name,
+            batchName: normalizeDbText(getDbRowValue(row, 'batchName', 'BatchName')),
+            testSuitId: normalizeDbText(getDbRowValue(row, 'testSuitId', 'TestSuitId')),
+            initialSteps: safeParseJsonArray(getDbRowValue(row, 'initialStepsJson', 'InitialStepsJson')),
+            steps: safeParseJsonArray(getDbRowValue(row, 'testStepsJson', 'TestStepsJson')),
+          });
+          if (result.results.length >= MAX_RESULTS) break;
+        }
+      }
+    } catch (error) {
+      result.error = error instanceof Error ? error.message : 'Could not search the database.';
+    } finally {
+      if (db) await db.close();
+    }
+  }
+
+  result.results.sort((a, b) => a.title.localeCompare(b.title));
+  return result;
+}
+
 async function getDbUpdaterOverview(settingsInput) {
   const dbConfig = getDbUpdaterRuntimeConfig(settingsInput);
   const targets = dbConfig.targets;
@@ -5292,6 +5420,10 @@ ipcMain.handle('desktop:delete-db-updater-test-case', (_event, settings, payload
 
 ipcMain.handle('desktop:get-db-updater-overview', (_event, settings) => {
   return getDbUpdaterOverview(settings);
+});
+
+ipcMain.handle('desktop:search-initial-steps', (_event, settings, payload) => {
+  return searchInitialStepsInDb(settings, payload);
 });
 
 ipcMain.handle('desktop:get-scheduler-config', () => {

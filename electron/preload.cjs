@@ -129,6 +129,9 @@ contextBridge.exposeInMainWorld('desktop', {
   getDbUpdaterOverview(settings) {
     return ipcRenderer.invoke('desktop:get-db-updater-overview', settings);
   },
+  searchInitialSteps(settings, payload) {
+    return ipcRenderer.invoke('desktop:search-initial-steps', settings, payload);
+  },
   onDbUpdaterProgress(callback) {
     if (typeof callback !== 'function') {
       return () => {};

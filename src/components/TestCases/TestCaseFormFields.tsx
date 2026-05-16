@@ -1,5 +1,8 @@
-
+import { useState } from 'react';
 import { NOT_SELECTED_LABEL } from '../../utils/selectLabels';
+import { IconInfo } from '../Common/Icons';
+import { InitialStepsPreviewModal } from './InitialStepsPreviewModal';
+import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 
 interface TestCaseFormFieldsProps {
   formData: {
@@ -26,6 +29,10 @@ interface TestCaseFormFieldsProps {
   showValidationSummary?: boolean;
   invalidFields?: Set<'title' | 'status' | 'method' | 'region' | 'execProcess' | 'pltpProcess' | 'initialSteps'>;
   titlePlaceholder?: string;
+  /** When provided, enables the "Find initial steps" DB-search control. */
+  workspaceSettings?: WorkspaceSettingsValues;
+  /** Active plan id — narrows the DB search to its mapped database. */
+  planId?: number;
 }
 
 const DEFAULT_STATUS_OPTIONS = ['Design', 'Ready', 'Closed', 'Removed'];
@@ -40,10 +47,15 @@ export function TestCaseFormFields({
   showValidationSummary = true,
   invalidFields = new Set(),
   titlePlaceholder = 'Enter test case title',
+  workspaceSettings,
+  planId,
 }: TestCaseFormFieldsProps) {
+  const [showInitialStepsPreview, setShowInitialStepsPreview] = useState(false);
   const handleChange = (field: string, value: string) => {
     onChange({ [field]: value } as any);
   };
+  const canSearchInitialSteps = Boolean(workspaceSettings);
+  const hasInitialStepsValue = formData.initialSteps.trim().length > 0;
 
   const statusOptions = DEFAULT_STATUS_OPTIONS.includes(formData.status)
     ? DEFAULT_STATUS_OPTIONS
@@ -84,7 +96,25 @@ export function TestCaseFormFields({
             </div>
           )}
           <div className="case-detail-edit-form__field" style={{ flex: 1 }}>
-            <label className="case-detail-edit-form__label">Initial Steps</label>
+            <div className="initial-steps-label-row">
+              <label className="case-detail-edit-form__label">Initial Steps</label>
+              {canSearchInitialSteps && (
+                <button
+                  type="button"
+                  className="initial-steps-info-btn"
+                  onClick={() => setShowInitialStepsPreview(true)}
+                  disabled={!hasInitialStepsValue}
+                  title={
+                    hasInitialStepsValue
+                      ? 'Preview these initial steps from the local test database'
+                      : 'Enter one or more initial step names first'
+                  }
+                  aria-label="Preview initial steps from the local database"
+                >
+                  <IconInfo size={14} />
+                </button>
+              )}
+            </div>
             <input
               type="text"
               className={`case-detail-edit-form__input${invalidFields.has('initialSteps') ? ' case-detail-edit-form__input--invalid' : ''}`}
@@ -183,6 +213,15 @@ export function TestCaseFormFields({
           </div>
         </div>
       </div>
+
+      {showInitialStepsPreview && workspaceSettings && (
+        <InitialStepsPreviewModal
+          names={formData.initialSteps}
+          planId={planId}
+          workspaceSettings={workspaceSettings}
+          onClose={() => setShowInitialStepsPreview(false)}
+        />
+      )}
     </>
   );
 }

@@ -11,10 +11,12 @@ import {
   IconSearch,
   IconUnfoldLess,
   IconUnfoldMore,
+  IconRocketLaunch,
   IconX,
 } from '../Common/Icons';
 import { useNotification } from '../../context/useNotification';
 import { GitManager, type GitFile } from './GitManager';
+import { QueueBuildModal } from './QueueBuildModal';
 import { CodeEditor, detectLanguage } from '../Common/CodeEditor';
 import { QuickOpen, type FileItem } from './QuickOpen';
 import { FindInFiles } from './FindInFiles';
@@ -192,6 +194,8 @@ export function SeleniumRepoBrowserModal({
   const [isFindInFilesOpen, setIsFindInFilesOpen] = useState(false);
   // Command palette (Ctrl+Shift+P) state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  // Queue pipeline build dialog
+  const [isQueueBuildOpen, setIsQueueBuildOpen] = useState(false);
   // Recently-opened files for Quick Open (scoped per repo, persisted in localStorage)
   const recentFilesKey = `repo-browser:recent-files:${repoPath}`;
   const [recentFiles, setRecentFiles] = useState<string[]>(() => {
@@ -2172,6 +2176,29 @@ export function SeleniumRepoBrowserModal({
               <p className="settings-workbench__subtitle">{repoPath}</p>
             </div>
             <div className="repo-browser__header-actions">
+              {(() => {
+                const canQueueBuild = Boolean(
+                  workspaceSettings?.organization?.trim()
+                  && workspaceSettings?.projectName?.trim()
+                  && workspaceSettings?.patToken?.trim(),
+                );
+                return (
+                  <button
+                    type="button"
+                    className="btn btn--secondary repo-browser__queue-build-btn"
+                    onClick={() => setIsQueueBuildOpen(true)}
+                    disabled={!canQueueBuild}
+                    title={
+                      canQueueBuild
+                        ? 'Queue a pipeline build for the current branch'
+                        : 'Set the Azure DevOps connection in Settings to queue builds'
+                    }
+                  >
+                    <IconRocketLaunch size={16} />
+                    Queue build
+                  </button>
+                );
+              })()}
               {!embedded && (
                 <button
                   type="button"
@@ -2965,6 +2992,22 @@ export function SeleniumRepoBrowserModal({
           </div>
         </section>
       </div>
+
+      {/* Queue pipeline build dialog */}
+      {workspaceSettings && (
+        <QueueBuildModal
+          isOpen={isQueueBuildOpen}
+          onClose={() => setIsQueueBuildOpen(false)}
+          connection={{
+            organization: workspaceSettings.organization,
+            projectName: workspaceSettings.projectName,
+            patToken: workspaceSettings.patToken,
+            apiVersion: workspaceSettings.apiVersion,
+          }}
+          branches={gitBranch.branches}
+          currentBranch={gitBranch.branch}
+        />
+      )}
 
       {/* Quick Open (Ctrl+P) — overlay rendered above all panels */}
       <QuickOpen

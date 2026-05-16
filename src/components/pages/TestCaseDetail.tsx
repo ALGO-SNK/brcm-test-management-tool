@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {MainLayout} from '../layouts/MainLayout';
 import {PageDetailLayout} from '../layouts/PageDetailLayout';
-import {IconAttachFile, IconCopy, IconOpenInNew, IconFolderCode, IconSearch, IconX} from '../Common/Icons';
+import {IconAttachFile, IconCopy, IconOpenInNew, IconFolderCode, IconSearch, IconInfo, IconX} from '../Common/Icons';
 import type {ADOTestCase, ADOTestPlan, ADOTestSuite} from '../../types';
 import type {WorkspaceSettingsValues} from './WorkspaceSettings';
 import {buildWorkItemAdoUrl, fetchTestCaseDetail, updateTestCase} from '../../services/adoApi';
@@ -10,6 +10,7 @@ import {buildTestCaseData} from '../../utils/testCaseBuilder';
 import type {ParsedStep} from '../TestCases/StepsEditor';
 import {StepsEditor, StepsSearchBar, useStepsSearch} from '../TestCases/StepsEditor';
 import {SharedStepPreviewModal} from '../TestCases/SharedStepPreviewModal';
+import {InitialStepsPreviewModal} from '../TestCases/InitialStepsPreviewModal';
 import {SeleniumRepoBrowserModal} from '../TestCases/SeleniumRepoBrowserModal';
 import {TestCaseFormFields} from '../TestCases/TestCaseFormFields';
 import {ACTION_REGISTRY} from '../../utils/actionRegistry';
@@ -46,6 +47,10 @@ interface StepViewModel {
   index: number;
   name: string;
   fullText: string;
+  /** Raw action token (e.g. "FETCH_SHARED_STEPS"), used to offer a preview. */
+  action?: string;
+  /** Referenced shared-step test case id, when action is FETCH_SHARED_STEPS. */
+  sharedStepId?: string;
 }
 
 interface DetailRow {
@@ -389,11 +394,17 @@ function parseStepsForDisplay(rawSteps: unknown): StepViewModel[] {
     return parsed.map((step, index) => {
       const fallbackLine = actionLines[index] || lines[index] || buildFullTextFromParsedStep(step);
       const description = step.description?.trim() || extractDescriptionFromLine(fallbackLine);
-      const actionName = formatActionName(step.action || extractActionFromLine(fallbackLine) || 'Step');
+      const rawAction = (step.action || extractActionFromLine(fallbackLine) || '').trim();
+      const actionName = formatActionName(rawAction || 'Step');
+      const sharedStepId = rawAction.toUpperCase() === 'FETCH_SHARED_STEPS'
+        ? (step.value || extractValueFromLine(fallbackLine) || '').trim()
+        : undefined;
       return {
         index: index + 1,
         name: description || actionName || `Step ${index + 1}`,
         fullText: fallbackLine || buildFullTextFromParsedStep(step),
+        action: rawAction || undefined,
+        sharedStepId,
       };
     });
   }
@@ -401,13 +412,23 @@ function parseStepsForDisplay(rawSteps: unknown): StepViewModel[] {
   const sourceLines = actionLines.length > 0 ? actionLines : lines;
   return sourceLines.map((line, index) => {
     const description = extractDescriptionFromLine(line);
-    const action = extractActionFromLine(line);
+    const action = (extractActionFromLine(line) || '').trim();
+    const sharedStepId = action.toUpperCase() === 'FETCH_SHARED_STEPS'
+      ? (extractValueFromLine(line) || '').trim()
+      : undefined;
     return {
       index: index + 1,
       name: description || formatActionName(action || 'Step'),
       fullText: line,
+      action: action || undefined,
+      sharedStepId,
     };
   });
+}
+
+function extractValueFromLine(line: string): string {
+  const match = line.match(/(?:^|\|)\s*Value=([^|]*)/i);
+  return match ? match[1].trim() : '';
 }
 
 function formatDateTime(value: unknown): string {
@@ -536,6 +557,7 @@ export function TestCaseDetail({
   const [stepSearchScrollNonce, setStepSearchScrollNonce] = useState(0);
   const editStepsSearch = useStepsSearch();
   const [sharedStepPreviewId, setSharedStepPreviewId] = useState<string | null>(null);
+  const [isInitialStepsPreviewOpen, setIsInitialStepsPreviewOpen] = useState(false);
   const [isAutomationManagerOpen, setIsAutomationManagerOpen] = useState(false);
   const [automationRefreshToken, setAutomationRefreshToken] = useState(0);
   const [isAutomationActionBusy, setIsAutomationActionBusy] = useState(false);
@@ -1668,7 +1690,15 @@ export function TestCaseDetail({
 
   const stepViewItems = useMemo(() => {
     if (!testCase) return [];
-    const items: Array<{ key: string; index: number; name: string; fullText: string; isInitial?: boolean }> = [];
+    const items: Array<{
+      key: string;
+      index: number;
+      name: string;
+      fullText: string;
+      isInitial?: boolean;
+      action?: string;
+      sharedStepId?: string;
+    }> = [];
     const initialStepsText = normalizeFieldText(testCase.fields?.['Custom.InitialStep']).trim();
     if (initialStepsText) {
       items.push({
@@ -1686,6 +1716,8 @@ export function TestCaseDetail({
         index: step.index,
         name: step.name,
         fullText: step.fullText,
+        action: step.action,
+        sharedStepId: step.sharedStepId,
       });
     });
 
@@ -2197,6 +2229,40 @@ export function TestCaseDetail({
                         <p className="case-detail-step-item__title">
                           <span className="case-detail-step-item__index">Step {step.index}:</span>
                           <strong className="case-detail-step-item__name">{step.name}</strong>
+                          {step.isInitial && (
+                            <button
+                              type="button"
+                              className="initial-steps-info-btn"
+                              onClick={() => setIsInitialStepsPreviewOpen(true)}
+                              title="Preview these initial steps from the local test database"
+                              aria-label="Preview initial steps from the local database"
+                            >
+                              <IconInfo size={14} />
+                            </button>
+                          )}
+                          {!step.isInitial
+                            && (step.action || '').toUpperCase() === 'FETCH_SHARED_STEPS'
+                            && (() => {
+                              const sid = (step.sharedStepId || '').trim();
+                              const parsed = Number(sid);
+                              const valid = sid.length > 0 && Number.isInteger(parsed) && parsed > 0;
+                              return (
+                                <button
+                                  type="button"
+                                  className="initial-steps-info-btn"
+                                  onClick={() => valid && setSharedStepPreviewId(sid)}
+                                  disabled={!valid}
+                                  title={
+                                    valid
+                                      ? `Preview shared step test case #${sid}`
+                                      : 'Shared step has no valid test case id'
+                                  }
+                                  aria-label="Preview shared step test case"
+                                >
+                                  <IconInfo size={14} />
+                                </button>
+                              );
+                            })()}
                         </p>
                         <pre className="case-detail-step-item__full">
                           {step.isInitial ? step.fullText : formatStepTextWithBoldLabels(step.fullText)}
@@ -2223,6 +2289,8 @@ export function TestCaseDetail({
                 showTitle
                 validationErrors={editValidationErrors}
                 titlePlaceholder="Enter test title"
+                workspaceSettings={workspaceSettings}
+                planId={plan.id}
               />
 
               <StepsEditor
@@ -2244,6 +2312,15 @@ export function TestCaseDetail({
           testId={sharedStepPreviewId}
           workspaceSettings={workspaceSettings}
           onClose={() => setSharedStepPreviewId(null)}
+        />
+      )}
+
+      {isInitialStepsPreviewOpen && testCase && (
+        <InitialStepsPreviewModal
+          names={normalizeFieldText(testCase.fields?.['Custom.InitialStep'])}
+          planId={plan.id}
+          workspaceSettings={workspaceSettings}
+          onClose={() => setIsInitialStepsPreviewOpen(false)}
         />
       )}
 
