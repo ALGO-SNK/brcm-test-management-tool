@@ -19,6 +19,11 @@ import {
   parseWorkItemIdsCsv,
 } from '../../services/mappingParser';
 import { updatePendingReleaseLogs } from '../../services/releaseLogUpdater';
+import {
+  executeSuitesSequentially,
+  type RunExecutionContext,
+  type SuiteExecutionPlan,
+} from '../../services/suiteRunExecutor';
 import type { ADOTestPlan, ADOTestSuite, ReleaseLogRecord, TestSuiteMapping } from '../../types';
 import {
   IconArrowDownward,
@@ -29,6 +34,7 @@ import {
   IconSort,
   IconX,
 } from '../Common/Icons';
+import { BatchSizeInput } from '../Common/BatchSizeInput';
 import type { WorkspaceSettingsValues } from './WorkspaceSettings';
 
 type RunMode = 'selected_suite' | 'nightly_full' | 'failed_only_rerun';
@@ -149,6 +155,22 @@ function toCdStateLabel(cd: ADOReleaseDefinitionAvailability): string {
   return status || 'Busy';
 }
 
+/** Display CDs uniformly as "On Demand Test Run-CD - 18 (ID: 26)". */
+function formatCdLabel(idOrName: number | string | null | undefined, name?: string | null): string {
+  // Two call modes:
+  //   formatCdLabel(id, name)
+  //   formatCdLabel(name, idAsSecondPositional? — not used)
+  // Primary path: pass (id, name).
+  const id = typeof idOrName === 'number'
+    ? idOrName
+    : Number.parseInt(String(idOrName ?? ''), 10);
+  const cleanName = (name ?? '').toString().trim();
+  if (cleanName) {
+    return Number.isFinite(id) ? `${cleanName} (ID: ${id})` : cleanName;
+  }
+  return Number.isFinite(id) ? `CD ${id}` : '';
+}
+
 function toCdStateBadgeClass(cd: ADOReleaseDefinitionAvailability): string {
   if (cd.isAvailable) return 'meta-pill meta-pill--success';
   const status = toCdStateLabel(cd).toLowerCase();
@@ -183,7 +205,8 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     key: 'suiteName',
     direction: 'asc',
   });
-  const [runMode, setRunMode] = useState<RunMode>('selected_suite');
+  // Run mode is fixed for the modal flow — Failed Batch Rerun uses a separate path.
+  const runMode: RunMode = 'selected_suite';
   const [configurations, setConfigurations] = useState<ADOTestConfigurationSummary[]>([]);
   const [selectedConfigurationId, setSelectedConfigurationId] = useState(workspaceSettings.schedulerDefaultConfigurationId);
   const [builds, setBuilds] = useState<ADOBuildSummary[]>([]);
@@ -202,9 +225,17 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
   const [isUpdatingLogs, setIsUpdatingLogs] = useState(false);
   const [isFailedBatchInProgress, setIsFailedBatchInProgress] = useState(false);
   const [isQueueRunModalOpen, setIsQueueRunModalOpen] = useState(false);
+  // Per-run batch size override (test points per CD batch). Empty/0 = single batch.
+  // Prefilled from workspace setting when modal opens; user can adjust without
+  // changing the global default.
+  const [modalBatchSize, setModalBatchSize] = useState<number>(10);
   const [isCdModalOpen, setIsCdModalOpen] = useState(false);
   const [pageSize, setPageSize] = useState(20);
   const [pageIndex, setPageIndex] = useState(0);
+  const [runProgress, setRunProgress] = useState<string | null>(null);
+  const [runMessages, setRunMessages] = useState<Array<{ ts: number; text: string }>>([]);
+  const [isRunActive, setIsRunActive] = useState(false);
+  const runAbortControllerRef = useRef<AbortController | null>(null);
   const buildDropdownRef = useRef<HTMLDivElement | null>(null);
   const suiteSelectAllRef = useRef<HTMLInputElement | null>(null);
 
@@ -261,9 +292,11 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     try {
       const workItemIds = parseWorkItemIdsCsv(workspaceSettings.schedulerMappingWorkItemIds || '');
       let mappings: TestSuiteMapping[] = [];
+      let mappingFetchSucceeded = false;
       if (workItemIds.length > 0) {
         try {
           mappings = await fetchSuiteReleaseMappings(workspaceSettings, workItemIds);
+          mappingFetchSucceeded = true;
         } catch (mappingError) {
           const message = mappingError instanceof Error ? mappingError.message : String(mappingError);
           addNotification(
@@ -276,6 +309,16 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
       const mappingBySuiteId = new Map<number, TestSuiteMapping>();
       mappings.forEach((mapping) => mappingBySuiteId.set(mapping.testSuiteId, mapping));
 
+      // Empty-mapping warning: fetch succeeded but returned 0 rows — likely XML schema
+      // changed or the work items are empty. Helps users debug instead of seeing an empty list.
+      if (mappingFetchSucceeded && mappings.length === 0 && workItemIds.length > 0) {
+        addNotification(
+          'warning',
+          `Mapping work item(s) ${workItemIds.join(', ')} returned no rows. ` +
+          `Check the work item Parameters field, or disable “Only show suites that have a row in the mapping work items” in Workspace Settings.`,
+        );
+      }
+
       const suiteResponses = await Promise.all(
         planScope.map(async (plan) => {
           const response = await fetchSuitesForPlan(workspaceSettings, plan);
@@ -284,19 +327,24 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
       );
       const allSuites = suiteResponses.flat();
 
-      // Exclusion filters (mirror C# SyncPageViewModel.cs:678-683 + Constants.cs ExcludedTestSuites):
-      //  1. Name-pattern exclusion — `schedulerExcludedSuiteNamePatterns` (CSV)
-      //  2. ID exclusion — `schedulerExcludedSuiteIdsCsv` (CSV of suite IDs)
-      // Both active whenever their CSV has any entries.
+      // Exclusion + presence filters:
+      //  Filter 1. Mapping presence — only suites with a row in mappings (toggle: schedulerRequireSuiteMapping)
+      //  Filter 2. ID exclusion — schedulerExcludedSuiteIdsCsv (CSV)
+      //  Filter 5. Name-pattern exclusion — schedulerExcludedSuiteNamePatterns (CSV)
+      // Filter 1 is silently skipped if mappings array is empty (don't drop everything if mappings failed).
+      const requireMapping = workspaceSettings.schedulerRequireSuiteMapping
+        && mappings.length > 0;
       const namePatterns = parseExcludedSuiteNamePatterns(
         workspaceSettings.schedulerExcludedSuiteNamePatterns || '',
       );
       const excludedIds = parseExcludedSuiteIdsCsv(
         workspaceSettings.schedulerExcludedSuiteIdsCsv || '',
       );
-      const filteredSuites = (namePatterns.length === 0 && excludedIds.size === 0)
+      const anyFilterActive = requireMapping || namePatterns.length > 0 || excludedIds.size > 0;
+      const filteredSuites = !anyFilterActive
         ? allSuites
         : allSuites.filter((suite) => {
+          if (requireMapping && !mappingBySuiteId.has(suite.suiteId)) return false;
           if (excludedIds.has(suite.suiteId)) return false;
           if (namePatterns.length > 0 && isSuiteNameExcluded(suite.suiteName, namePatterns)) return false;
           return true;
@@ -316,7 +364,8 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
         .sort((left, right) => left.suiteName.localeCompare(right.suiteName));
 
       setSuiteRows(enrichedSuites);
-      setSelectedSuiteIds((previous) => previous.filter((suiteId) => enrichedSuites.some((suite) => suite.suiteId === suiteId)));
+      // Selection is auto-synced to the visible set by the effect watching
+      // [planFilter, selectedTag, suiteSearchText, suiteRows] — no manual cleanup needed.
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load suites.';
       addNotification('error', message);
@@ -344,12 +393,17 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
         workspaceSettings.schedulerBuildDefinitionId,
         50,
       );
-      const latestUniqueBuilds = toLatestUniqueBuilds(nextBuilds);
+      // No dedup — keep all fetched builds. Default selection = the newest one.
+      const sorted = [...nextBuilds].sort((left, right) => {
+        const leftTs = Date.parse(left.queueTime);
+        const rightTs = Date.parse(right.queueTime);
+        return (Number.isFinite(rightTs) ? rightTs : 0) - (Number.isFinite(leftTs) ? leftTs : 0);
+      });
       setBuilds(nextBuilds);
       setSelectedBuildId((previous) => (
-        previous && latestUniqueBuilds.some((build) => build.id === previous)
+        previous && sorted.some((build) => build.id === previous)
           ? previous
-          : latestUniqueBuilds[0]?.id ?? null
+          : sorted[0]?.id ?? null
       ));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load builds.';
@@ -367,13 +421,16 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     }
     setIsLoadingConfigurations(true);
     try {
+      // Show every active configuration — user picks the one they want at run time.
+      // The previous filter that hid `schedulerDefaultPointConfigurationId` is gone:
+      // the default-point config still acts as the eligibility fallback inside the
+      // executor, but it's a perfectly valid manual choice in the modal too.
       const nextConfigurations = await fetchTestConfigurations(workspaceSettings);
-      const filtered = nextConfigurations.filter(
-        (configuration) => configuration.id !== workspaceSettings.schedulerDefaultPointConfigurationId,
-      );
-      setConfigurations(filtered);
-      if (!filtered.some((configuration) => configuration.id === selectedConfigurationId)) {
-        setSelectedConfigurationId(filtered[0]?.id ?? workspaceSettings.schedulerDefaultConfigurationId);
+      setConfigurations(nextConfigurations);
+      if (!nextConfigurations.some((configuration) => configuration.id === selectedConfigurationId)) {
+        setSelectedConfigurationId(
+          nextConfigurations[0]?.id ?? workspaceSettings.schedulerDefaultConfigurationId,
+        );
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load configurations.';
@@ -593,6 +650,16 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     suiteSelectAllRef.current.indeterminate = areSomeVisibleSuitesSelected;
   }, [areSomeVisibleSuitesSelected]);
 
+  // Auto-sync selection to the current filter scope.
+  // Default = everything in scope is selected. Each filter change (plan, tag, search,
+  // or a fresh suite load) overwrites the selection with the new visible set.
+  // Sort and pagination do NOT trigger this — they're view-only operations.
+  useEffect(() => {
+    setSelectedSuiteIds(visibleSuiteIds);
+    // visibleSuiteIds is derived; we watch its sources to avoid resetting on sort.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planFilter, selectedTag, suiteSearchText, suiteRows]);
+
   const selectedSuiteRows = useMemo(
     () => suiteRows.filter((suite) => selectedSuiteIdSet.has(suite.suiteId)),
     [selectedSuiteIdSet, suiteRows],
@@ -618,28 +685,37 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
   );
 
   const selectedBuild = useMemo(
-    () => toLatestUniqueBuilds(builds).find((build) => build.id === selectedBuildId) ?? null,
+    () => builds.find((build) => build.id === selectedBuildId) ?? null,
     [builds, selectedBuildId],
   );
 
-  const latestUniqueBuilds = useMemo(
-    () => toLatestUniqueBuilds(builds),
+  // Show all fetched builds (no branch dedup) sorted newest-first.
+  // User can search to narrow; full list is otherwise scrollable.
+  const sortedBuilds = useMemo(
+    () => [...builds].sort((left, right) => {
+      const leftTs = Date.parse(left.queueTime);
+      const rightTs = Date.parse(right.queueTime);
+      const safeLeft = Number.isFinite(leftTs) ? leftTs : 0;
+      const safeRight = Number.isFinite(rightTs) ? rightTs : 0;
+      if (safeLeft !== safeRight) return safeRight - safeLeft;
+      return right.id - left.id;
+    }),
     [builds],
   );
 
   const selectedBuildLabel = useMemo(() => {
     if (!selectedBuildId) return '';
-    const build = latestUniqueBuilds.find((candidate) => candidate.id === selectedBuildId);
+    const build = sortedBuilds.find((candidate) => candidate.id === selectedBuildId);
     if (!build) return '';
     return toBuildOptionLabel(build.id, build.sourceBranch || build.buildNumber);
-  }, [latestUniqueBuilds, selectedBuildId]);
+  }, [sortedBuilds, selectedBuildId]);
 
   const visibleBuildOptions = useMemo(() => {
     const search = buildDropdownSearch.trim().toLowerCase();
     if (!search) {
-      return latestUniqueBuilds;
+      return sortedBuilds;
     }
-    return latestUniqueBuilds.filter((build) => {
+    return sortedBuilds.filter((build) => {
       const name = toBranchLabel(build.sourceBranch || build.buildNumber).toLowerCase();
       const buildNumber = build.buildNumber.toLowerCase();
       return (
@@ -648,7 +724,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
         || buildNumber.includes(search)
       );
     });
-  }, [buildDropdownSearch, latestUniqueBuilds]);
+  }, [buildDropdownSearch, sortedBuilds]);
 
   // World Pay build is now resolved from explicit user choice (mirrors C# WorldPay ComboBox)
   const selectedWorldPayBuild = useMemo(() => {
@@ -771,6 +847,112 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     workspaceSettings,
   ]);
 
+  /**
+   * Kick off ADO orchestration for the given suite IDs.
+   * Fire-and-forget — progress flows through `runProgress` state.
+   * Writes a release_logs row per suite via window.desktop.upsertReleaseLog
+   * (inside executeSuitesSequentially).
+   */
+  const startSuiteRun = useCallback((
+    suiteIds: number[],
+    options: { isFailedRerun?: boolean; pointBatchSizeOverride?: number } = {},
+  ) => {
+    if (suiteIds.length === 0) return;
+    if (!selectedBuild) return;
+    const configuration = configurations.find((c) => c.id === selectedConfigurationId)
+      ?? { id: selectedConfigurationId, name: `Configuration ${selectedConfigurationId}` };
+
+    const plans: SuiteExecutionPlan[] = suiteIds.map((suiteId, idx) => {
+      const row = suiteRows.find((s) => s.suiteId === suiteId);
+      return {
+        planId: row?.planId ?? 0,
+        suiteId,
+        suiteName: row?.suiteName ?? `Suite ${suiteId}`,
+        releaseDefinitionId: row?.releaseDefinitionId ?? 0,
+        batchIndex: Math.floor(idx / Math.max(1, batchSize)),
+      };
+    }).filter((plan) => plan.planId > 0);
+
+    if (plans.length === 0) {
+      addNotification('warning', 'No runnable plans matched the selected suites.');
+      return;
+    }
+
+    const ctx: RunExecutionContext = {
+      settings: workspaceSettings,
+      build: selectedBuild,
+      worldPayBuild: selectedWorldPayBuild,
+      worldPayPlanIds,
+      configuration,
+      releaseDefinitionIds: releaseDefinitionPool,
+      releaseCutoffTime: Date.now(),
+      defaultPointConfigurationId: workspaceSettings.schedulerDefaultPointConfigurationId,
+      pointBatchSize: options.pointBatchSizeOverride !== undefined
+        ? options.pointBatchSizeOverride
+        : (workspaceSettings.schedulerPointBatchSize ?? 0),
+      cdPollIntervalMs: Math.max(10, workspaceSettings.schedulerPollSeconds ?? 30) * 1000,
+      artifactAlias: (workspaceSettings.schedulerArtifactAlias || '').trim() || 'drop',
+      manualEnvironments: (workspaceSettings.schedulerManualEnvironmentsCsv || '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+      isFailedRerun: Boolean(options.isFailedRerun),
+      onProgress: (message) => {
+        setRunProgress(message);
+        setRunMessages((prev) => {
+          // Keep the last 100 messages; newest at the end.
+          const next = prev.length >= 100 ? prev.slice(-99) : prev.slice();
+          next.push({ ts: Date.now(), text: message });
+          return next;
+        });
+      },
+      onLog: () => { /* DB persist already handled inside executor */ },
+    };
+
+    const abortController = new AbortController();
+    runAbortControllerRef.current = abortController;
+    setIsRunActive(true);
+    setRunMessages([]);
+    setRunProgress(`Starting ${plans.length} suite(s)…`);
+
+    void executeSuitesSequentially(ctx, plans, abortController.signal)
+      .then(() => {
+        setRunProgress(`Run complete: ${plans.length} suite(s) executed`);
+        addNotification('success', `Run complete: ${plans.length} suite(s) executed`);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (abortController.signal.aborted) {
+          setRunProgress('Run cancelled');
+          addNotification('info', 'Run cancelled');
+        } else {
+          setRunProgress(`Run failed: ${message}`);
+          addNotification('error', `Run failed: ${message}`);
+        }
+      })
+      .finally(() => {
+        runAbortControllerRef.current = null;
+        setIsRunActive(false);
+      });
+  }, [
+    addNotification,
+    batchSize,
+    configurations,
+    releaseDefinitionPool,
+    selectedBuild,
+    selectedConfigurationId,
+    selectedWorldPayBuild,
+    suiteRows,
+    workspaceSettings,
+    worldPayPlanIds,
+  ]);
+
+  const cancelActiveRun = () => {
+    if (runAbortControllerRef.current) {
+      runAbortControllerRef.current.abort();
+    }
+  };
+
   const handleSubmitRun = async (): Promise<boolean> => {
     if (!window.desktop?.queueSchedulerRunRequest) {
       addNotification('error', 'Scheduler run APIs are unavailable. Restart the app to load latest desktop bridge.');
@@ -824,7 +1006,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
         selectedBuildId: selectedBuild.id,
         selectedWorldPayBuildId: selectedWorldPayBuild?.id ?? null,
         selectedReleaseDefinitionId: firstAvailableCd.definitionId,
-        notes: `CD ${firstAvailableCd.definitionId} ${firstAvailableCd.definitionName}`,
+        notes: formatCdLabel(firstAvailableCd.definitionId, firstAvailableCd.definitionName),
       });
       addNotification(
         'success',
@@ -832,11 +1014,13 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
           ? `Run request queued with ${result.batchCount} balanced batches.`
           : 'Run request queued.',
       );
-      // Mirror C# overnight → failed-batch follow-up: auto-trigger rerun after overnight
-      if (runMode === 'nightly_full') {
-        addNotification('info', 'Overnight queued. Failed-batch follow-up will trigger automatically.');
-        void handleFailedBatchRerun();
-      }
+
+      // Kick off ADO orchestration in the background (Option A).
+      // Each suite creates a test run + release in ADO and writes a release_logs row.
+      startSuiteRun(queuedSuiteIds, {
+        isFailedRerun: false,
+        pointBatchSizeOverride: modalBatchSize,
+      });
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not queue run request.';
@@ -850,6 +1034,9 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
   const openQueueRunModal = () => {
     setBuildDropdownSearch('');
     setIsBuildDropdownOpen(false);
+    // Prefill batch size from workspace default; fall back to 10 if not set.
+    const workspaceDefault = workspaceSettings.schedulerPointBatchSize;
+    setModalBatchSize(Number.isFinite(workspaceDefault) && workspaceDefault > 0 ? workspaceDefault : 10);
     setIsQueueRunModalOpen(true);
   };
 
@@ -889,13 +1076,14 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
         releaseId: entry.releaseId,
         releaseDefinitionId: entry.releaseDefinitionId,
         releaseDefinitionName: entry.releaseDefinitionName,
+        testRunId: entry.testRunId ?? null,
         suiteId: entry.testSuiteId,
         suiteName: '',
         planId: 0,
         buildNumber: '',
         buildId: 0,
         configurationId: 0,
-        batchIndex: 0,
+        batchIndex: entry.batchIndex ?? 0,
         releaseCutoffTime: 0,
         createdAt: 0,
         modifiedAt: 0,
@@ -961,6 +1149,9 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
           ? `Failed-batch rerun queued with ${result.batchCount} batches (${eligible.length} suites).`
           : `Failed-batch rerun queued (${eligible.length} suites).`,
       );
+
+      // Execute the failed suites with isFailedRerun = true so logs are marked correctly
+      startSuiteRun(eligible, { isFailedRerun: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not queue failed-batch rerun.';
       addNotification('error', message);
@@ -972,6 +1163,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     batchSize,
     planFilter,
     selectedConfigurationId,
+    startSuiteRun,
     workspaceSettings.schedulerExcludedSuiteIdsCsv,
   ]);
 
@@ -1049,7 +1241,8 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
         </div>
       </div>
 
-      <div className="workspace-hub__plans-body scheduler-run-screen">
+      <div className={`workspace-hub__plans-body scheduler-run-screen${(isRunActive || runProgress) ? ' has-sidepanel' : ''}`}>
+        <div className="scheduler-run-screen__main">
         <div className="scheduler-run-screen__filterbar">
           <select
             className="settings-input scheduler-run-screen__filter-control scheduler-run-screen__filter-plan"
@@ -1310,6 +1503,60 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
             </nav>
           )}
         </div>
+        </div>
+
+        {(isRunActive || runProgress) && (
+          <aside
+            className={`scheduler-run-screen__sidepanel${isRunActive ? ' is-active' : ' is-done'}`}
+            aria-label="Run progress"
+          >
+            <header className="scheduler-run-screen__sidepanel-head">
+              <span
+                className={`scheduler-run-screen__sidepanel-dot${isRunActive ? ' is-active' : ' is-done'}`}
+                aria-hidden="true"
+              />
+              <span className="scheduler-run-screen__sidepanel-title">
+                {isRunActive ? 'Run in progress' : 'Run complete'}
+              </span>
+              {isRunActive ? (
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--xs"
+                  onClick={cancelActiveRun}
+                >
+                  Cancel
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--xs"
+                  onClick={() => { setRunProgress(null); setRunMessages([]); }}
+                  aria-label="Dismiss run status"
+                >
+                  Dismiss
+                </button>
+              )}
+            </header>
+
+            <div className="scheduler-run-screen__sidepanel-current">
+              {runProgress ?? 'Run in progress…'}
+            </div>
+
+            {runMessages.length > 0 && (
+              <div className="scheduler-run-screen__sidepanel-log" role="log" aria-live="polite">
+                {runMessages.slice().reverse().map((entry, idx) => {
+                  const time = new Date(entry.ts).toLocaleTimeString([], { hour12: false });
+                  return (
+                    <div key={`${entry.ts}-${idx}`} className="scheduler-run-screen__sidepanel-log-row">
+                      <span className="scheduler-run-screen__sidepanel-log-time">{time}</span>
+                      <span className="scheduler-run-screen__sidepanel-log-text">{entry.text}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </aside>
+        )}
       </div>
 
       {isCdModalOpen && (
@@ -1341,16 +1588,14 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
                   <table className="data-table plans-table">
                     <thead>
                       <tr>
-                        <th style={{ width: 160 }}>CD ID</th>
-                        <th>CD Name</th>
-                        <th>State</th>
+                        <th>Release Definition</th>
+                        <th style={{ width: 160 }}>State</th>
                       </tr>
                     </thead>
                     <tbody>
                       {cdAvailabilityRows.map((cd) => (
                         <tr key={cd.definitionId}>
-                          <td>{cd.definitionId}</td>
-                          <td>{cd.definitionName || `CD ${cd.definitionId}`}</td>
+                          <td>{formatCdLabel(cd.definitionId, cd.definitionName)}</td>
                           <td>
                             <span className={toCdStateBadgeClass(cd)}>
                               {toCdStateLabel(cd)}
@@ -1396,67 +1641,53 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
             </div>
 
             <div className="modal__body scheduler-run-modal__body">
-              <div className="scheduler-run-modal__grid">
-                <label className="scheduler-run-screen__field">
-                  <span>Run Mode</span>
-                  <select
-                    className="settings-input"
-                    value={runMode}
-                    onChange={(event) => setRunMode(event.target.value as RunMode)}
-                  >
-                    <option value="selected_suite">Selected Suites</option>
-                    <option value="nightly_full">Run Overnight Batches</option>
-                  </select>
-                </label>
-                <label className="scheduler-run-screen__field scheduler-run-screen__field--build">
-                  <span>Build</span>
-                  <div className="scheduler-run-screen__build-combobox" ref={buildDropdownRef}>
-                    <button
-                      type="button"
-                      className="settings-input scheduler-run-screen__build-trigger"
-                      disabled={isLoadingBuilds}
-                      onClick={() => {
-                        setBuildDropdownSearch('');
-                        setIsBuildDropdownOpen((previous) => !previous);
-                      }}
-                    >
-                      <span className="scheduler-run-screen__build-trigger-label">
-                        {selectedBuildLabel || 'Select build'}
-                      </span>
-                      <IconChevronDown size={16} />
-                    </button>
-                    {isBuildDropdownOpen && (
-                      <div className="scheduler-run-screen__build-popover">
-                        <input
-                          className="settings-input scheduler-run-screen__build-search"
-                          value={buildDropdownSearch}
-                          onChange={(event) => setBuildDropdownSearch(event.target.value)}
-                          placeholder="Search build id / name"
-                          autoFocus
-                        />
-                        <div className="scheduler-run-screen__build-list">
-                          {visibleBuildOptions.map((build) => (
-                            <button
-                              key={build.id}
-                              type="button"
-                              className={`scheduler-run-screen__build-item${selectedBuildId === build.id ? ' is-active' : ''}`}
-                              onClick={() => {
-                                setSelectedBuildId(build.id);
-                                setIsBuildDropdownOpen(false);
-                              }}
-                            >
-                              {toBuildOptionLabel(build.id, build.sourceBranch || build.buildNumber)}
-                            </button>
-                          ))}
-                          {visibleBuildOptions.length === 0 && (
-                            <div className="scheduler-run-screen__build-empty">No matching builds</div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </label>
+              {/* Summary badges at top — quick context for what will run */}
+              {selectedSuiteIds.length === 0 ? (
+                <p className="scheduler-run-modal__hint">Select at least one suite to enable Run.</p>
+              ) : (
+                <div className="scheduler-run-modal__summary">
+                  <span className="meta-pill">
+                    <strong>{selectedSuiteIds.length.toLocaleString()}</strong>&nbsp;suites selected
+                  </span>
+                  {requiresWorldPayBuild && (
+                    <span className="meta-pill meta-pill--info">Includes World&nbsp;Pay suites</span>
+                  )}
+                </div>
+              )}
 
+              {/* Next available CD — visually distinct status card */}
+              <div className={`scheduler-run-modal__cd-card${firstAvailableCd ? '' : ' scheduler-run-modal__cd-card--empty'}`}>
+                <div className="scheduler-run-modal__cd-head">
+                  <span className="scheduler-run-screen__field-label">Next available CD</span>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--xs"
+                    onClick={() => { void loadReleaseDefinitionAvailability(); }}
+                    disabled={isLoadingCdPool}
+                  >
+                    <IconRefresh size={13} />
+                    Refresh
+                  </button>
+                </div>
+                <div className="scheduler-run-modal__cd-body">
+                  <span
+                    className={`scheduler-run-modal__cd-dot${firstAvailableCd ? ' is-available' : ' is-unavailable'}`}
+                    aria-hidden="true"
+                  />
+                  {firstAvailableCd ? (
+                    <span className="scheduler-run-modal__cd-id">
+                      {formatCdLabel(firstAvailableCd.definitionId, firstAvailableCd.definitionName)}
+                    </span>
+                  ) : (
+                    <span className="scheduler-run-modal__cd-empty">
+                      No CD available — refresh or expand the CD pool in Workspace Settings.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Configuration + Batch size on one row (matches Suite Tree modal) */}
+              <div className="scheduler-run-modal__inline-fields">
                 <label className="scheduler-run-screen__field">
                   <span>Configuration</span>
                   <select
@@ -1481,44 +1712,67 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
                     )}
                   </select>
                 </label>
-                {requiresWorldPayBuild && (
-                  <label className="scheduler-run-screen__field">
-                    <span>World Pay Server</span>
-                    <select
-                      className="settings-input"
-                      value={selectedWorldPayServer}
-                      onChange={(event) => setSelectedWorldPayServer(event.target.value as WorldPayServer)}
-                    >
-                      <option value="Regression World Pay">Regression World Pay</option>
-                      <option value="Kanban World Pay">Kanban World Pay</option>
-                    </select>
-                  </label>
-                )}
-              </div>
 
-              <div className="scheduler-run-modal__availability">
-                <label className="scheduler-run-screen__field scheduler-run-screen__field--grow">
-                  <span>CD Availability</span>
-                  <input
-                    className="settings-input"
-                    value={firstAvailableCd ? `${firstAvailableCd.definitionId} · ${firstAvailableCd.definitionName}` : 'No CD available'}
-                    readOnly
+                <label className="scheduler-run-screen__field" htmlFor="modalBatchSize">
+                  <span>Batch size (per CD)</span>
+                  <BatchSizeInput
+                    id="modalBatchSize"
+                    value={modalBatchSize}
+                    onChange={setModalBatchSize}
                   />
                 </label>
-                <button type="button" className="btn btn--secondary btn--sm" onClick={() => { void loadReleaseDefinitionAvailability(); }} disabled={isLoadingCdPool}>
-                  <IconRefresh size={14} />
-                  Refresh CDs
-                </button>
               </div>
 
-              {selectedSuiteIds.length === 0 ? (
-                <p className="scheduler-run-modal__hint">Select at least one suite to enable Run.</p>
-              ) : (
-                <div className="scheduler-run-modal__meta">
-                  <span className="meta-pill">{selectedSuiteIds.length} suites selected</span>
-                  <span className="meta-pill">{eligiblePointTotal} eligible points</span>
+              {/* Build */}
+              <label className="scheduler-run-screen__field scheduler-run-screen__field--build">
+                <span>Build</span>
+                <div className="scheduler-run-screen__build-combobox" ref={buildDropdownRef}>
+                  <button
+                    type="button"
+                    className="settings-input scheduler-run-screen__build-trigger"
+                    disabled={isLoadingBuilds}
+                    onClick={() => {
+                      setBuildDropdownSearch('');
+                      setIsBuildDropdownOpen((previous) => !previous);
+                    }}
+                  >
+                    <span className="scheduler-run-screen__build-trigger-label">
+                      {selectedBuildLabel || 'Select build'}
+                    </span>
+                    <IconChevronDown size={16} />
+                  </button>
+                  {isBuildDropdownOpen && (
+                    <div className="scheduler-run-screen__build-popover">
+                      <input
+                        className="settings-input scheduler-run-screen__build-search"
+                        value={buildDropdownSearch}
+                        onChange={(event) => setBuildDropdownSearch(event.target.value)}
+                        placeholder="Search build id / name"
+                        autoFocus
+                      />
+                      <div className="scheduler-run-screen__build-list">
+                        {visibleBuildOptions.map((build) => (
+                          <button
+                            key={build.id}
+                            type="button"
+                            className={`scheduler-run-screen__build-item${selectedBuildId === build.id ? ' is-active' : ''}`}
+                            onClick={() => {
+                              setSelectedBuildId(build.id);
+                              setIsBuildDropdownOpen(false);
+                            }}
+                          >
+                            {toBuildOptionLabel(build.id, build.sourceBranch || build.buildNumber)}
+                          </button>
+                        ))}
+                        {visibleBuildOptions.length === 0 && (
+                          <div className="scheduler-run-screen__build-empty">No matching builds</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </label>
+
             </div>
 
             <div className="modal__footer">

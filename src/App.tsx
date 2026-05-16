@@ -47,6 +47,7 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
         schedulerDefaultMode: 'nightly_full',
         schedulerDefaultBatchSize: 10,
         schedulerMaxHistoryRows: 500,
+        schedulerPointBatchSize: 15,
         schedulerBuildDefinitionId: 260,
         schedulerDefaultConfigurationId: 34,
         schedulerDefaultPointConfigurationId: 33,
@@ -57,6 +58,9 @@ function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
         schedulerWorldPayTestPlanId: 139145,
         schedulerEnabledPlanIds: [],
         schedulerMappingWorkItemIds: '136838,147829',
+        schedulerRequireSuiteMapping: true,
+        schedulerArtifactAlias: '_Automated Testing Framework-ASP.NET Core-CI',
+        schedulerManualEnvironmentsCsv: 'Test Run Execute',
         schedulerExcludedSuiteIdsCsv: '',
         schedulerExcludedSuiteNamePatterns: 'initial,intial',
     };

@@ -1,6 +1,4 @@
 import type {
-  ADOBuildSummary,
-  ADOTestConfigurationSummary,
   ReleaseLogRecord,
   WorkspaceConnectionSettings,
 } from '../types';
@@ -10,16 +8,38 @@ import {
   attachTestRunToRelease,
   startReleaseEnvironment,
   fetchTestPointsForSuite,
+  updateTestRunAfterRelease,
+  type ADOBuildSummary,
+  type ADOTestConfigurationSummary,
 } from './adoApi';
 import { waitForAvailableReleaseDefinition } from './releaseDefinitionWaiter';
+import { divideIntoBalancedBatches } from '../utils/divideIntoBalancedBatches';
 
 export interface RunExecutionContext {
   settings: WorkspaceConnectionSettings;
   build: ADOBuildSummary;
+  /** Optional WorldPay build — used when a plan's id is in `worldPayPlanIds`. */
+  worldPayBuild?: ADOBuildSummary | null;
+  /** Plan IDs that should use the WorldPay build. */
+  worldPayPlanIds?: number[];
   configuration: ADOTestConfigurationSummary;
   releaseDefinitionIds: number[];
   releaseCutoffTime: number;
   defaultPointConfigurationId: number;
+  /** Max test points per CD batch. 0 / undefined => no chunking (all points in one batch). */
+  pointBatchSize?: number;
+  /** How often to poll for CD availability when none are free. Default 30s. */
+  cdPollIntervalMs?: number;
+  /** Artifact alias the release definition expects (must match RD's artifact source name). */
+  artifactAlias: string;
+  /** Environment names to skip auto-deploy at release create time. */
+  manualEnvironments?: string[];
+  /** When true, suites are persisted with isFailedRerun = true. */
+  isFailedRerun?: boolean;
+  /** Optional point outcome filter. Default keeps existing all-eligible behavior. */
+  pointOutcomeFilter?: 'all' | 'failed';
+  /** Persist release log rows. Defaults to true for existing scheduler workspace flows. */
+  persistReleaseLogs?: boolean;
   onProgress: (message: string) => void;
   onLog: (record: ReleaseLogRecord) => void;
 }
@@ -33,7 +53,26 @@ export interface SuiteExecutionPlan {
 }
 
 /**
- * Execute test suites sequentially with release orchestration
+ * Split test points into balanced batches.
+ *
+ * Batch size acts as a CAP — the actual size per batch is the smallest integer
+ * that keeps every batch ≤ cap. For 25 points with cap 10, the result is
+ * [9, 8, 8] rather than [10, 10, 5], so each CD does similar work.
+ *
+ * Size <= 0 / Infinity => single batch containing all points (used when the
+ * user picks "All" in the modal).
+ */
+function chunkPoints<T>(items: T[], cap: number): T[][] {
+  if (!items.length) return [];
+  if (!Number.isFinite(cap) || cap <= 0) return [items.slice()];
+  return divideIntoBalancedBatches(items, cap);
+}
+
+/**
+ * Execute test suites from a pool. For each suite, points are filtered to
+ * automated + matching configuration, then split into batches. Each batch is
+ * submitted to the next available CD from the pool. When the pool is exhausted,
+ * the waiter polls indefinitely (UI sees a "paused" banner via onProgress).
  */
 export async function executeSuitesSequentially(
   context: RunExecutionContext,
@@ -46,17 +85,28 @@ export async function executeSuitesSequentially(
   }
 
   context.onProgress(`Starting execution of ${plans.length} suite(s)`);
+  const worldPayPlanIdSet = new Set(context.worldPayPlanIds ?? []);
+  const pointBatchSize = context.pointBatchSize ?? 0;
+  const cdPollIntervalMs = context.cdPollIntervalMs ?? 30_000;
+  const pointOutcomeFilter = context.pointOutcomeFilter ?? 'all';
+  const persistReleaseLogs = context.persistReleaseLogs ?? true;
 
+  let suiteIndex = 0;
   for (const plan of plans) {
+    suiteIndex += 1;
     if (signal?.aborted) {
       context.onProgress('Execution cancelled');
       return;
     }
 
-    try {
-      context.onProgress(`Executing suite ${plan.suiteId}: ${plan.suiteName}`);
+    const buildForPlan = worldPayPlanIdSet.has(plan.planId) && context.worldPayBuild
+      ? context.worldPayBuild
+      : context.build;
 
-      // Fetch test points for this suite
+    const suitePrefix = `Suite ${suiteIndex}/${plans.length} · ${plan.suiteName}`;
+
+    try {
+      context.onProgress(`${suitePrefix}: fetching test points…`);
       const testPoints = await fetchTestPointsForSuite(
         context.settings,
         plan.planId,
@@ -64,133 +114,212 @@ export async function executeSuitesSequentially(
         signal,
       );
 
-      // Filter to eligible points (automated, with correct configuration)
-      const eligiblePoints = testPoints
-        .filter((point) => point.isAutomated !== false)
+      // Strict automation filter — only keep points explicitly marked automated.
+      // Matches C#: `.Where(x => x.IsAutomated)`.
+      const automatedPoints = testPoints.filter((point) => point.isAutomated === true);
+      const configurationMatchedPoints = automatedPoints
         .filter((point) => {
           const pointConfig = point.configurationId || 0;
-          return pointConfig === context.defaultPointConfigurationId || pointConfig === context.configuration.id;
+          return pointConfig === context.defaultPointConfigurationId
+            || pointConfig === context.configuration.id;
+        });
+      const eligiblePoints = configurationMatchedPoints
+        .filter((point) => {
+          if (pointOutcomeFilter !== 'failed') return true;
+          // "Run failed" pre-filter — exact Failed combination:
+          //   state          === "notReady"
+          //   lastResultState === "completed"
+          //   outcome         === "failed"
+          //   isActive        === false
+          const state = (point.state ?? '').trim().toLowerCase();
+          const lastResultState = (point.lastResultState ?? '').trim().toLowerCase();
+          const outcome = (point.outcome ?? '').trim().toLowerCase();
+          const isActive = point.isActive === true;
+          return !isActive
+            && state === 'notready'
+            && lastResultState === 'completed'
+            && outcome === 'failed';
         })
         .map((point) => point.id);
 
+      context.onProgress(
+        pointOutcomeFilter === 'failed'
+          ? `${suitePrefix}: ${testPoints.length} total points, ${automatedPoints.length} automated, ${configurationMatchedPoints.length} match configuration, ${eligiblePoints.length} failed`
+          : `${suitePrefix}: ${testPoints.length} total points, ${automatedPoints.length} automated, ${eligiblePoints.length} match configuration`,
+      );
+
       if (!eligiblePoints.length) {
-        context.onProgress(`No eligible points for suite ${plan.suiteId}`);
+        context.onProgress(
+          pointOutcomeFilter === 'failed'
+            ? `${suitePrefix}: no failed automated points for the selected configuration, skipping`
+            : `${suitePrefix}: no eligible automated points, skipping`,
+        );
         continue;
       }
 
-      context.onProgress(`Found ${eligiblePoints.length} eligible points for suite ${plan.suiteId}`);
-
-      // Wait for available release definition
-      context.onProgress(`Waiting for available CD from pool of ${context.releaseDefinitionIds.length}`);
-      const availableCd = await waitForAvailableReleaseDefinition(
-        context.settings,
-        context.releaseDefinitionIds,
-        3, // maxRetries
-        300_000, // retryDelayMs (5 minutes)
-        signal,
+      const batches = chunkPoints(eligiblePoints, pointBatchSize);
+      const batchSizesSummary = batches.map((b) => b.length).join(', ');
+      context.onProgress(
+        `${suitePrefix}: ${eligiblePoints.length} points → ${batches.length} batch(es) [${batchSizesSummary}]`,
       );
 
-      if (!availableCd) {
-        throw new Error('No available release definition found after retries');
-      }
+      let batchIndex = 0;
+      for (const batchPoints of batches) {
+        batchIndex += 1;
+        if (signal?.aborted) {
+          context.onProgress('Execution cancelled');
+          return;
+        }
 
-      context.onProgress(`Using CD ${availableCd.definitionId} (${availableCd.definitionName})`);
+        const batchPrefix = `${suitePrefix} · Batch ${batchIndex}/${batches.length}`;
 
-      // Create test run
-      const runResult = await createTestRun(
-        context.settings,
-        plan.planId,
-        plan.suiteId,
-        eligiblePoints,
-        context.configuration.id,
-        signal,
-      );
+        context.onProgress(`${batchPrefix}: waiting for available CD…`);
+        const availableCd = await waitForAvailableReleaseDefinition(
+          context.settings,
+          context.releaseDefinitionIds,
+          {
+            pollIntervalMs: cdPollIntervalMs,
+            signal,
+            onWaiting: (attempt) => {
+              context.onProgress(
+                `${batchPrefix}: paused — no CD free (poll ${attempt}, retrying in ${Math.round(cdPollIntervalMs / 1000)}s)…`,
+              );
+            },
+          },
+        );
 
-      context.onProgress(`Created test run ${runResult.id} for suite ${plan.suiteId}`);
+        if (!availableCd) {
+          // Cancelled or empty pool
+          context.onProgress(`${batchPrefix}: cancelled while waiting for CD`);
+          return;
+        }
 
-      // Create release
-      const releaseResult = await createRelease(
-        context.settings,
-        availableCd.definitionId,
-        context.build.id,
-        context.build.buildNumber,
-        signal,
-      );
+        const cdLabel = availableCd.definitionName?.trim()
+          ? `${availableCd.definitionName} (ID: ${availableCd.definitionId})`
+          : `CD ${availableCd.definitionId}`;
+        context.onProgress(`${batchPrefix}: using ${cdLabel}`);
 
-      context.onProgress(`Created release ${releaseResult.id}`);
+        // Create test run for this batch
+        const runResult = await createTestRun(
+          context.settings,
+          plan.planId,
+          plan.suiteId,
+          batchPoints,
+          context.configuration.id,
+          signal,
+        );
 
-      // Attach test run to release (use first environment, typically id 1)
-      const environmentId = 1;
-      await attachTestRunToRelease(
-        context.settings,
-        releaseResult.id,
-        environmentId,
-        runResult.id,
-        signal,
-      );
+        // Create release on the picked CD using the picked build (with full metadata)
+        const releaseResult = await createRelease(
+          context.settings,
+          availableCd.definitionId,
+          buildForPlan,
+          {
+            artifactAlias: context.artifactAlias,
+            manualEnvironments: context.manualEnvironments,
+          },
+          signal,
+        );
 
-      context.onProgress(`Attached test run ${runResult.id} to release ${releaseResult.id}`);
+        // Pick the right environment from the release.
+        // Prefer the env whose name matches the configured `manualEnvironments[0]`
+        // (the one we deferred). Fall back to the lowest-rank env.
+        const manualEnvName = (context.manualEnvironments ?? [])[0]?.trim().toLowerCase();
+        const targetEnv = (manualEnvName
+          ? releaseResult.environments.find((env) => env.name.trim().toLowerCase() === manualEnvName)
+          : null)
+          ?? releaseResult.environments[0];
 
-      // Start release environment
-      await startReleaseEnvironment(
-        context.settings,
-        releaseResult.id,
-        environmentId,
-        signal,
-      );
+        if (!targetEnv) {
+          throw new Error(
+            `Release ${releaseResult.id} created but has no environments. Check the release definition.`,
+          );
+        }
 
-      context.onProgress(`Started release environment for release ${releaseResult.id}`);
+        // C# step 3: attach release/environment URIs + build to the test run.
+        // This MUST happen before starting the env, otherwise the run transitions
+        // to "InProgress" automatically and the pipeline can't claim it.
+        context.onProgress(`${batchPrefix}: linking run ${runResult.id} to release ${releaseResult.id}…`);
+        await updateTestRunAfterRelease(
+          context.settings,
+          runResult.id,
+          releaseResult.id,
+          targetEnv.id,
+          buildForPlan.id,
+          signal,
+        );
 
-      // Log the execution
-      const logRecord: ReleaseLogRecord = {
-        releaseId: releaseResult.id,
-        releaseDefinitionId: availableCd.definitionId,
-        releaseDefinitionName: availableCd.definitionName,
-        testRunId: runResult.id,
-        suiteId: plan.suiteId,
-        suiteName: plan.suiteName,
-        planId: plan.planId,
-        buildNumber: context.build.buildNumber,
-        buildId: context.build.id,
-        configurationId: context.configuration.id,
-        batchIndex: plan.batchIndex,
-        releaseCutoffTime: context.releaseCutoffTime,
-        createdAt: Date.now(),
-        modifiedAt: Date.now(),
-        runtime: undefined,
-        passCount: undefined,
-        failCount: undefined,
-        notes: `CD ${availableCd.definitionId}`,
-      };
+        context.onProgress(`${batchPrefix}: setting tcmTestRun + variables on release env…`);
+        await attachTestRunToRelease(
+          context.settings,
+          releaseResult.id,
+          targetEnv.id,
+          runResult.id,
+          signal,
+        );
 
-      context.onLog(logRecord);
+        await startReleaseEnvironment(
+          context.settings,
+          releaseResult.id,
+          targetEnv.id,
+          signal,
+        );
 
-      // Persist to local SQLite release_logs table (mirrors C# ReleaseLogRepository)
-      if (window.desktop?.upsertReleaseLog) {
-        try {
-          await window.desktop.upsertReleaseLog({
-            releaseId: releaseResult.id,
-            releaseName: `Release-${releaseResult.id}`,
-            releaseDefinitionId: availableCd.definitionId,
-            releaseDefinitionName: availableCd.definitionName,
-            testSuiteId: plan.suiteId,
-            isFailedRerun: false,
-            releaseStartTime: new Date().toISOString(),
-          });
-        } catch (persistError) {
-          const message =
-            persistError instanceof Error ? persistError.message : String(persistError);
-          context.onProgress(`Warning: could not persist release log: ${message}`);
+        context.onProgress(`${batchPrefix}: started release ${releaseResult.id} (${batchPoints.length} points)`);
+
+        // In-memory log record (callback for non-DB consumers)
+        const logRecord: ReleaseLogRecord = {
+          releaseId: releaseResult.id,
+          releaseDefinitionId: availableCd.definitionId,
+          releaseDefinitionName: availableCd.definitionName,
+          testRunId: runResult.id,
+          suiteId: plan.suiteId,
+          suiteName: plan.suiteName,
+          planId: plan.planId,
+          buildNumber: buildForPlan.buildNumber,
+          buildId: buildForPlan.id,
+          configurationId: context.configuration.id,
+          batchIndex,
+          releaseCutoffTime: context.releaseCutoffTime,
+          createdAt: Date.now(),
+          modifiedAt: Date.now(),
+          runtime: undefined,
+          passCount: undefined,
+          failCount: undefined,
+          notes: `${cdLabel} · batch ${batchIndex}/${batches.length}`,
+        };
+        context.onLog(logRecord);
+
+        // Persist to SQLite (mirrors C# ReleaseLogRepository).
+        if (persistReleaseLogs && window.desktop?.upsertReleaseLog) {
+          try {
+            await window.desktop.upsertReleaseLog({
+              releaseId: releaseResult.id,
+              releaseName: `Release-${releaseResult.id}`,
+              releaseDefinitionId: availableCd.definitionId,
+              releaseDefinitionName: availableCd.definitionName,
+              testSuiteId: plan.suiteId,
+              testRunId: runResult.id,
+              isFailedRerun: Boolean(context.isFailedRerun),
+              releaseStartTime: new Date().toISOString(),
+              batchIndex,
+              batchCount: batches.length,
+            });
+          } catch (persistError) {
+            const message =
+              persistError instanceof Error ? persistError.message : String(persistError);
+            context.onProgress(`Warning: could not persist release log: ${message}`);
+          }
         }
       }
 
-      context.onProgress(`Logged execution for suite ${plan.suiteId}`);
+      context.onProgress(`${suitePrefix}: done (${batches.length} batch(es) submitted)`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      context.onProgress(`Error executing suite ${plan.suiteId}: ${message}`);
+      context.onProgress(`${suitePrefix}: error — ${message}`);
       throw error;
     }
   }
 
-  context.onProgress('All suites executed successfully');
+  context.onProgress('All suites submitted to ADO. Results will populate after Update Logs.');
 }

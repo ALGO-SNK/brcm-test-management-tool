@@ -55,9 +55,9 @@ export function ScheduleRunHistoryPage() {
     const headers = [
       'Release ID',
       'Release Name',
-      'Release Definition ID',
-      'Release Definition Name',
+      'Release Definition',
       'Test Suite ID',
+      'Batch',
       'Failed Rerun',
       'Total',
       'Passed',
@@ -67,20 +67,25 @@ export function ScheduleRunHistoryPage() {
       'Last Modified',
     ];
 
-    const rows = filteredLogs.map((log) => [
-      log.releaseId,
-      log.releaseName,
-      log.releaseDefinitionId,
-      log.releaseDefinitionName,
-      log.testSuiteId,
-      log.isFailedRerun ? 'Yes' : 'No',
-      log.totalTests ?? '',
-      log.passedTests ?? '',
-      log.failedTests ?? '',
-      log.releaseStartTime,
-      log.releaseRunTime,
-      log.releaseLogModifiedTime,
-    ]);
+    const rows = filteredLogs.map((log) => {
+      const cdLabel = log.releaseDefinitionName?.trim()
+        ? `${log.releaseDefinitionName} (ID: ${log.releaseDefinitionId})`
+        : `CD ${log.releaseDefinitionId}`;
+      return [
+        log.releaseId,
+        log.releaseName,
+        cdLabel,
+        log.testSuiteId,
+        log.batchIndex && log.batchCount ? `${log.batchIndex}/${log.batchCount}` : '',
+        log.isFailedRerun ? 'Yes' : 'No',
+        log.totalTests ?? '',
+        log.passedTests ?? '',
+        log.failedTests ?? '',
+        log.releaseStartTime,
+        log.releaseRunTime,
+        log.releaseLogModifiedTime,
+      ];
+    });
 
     const csv = [
       headers.join(','),
@@ -173,9 +178,10 @@ export function ScheduleRunHistoryPage() {
                   <tr>
                     <th style={{ width: 90 }}>Release ID</th>
                     <th>Release Name</th>
-                    <th style={{ width: 100 }}>CD ID</th>
-                    <th>CD Name</th>
+                    <th>Release Definition</th>
                     <th style={{ width: 90 }}>Suite ID</th>
+                    <th style={{ width: 90 }}>Run ID</th>
+                    <th style={{ width: 70 }}>Batch</th>
                     <th style={{ width: 80 }}>Rerun?</th>
                     <th style={{ width: 70 }}>Total</th>
                     <th style={{ width: 70 }}>Passed</th>
@@ -185,13 +191,22 @@ export function ScheduleRunHistoryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredLogs.map((log) => (
+                  {filteredLogs.map((log) => {
+                    const cdLabel = log.releaseDefinitionName?.trim()
+                      ? `${log.releaseDefinitionName} (ID: ${log.releaseDefinitionId})`
+                      : `CD ${log.releaseDefinitionId}`;
+                    return (
                     <tr key={log.releaseId}>
                       <td style={{ textAlign: 'center', fontWeight: 500 }}>{log.releaseId}</td>
                       <td>{log.releaseName || '—'}</td>
-                      <td style={{ textAlign: 'center' }}>{log.releaseDefinitionId}</td>
-                      <td>{log.releaseDefinitionName || '—'}</td>
+                      <td>{cdLabel}</td>
                       <td style={{ textAlign: 'center' }}>{log.testSuiteId}</td>
+                      <td style={{ textAlign: 'center' }}>{log.testRunId ?? '—'}</td>
+                      <td style={{ textAlign: 'center', fontSize: '12px' }}>
+                        {log.batchIndex && log.batchCount
+                          ? `${log.batchIndex}/${log.batchCount}`
+                          : '—'}
+                      </td>
                       <td style={{ textAlign: 'center' }}>
                         {log.isFailedRerun ? (
                           <span className="meta-pill meta-pill--warning">Yes</span>
@@ -219,7 +234,8 @@ export function ScheduleRunHistoryPage() {
                       <td style={{ fontSize: '12px' }}>{log.releaseStartTime || '—'}</td>
                       <td style={{ fontSize: '12px' }}>{log.releaseRunTime || '—'}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

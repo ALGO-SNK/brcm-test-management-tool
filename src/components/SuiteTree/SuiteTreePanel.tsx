@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SuiteTreeNode } from './SuiteTreeNode';
 import {
+  IconChevronDown,
+  IconMotionPlay,
+  IconRefresh,
   IconSearch,
   IconUnfoldLess,
   IconUnfoldMore,
@@ -10,12 +13,34 @@ import type { ADOTestPlan, ADOTestSuite } from '../../types';
 import type { WorkspaceSettingsValues } from '../pages/WorkspaceSettings';
 import {
   buildSuiteAdoUrl,
+  fetchBuilds,
+  fetchReleaseDefinitionAvailability,
   createStaticSuite,
+  fetchTestConfigurations,
   fetchSuitesForPlan,
   getCachedSuitesForPlan,
+  type ADOBuildSummary,
+  type ADOReleaseDefinitionAvailability,
+  type ADOTestConfigurationSummary,
 } from '../../services/adoApi';
 import { useNotification } from '../../context/useNotification';
-import { divideIntoBalancedBatches } from '../../utils/divideIntoBalancedBatches';
+import { BatchSizeInput } from '../Common/BatchSizeInput';
+import {
+  buildOnDemandSuiteRunPayload,
+  formatCdLabel,
+  getConfiguration,
+  getWorldPayPlanIds,
+  parseDefinitionIdsCsv,
+  runOnDemandSuite,
+  toBuildOptionLabel,
+  toLatestUniqueBuilds,
+  type OnDemandSuiteRunMode,
+} from '../../services/onDemandSuiteRunner';
+
+/** Imperative trigger exposed to siblings (e.g. the CaseTable toolbar). */
+export interface SuiteRunTrigger {
+  trigger: (suite: ADOTestSuite, mode: OnDemandSuiteRunMode) => void;
+}
 
 interface SuiteTreePanelProps {
   plan: ADOTestPlan;
@@ -24,6 +49,13 @@ interface SuiteTreePanelProps {
   onAddTestCase: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
   workspaceSettings: WorkspaceSettingsValues;
   createPlanSuiteRequest?: number;
+  /** Optional: receive a trigger that the parent can call to open the suite-run modal. */
+  onRunTriggerReady?: (trigger: SuiteRunTrigger) => void;
+}
+
+interface PendingSuiteRun {
+  suite: ADOTestSuite;
+  mode: OnDemandSuiteRunMode;
 }
 
 function normalizeSuite(raw: Record<string, unknown>): ADOTestSuite {
@@ -150,6 +182,7 @@ export function SuiteTreePanel({
   onAddTestCase,
   workspaceSettings,
   createPlanSuiteRequest = 0,
+  onRunTriggerReady,
 }: SuiteTreePanelProps) {
   const [suites, setSuites] = useState<ADOTestSuite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -163,13 +196,30 @@ export function SuiteTreePanel({
   const [createSuiteError, setCreateSuiteError] = useState<string | null>(null);
   const [isCreatingSuite, setIsCreatingSuite] = useState(false);
   const suitesRef = useRef<ADOTestSuite[]>([]);
+  const suiteRunControllersRef = useRef<Set<AbortController>>(new Set());
+  const [activeSuiteActionKeys, setActiveSuiteActionKeys] = useState<Set<string>>(() => new Set());
+  const [pendingSuiteRun, setPendingSuiteRun] = useState<PendingSuiteRun | null>(null);
+  const [builds, setBuilds] = useState<ADOBuildSummary[]>([]);
+  const [selectedBuildId, setSelectedBuildId] = useState<number | null>(null);
+  const [buildDropdownSearch, setBuildDropdownSearch] = useState('');
+  const [isBuildDropdownOpen, setIsBuildDropdownOpen] = useState(false);
+  const [configurations, setConfigurations] = useState<ADOTestConfigurationSummary[]>([]);
+  const [selectedConfigurationId, setSelectedConfigurationId] = useState(
+    workspaceSettings.schedulerDefaultConfigurationId,
+  );
+  const [releaseDefinitions, setReleaseDefinitions] = useState<ADOReleaseDefinitionAvailability[]>([]);
+  const [isLoadingBuilds, setIsLoadingBuilds] = useState(false);
+  const [isLoadingConfigurations, setIsLoadingConfigurations] = useState(false);
+  const [isLoadingCdPool, setIsLoadingCdPool] = useState(false);
+  const [isSubmittingSuiteRun, setIsSubmittingSuiteRun] = useState(false);
+  const [suiteRunBatchSize, setSuiteRunBatchSize] = useState(10);
+  const buildDropdownRef = useRef<HTMLDivElement | null>(null);
   const { addNotification } = useNotification();
   const canCreateSuite = Boolean(
     workspaceSettings.organization.trim()
       && workspaceSettings.projectName.trim()
       && workspaceSettings.patToken.trim(),
   );
-  const DEFAULT_DEVICE_BATCH_SIZE = 10;
 
   useEffect(() => {
     let active = true;
@@ -210,6 +260,11 @@ export function SuiteTreePanel({
     suitesRef.current = suites;
   }, [suites]);
 
+  useEffect(() => () => {
+    suiteRunControllersRef.current.forEach((controller) => controller.abort());
+    suiteRunControllersRef.current.clear();
+  }, []);
+
   const { children: visibleSuites } = useMemo(() => flattenRoot(suites), [suites]);
   const showExpandControls = hasAnyChildren(visibleSuites);
 
@@ -230,6 +285,169 @@ export function SuiteTreePanel({
     const response = await fetchSuitesForPlan(workspaceSettings, plan);
     return extractSuites(response);
   }, [plan, workspaceSettings]);
+
+  const releaseDefinitionPool = useMemo(
+    () => parseDefinitionIdsCsv(workspaceSettings.schedulerReleaseDefinitionIdsCsv),
+    [workspaceSettings.schedulerReleaseDefinitionIdsCsv],
+  );
+
+  // Show all fetched builds (no branch dedup) sorted newest-first.
+  const sortedBuilds = useMemo(
+    () => [...builds].sort((left, right) => {
+      const leftTs = Date.parse(left.queueTime);
+      const rightTs = Date.parse(right.queueTime);
+      const safeLeft = Number.isFinite(leftTs) ? leftTs : 0;
+      const safeRight = Number.isFinite(rightTs) ? rightTs : 0;
+      if (safeLeft !== safeRight) return safeRight - safeLeft;
+      return right.id - left.id;
+    }),
+    [builds],
+  );
+
+  const selectedBuild = useMemo(
+    () => sortedBuilds.find((build) => build.id === selectedBuildId) ?? null,
+    [sortedBuilds, selectedBuildId],
+  );
+
+  const selectedBuildLabel = useMemo(() => {
+    if (!selectedBuildId) return '';
+    const build = sortedBuilds.find((candidate) => candidate.id === selectedBuildId);
+    if (!build) return '';
+    return toBuildOptionLabel(build.id, build.sourceBranch || build.buildNumber);
+  }, [sortedBuilds, selectedBuildId]);
+
+  const visibleBuildOptions = useMemo(() => {
+    const search = buildDropdownSearch.trim().toLowerCase();
+    if (!search) return sortedBuilds;
+    return sortedBuilds.filter((build) => {
+      const name = (build.sourceBranch || build.buildNumber).toLowerCase();
+      const buildNumber = build.buildNumber.toLowerCase();
+      return (
+        String(build.id).includes(search)
+        || name.includes(search)
+        || buildNumber.includes(search)
+      );
+    });
+  }, [buildDropdownSearch, sortedBuilds]);
+
+  const worldPayPlanIds = useMemo(
+    () => getWorldPayPlanIds(workspaceSettings),
+    [workspaceSettings],
+  );
+
+  const requiresWorldPayBuild = useMemo(
+    () => worldPayPlanIds.includes(plan.id),
+    [plan.id, worldPayPlanIds],
+  );
+
+  const selectedWorldPayBuild = useMemo(() => {
+    if (!requiresWorldPayBuild) return null;
+    return builds.find((build) => build.sourceBranch === workspaceSettings.schedulerWorldPayRegressionBranch) ?? null;
+  }, [
+    builds,
+    requiresWorldPayBuild,
+    workspaceSettings.schedulerWorldPayRegressionBranch,
+  ]);
+
+  const firstAvailableCd = useMemo(
+    () => releaseDefinitions.find((definition) => definition.isAvailable) ?? null,
+    [releaseDefinitions],
+  );
+
+  const selectedConfiguration = useMemo(
+    () => getConfiguration(configurations, selectedConfigurationId),
+    [configurations, selectedConfigurationId],
+  );
+
+  const canRunFromSuiteModal = Boolean(
+    pendingSuiteRun
+      && selectedBuild
+      && firstAvailableCd
+      && !(requiresWorldPayBuild && !selectedWorldPayBuild)
+      && !isLoadingBuilds
+      && !isLoadingConfigurations
+      && !isLoadingCdPool
+      && !isSubmittingSuiteRun,
+  );
+
+  const loadBuilds = useCallback(async () => {
+    if (!canCreateSuite) {
+      setBuilds([]);
+      setSelectedBuildId(null);
+      return;
+    }
+    setIsLoadingBuilds(true);
+    try {
+      const nextBuilds = await fetchBuilds(
+        workspaceSettings,
+        workspaceSettings.schedulerBuildDefinitionId,
+        50,
+      );
+      // No branch dedup — keep all builds. Default to newest.
+      const sorted = [...nextBuilds].sort((left, right) => {
+        const leftTs = Date.parse(left.queueTime);
+        const rightTs = Date.parse(right.queueTime);
+        return (Number.isFinite(rightTs) ? rightTs : 0) - (Number.isFinite(leftTs) ? leftTs : 0);
+      });
+      setBuilds(nextBuilds);
+      setSelectedBuildId((previous) => (
+        previous && sorted.some((build) => build.id === previous)
+          ? previous
+          : sorted[0]?.id ?? null
+      ));
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : 'Could not load builds.';
+      addNotification('error', message);
+      setBuilds([]);
+      setSelectedBuildId(null);
+    } finally {
+      setIsLoadingBuilds(false);
+    }
+  }, [addNotification, canCreateSuite, workspaceSettings]);
+
+  const loadConfigurations = useCallback(async () => {
+    if (!canCreateSuite) {
+      setConfigurations([]);
+      return;
+    }
+    setIsLoadingConfigurations(true);
+    try {
+      const nextConfigurations = await fetchTestConfigurations(workspaceSettings);
+      setConfigurations(nextConfigurations);
+      setSelectedConfigurationId((previous) => (
+        nextConfigurations.some((configuration) => configuration.id === previous)
+          ? previous
+          : nextConfigurations[0]?.id ?? workspaceSettings.schedulerDefaultConfigurationId
+      ));
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : 'Could not load test configurations.';
+      addNotification('error', message);
+      setConfigurations([]);
+    } finally {
+      setIsLoadingConfigurations(false);
+    }
+  }, [addNotification, canCreateSuite, workspaceSettings]);
+
+  const loadReleaseDefinitionAvailability = useCallback(async () => {
+    if (!canCreateSuite || releaseDefinitionPool.length === 0) {
+      setReleaseDefinitions([]);
+      return;
+    }
+    setIsLoadingCdPool(true);
+    try {
+      const availability = await fetchReleaseDefinitionAvailability(
+        workspaceSettings,
+        releaseDefinitionPool,
+      );
+      setReleaseDefinitions(availability);
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : 'Could not load CD availability.';
+      addNotification('error', message);
+      setReleaseDefinitions([]);
+    } finally {
+      setIsLoadingCdPool(false);
+    }
+  }, [addNotification, canCreateSuite, releaseDefinitionPool, workspaceSettings]);
 
   const handleToggleAll = () => {
     setExpandSignal(prev => {
@@ -277,6 +495,57 @@ export function SuiteTreePanel({
     };
   }, [closeCreateSuiteModal, isCreateSuiteOpen, isCreatingSuite]);
 
+  useEffect(() => {
+    setSelectedConfigurationId(workspaceSettings.schedulerDefaultConfigurationId);
+  }, [workspaceSettings.schedulerDefaultConfigurationId]);
+
+  useEffect(() => {
+    if (!pendingSuiteRun) return;
+    setBuildDropdownSearch('');
+    setIsBuildDropdownOpen(false);
+    setSuiteRunBatchSize(10);
+    void loadBuilds();
+    void loadConfigurations();
+    void loadReleaseDefinitionAvailability();
+  }, [
+    loadBuilds,
+    loadConfigurations,
+    loadReleaseDefinitionAvailability,
+    pendingSuiteRun,
+  ]);
+
+  useEffect(() => {
+    if (!pendingSuiteRun || isSubmittingSuiteRun) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsBuildDropdownOpen(false);
+        setPendingSuiteRun(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSubmittingSuiteRun, pendingSuiteRun]);
+
+  useEffect(() => {
+    if (!isBuildDropdownOpen) return () => {};
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (buildDropdownRef.current?.contains(target)) return;
+      setIsBuildDropdownOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [isBuildDropdownOpen]);
+
   const handleOpenSuiteInAdo = (suite: ADOTestSuite) => {
     if (!canOpenInAdo) return;
     openAdoUrl(buildSuiteAdoUrl(workspaceSettings, plan.id, suite.id));
@@ -286,28 +555,128 @@ export function SuiteTreePanel({
     onAddTestCase(suite, path);
   };
 
-  const handleRunSuiteInCi = (suite: ADOTestSuite) => {
-    addNotification('info', `Dummy action: "${suite.name}" queued for CI pipeline execution.`);
-  };
-
-  const handleRunSuiteOnDevicesInBatches = (suite: ADOTestSuite) => {
-    const testCaseCount = Math.max(0, Number(suite.testCaseCount ?? 0));
-    const suiteItems = Array.from({ length: testCaseCount }, (_, index) => index + 1);
-    const batches = divideIntoBalancedBatches(suiteItems, DEFAULT_DEVICE_BATCH_SIZE);
-
-    if (testCaseCount === 0) {
-      addNotification('info', `Dummy action: "${suite.name}" has no test cases for CI batched run.`);
+  const openSuiteRunModal = useCallback((suite: ADOTestSuite, mode: OnDemandSuiteRunMode) => {
+    const actionKey = `${suite.id}:${mode}`;
+    if (activeSuiteActionKeys.has(actionKey)) {
+      addNotification('info', `"${suite.name}" is already running for this action.`);
       return;
     }
 
-    addNotification(
-      'info',
-      `Dummy action: "${suite.name}" queued for CI batched run with ${batches.length} balanced batches (${testCaseCount} cases, max ${DEFAULT_DEVICE_BATCH_SIZE} per batch).`,
-    );
+    setPendingSuiteRun({ suite, mode });
+  }, [
+    activeSuiteActionKeys,
+    addNotification,
+  ]);
+
+  // Expose the run trigger to the parent so siblings (e.g. CaseTable toolbar)
+  // can open the run modal without duplicating the modal state machine.
+  useEffect(() => {
+    if (!onRunTriggerReady) return;
+    onRunTriggerReady({ trigger: openSuiteRunModal });
+  }, [onRunTriggerReady, openSuiteRunModal]);
+
+  const closeSuiteRunModal = useCallback(() => {
+    if (isSubmittingSuiteRun) return;
+    setIsBuildDropdownOpen(false);
+    setPendingSuiteRun(null);
+  }, [isSubmittingSuiteRun]);
+
+  const submitSuiteRunFromModal = useCallback(async () => {
+    if (!pendingSuiteRun || !selectedBuild || !firstAvailableCd) return;
+    if (requiresWorldPayBuild && !selectedWorldPayBuild) {
+      addNotification('error', 'WorldPay suite selected but no matching Regression World Pay build was found.');
+      return;
+    }
+
+    const { suite, mode } = pendingSuiteRun;
+    const actionKey = `${suite.id}:${mode}`;
+    if (activeSuiteActionKeys.has(actionKey)) {
+      addNotification('info', `"${suite.name}" is already running for this action.`);
+      return;
+    }
+
+    const labels: Record<OnDemandSuiteRunMode, string> = {
+      ci: 'Run in CI',
+      failed: 'Run Failed',
+    };
+    const normalizedBatchSize = Number.isFinite(suiteRunBatchSize) && suiteRunBatchSize > 0
+      ? Math.max(1, Math.round(suiteRunBatchSize))
+      : 10;
+    const requestPayload = buildOnDemandSuiteRunPayload({
+      mode,
+      suiteId: suite.id,
+      planId: plan.id,
+      selectedConfigurationId,
+      batchSize: normalizedBatchSize,
+      selectedBuild,
+      selectedWorldPayBuild,
+      selectedReleaseDefinitionId: firstAvailableCd.definitionId,
+      selectedReleaseDefinitionName: firstAvailableCd.definitionName,
+      requiresWorldPayBuild,
+    });
+    const controller = new AbortController();
+    suiteRunControllersRef.current.add(controller);
+    setActiveSuiteActionKeys((previous) => new Set(previous).add(actionKey));
+    setIsSubmittingSuiteRun(true);
+    setIsBuildDropdownOpen(false);
+    setPendingSuiteRun(null);
+    addNotification('info', `${labels[mode]} started for "${suite.name}".`);
+    setIsSubmittingSuiteRun(false);
+
+    void runOnDemandSuite({
+      settings: workspaceSettings,
+      plan,
+      suite,
+      mode,
+      build: selectedBuild,
+      worldPayBuild: selectedWorldPayBuild,
+      configuration: selectedConfiguration,
+      releaseDefinitionIds: releaseDefinitionPool,
+      selectedReleaseDefinitionId: requestPayload.selectedReleaseDefinitionId,
+      batchSize: requestPayload.batchSize,
+      signal: controller.signal,
+      onProgress: (message) => {
+        console.debug('[SuiteTreeRun]', message);
+      },
+    })
+      .then(() => {
+        addNotification('success', `${labels[mode]} submitted for "${suite.name}".`);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        const message = error instanceof Error ? error.message : 'Could not run suite.';
+        addNotification('error', message);
+      })
+      .finally(() => {
+        suiteRunControllersRef.current.delete(controller);
+        setActiveSuiteActionKeys((previous) => {
+          const next = new Set(previous);
+          next.delete(actionKey);
+          return next;
+        });
+      });
+  }, [
+    activeSuiteActionKeys,
+    addNotification,
+    firstAvailableCd,
+    plan,
+    pendingSuiteRun,
+    releaseDefinitionPool,
+    requiresWorldPayBuild,
+    selectedBuild,
+    selectedConfiguration,
+    selectedConfigurationId,
+    selectedWorldPayBuild,
+    suiteRunBatchSize,
+    workspaceSettings,
+  ]);
+
+  const handleRunSuiteInCi = (suite: ADOTestSuite) => {
+    openSuiteRunModal(suite, 'ci');
   };
 
   const handleRerunFailedTests = (suite: ADOTestSuite) => {
-    addNotification('info', `Dummy action: rerun failed tests requested for "${suite.name}".`);
+    openSuiteRunModal(suite, 'failed');
   };
 
   const handleCreateSuite = async () => {
@@ -365,6 +734,13 @@ export function SuiteTreePanel({
       setIsCreatingSuite(false);
     }
   };
+
+  const pendingSuiteRunLabel = pendingSuiteRun
+    ? ({
+        ci: 'Run in CI',
+        failed: 'Run Failed',
+      } satisfies Record<OnDemandSuiteRunMode, string>)[pendingSuiteRun.mode]
+    : 'Queue Run';
 
   return (
     <>
@@ -445,7 +821,6 @@ export function SuiteTreePanel({
                   onAddSuite={(selectedSuite) => openCreateSuiteModal(selectedSuite)}
                   onAddTestCase={handleAddTestCase}
                   onRunSuiteInCi={handleRunSuiteInCi}
-                  onRunSuiteOnDevicesInBatches={handleRunSuiteOnDevicesInBatches}
                   onRerunFailedTests={handleRerunFailedTests}
                   onOpenInAdo={handleOpenSuiteInAdo}
                   filterText={filterText}
@@ -459,6 +834,189 @@ export function SuiteTreePanel({
           )}
         </div>
       </div>
+
+      {pendingSuiteRun && (
+        <div className="modal-overlay scheduler-run-modal-overlay" role="presentation">
+          <button
+            type="button"
+            className="modal-overlay__backdrop"
+            aria-label="Close queue run dialog"
+            onClick={closeSuiteRunModal}
+          />
+          <div className="modal scheduler-run-modal" role="dialog" aria-modal="true" aria-labelledby="suiteQueueRunDialogTitle">
+            <div className="modal__header scheduler-run-modal__header">
+              <div>
+                <h3 className="modal__title" id="suiteQueueRunDialogTitle">{pendingSuiteRunLabel}</h3>
+                <p className="modal__subtitle">Review execution inputs before running this suite.</p>
+              </div>
+              <button
+                type="button"
+                className="btn btn--ghost btn--icon"
+                onClick={closeSuiteRunModal}
+                disabled={isSubmittingSuiteRun}
+                aria-label="Close"
+              >
+                <IconX size={16} />
+              </button>
+            </div>
+
+            <div className="modal__body scheduler-run-modal__body">
+              <div className="scheduler-run-modal__summary">
+                <span className="meta-pill">
+                  <strong>1</strong>&nbsp;suite selected
+                </span>
+                <span className="meta-pill">
+                  {pendingSuiteRun.suite.name}
+                </span>
+                {requiresWorldPayBuild && (
+                  <span className="meta-pill meta-pill--info">World&nbsp;Pay suite</span>
+                )}
+              </div>
+
+              <div className={`scheduler-run-modal__cd-card${firstAvailableCd ? '' : ' scheduler-run-modal__cd-card--empty'}`}>
+                <div className="scheduler-run-modal__cd-head">
+                  <span className="scheduler-run-screen__field-label">Next available CD</span>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--xs"
+                    onClick={() => { void loadReleaseDefinitionAvailability(); }}
+                    disabled={isLoadingCdPool}
+                  >
+                    <IconRefresh size={13} />
+                    Refresh
+                  </button>
+                </div>
+                <div className="scheduler-run-modal__cd-body">
+                  <span
+                    className={`scheduler-run-modal__cd-dot${firstAvailableCd ? ' is-available' : ' is-unavailable'}`}
+                    aria-hidden="true"
+                  />
+                  {firstAvailableCd ? (
+                    <span className="scheduler-run-modal__cd-id">
+                      {formatCdLabel(firstAvailableCd.definitionId, firstAvailableCd.definitionName)}
+                    </span>
+                  ) : (
+                    <span className="scheduler-run-modal__cd-empty">
+                      No CD available — refresh or expand the CD pool in Workspace Settings.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="scheduler-run-modal__inline-fields">
+                <label className="scheduler-run-screen__field">
+                  <span>Configuration</span>
+                  <select
+                    className="settings-input"
+                    value={selectedConfigurationId}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      setSelectedConfigurationId(Number.isFinite(value) ? Math.max(1, Math.round(value)) : 1);
+                    }}
+                    disabled={isLoadingConfigurations}
+                  >
+                    {configurations.length === 0 ? (
+                      <option value={selectedConfigurationId}>
+                        {`Configuration ${selectedConfigurationId}`}
+                      </option>
+                    ) : (
+                      configurations.map((configuration) => (
+                        <option key={configuration.id} value={configuration.id}>
+                          {configuration.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+
+                <label className="scheduler-run-screen__field" htmlFor="suiteRunBatchSize">
+                  <span>Batch size (per CD)</span>
+                  <BatchSizeInput
+                    id="suiteRunBatchSize"
+                    value={suiteRunBatchSize}
+                    onChange={setSuiteRunBatchSize}
+                  />
+                </label>
+              </div>
+
+              <label className="scheduler-run-screen__field scheduler-run-screen__field--build">
+                <span>Build</span>
+                <div className="scheduler-run-screen__build-combobox" ref={buildDropdownRef}>
+                  <button
+                    type="button"
+                    className="settings-input scheduler-run-screen__build-trigger"
+                    disabled={isLoadingBuilds}
+                    onClick={() => {
+                      setBuildDropdownSearch('');
+                      setIsBuildDropdownOpen((previous) => !previous);
+                    }}
+                  >
+                    <span className="scheduler-run-screen__build-trigger-label">
+                      {selectedBuildLabel || 'Select build'}
+                    </span>
+                    <IconChevronDown size={16} />
+                  </button>
+                  {isBuildDropdownOpen && (
+                    <div className="scheduler-run-screen__build-popover">
+                      <input
+                        className="settings-input scheduler-run-screen__build-search"
+                        value={buildDropdownSearch}
+                        onChange={(event) => setBuildDropdownSearch(event.target.value)}
+                        placeholder="Search build id / name"
+                        autoFocus
+                      />
+                      <div className="scheduler-run-screen__build-list">
+                        {visibleBuildOptions.map((build) => (
+                          <button
+                            key={build.id}
+                            type="button"
+                            className={`scheduler-run-screen__build-item${selectedBuildId === build.id ? ' is-active' : ''}`}
+                            onClick={() => {
+                              setSelectedBuildId(build.id);
+                              setIsBuildDropdownOpen(false);
+                            }}
+                          >
+                            {toBuildOptionLabel(build.id, build.sourceBranch || build.buildNumber)}
+                          </button>
+                        ))}
+                        {visibleBuildOptions.length === 0 && (
+                          <div className="scheduler-run-screen__build-empty">No matching builds</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              {requiresWorldPayBuild && !selectedWorldPayBuild && (
+                <p className="scheduler-run-modal__hint">
+                  No matching Regression World Pay build was found for this suite.
+                </p>
+              )}
+            </div>
+
+            <div className="modal__footer">
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={closeSuiteRunModal}
+                disabled={isSubmittingSuiteRun}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => { void submitSuiteRunFromModal(); }}
+                disabled={!canRunFromSuiteModal}
+              >
+                <IconMotionPlay size={15} />
+                Run
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isCreateSuiteOpen && (
         <div className="steps-editor__confirm-overlay" role="dialog" aria-modal="true" aria-label="Create static suite">

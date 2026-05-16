@@ -101,6 +101,12 @@ export interface ADOTestCase {
   pointBreakdown?: Array<{
     configurationName?: string;
     outcome?: string;
+    /** Test point state ("notReady" | "ready" | "completed" | "inProgress" | …). */
+    state?: string;
+    /** Last result state from ADO ("completed" | "pending" | …). */
+    lastResultState?: string;
+    /** Whether the test point is currently active (run pending/in-flight). */
+    isActive?: boolean;
   }>;
   fields: Record<string, unknown>;
   _links: {
@@ -214,6 +220,8 @@ export interface ADOTestPoint {
   testCaseId?: number;
   outcome?: string;
   state?: string;
+  lastResultState?: string;
+  isActive?: boolean;
   isAutomated?: boolean;
 }
 
@@ -223,10 +231,12 @@ export interface ADOBuildSummary {
   status: string;
   result?: string;
   sourceBranch?: string;
+  sourceVersion?: string;
   queueTime: string;
   repository?: {
     id: string;
-    name: string;
+    name?: string;
+    type?: string;
   };
 }
 

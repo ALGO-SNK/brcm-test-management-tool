@@ -43,6 +43,8 @@ export interface WorkspaceSettingsValues {
   schedulerDefaultMode: SchedulerRunMode;
   schedulerDefaultBatchSize: number;
   schedulerMaxHistoryRows: number;
+  /** Max test points per CD batch when executing a suite. 0/blank = no chunking (one batch per suite). */
+  schedulerPointBatchSize: number;
   schedulerBuildDefinitionId: number;
   schedulerDefaultConfigurationId: number;
   schedulerDefaultPointConfigurationId: number;
@@ -53,6 +55,11 @@ export interface WorkspaceSettingsValues {
   schedulerWorldPayTestPlanId: number;
   schedulerEnabledPlanIds: number[];
   schedulerMappingWorkItemIds: string;
+  schedulerRequireSuiteMapping: boolean;
+  /** Artifact alias the release definition expects (e.g. "_MyProject-CI"). Project-specific. */
+  schedulerArtifactAlias: string;
+  /** CSV of environment names to start manually rather than auto-deploy on release create. */
+  schedulerManualEnvironmentsCsv: string;
   schedulerExcludedSuiteIdsCsv: string;
   schedulerExcludedSuiteNamePatterns: string;
 }
@@ -1348,6 +1355,29 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
                             }}
                           />
                         </label>
+                        <label className="settings-field" htmlFor="schedulerPointBatchSize">
+                          <span className="settings-field__label">Point batch size (per CD)</span>
+                          <input
+                            id="schedulerPointBatchSize"
+                            className="settings-input"
+                            type="number"
+                            min={0}
+                            max={500}
+                            step={1}
+                            placeholder="Blank = all points in one batch"
+                            value={form.schedulerPointBatchSize > 0 ? form.schedulerPointBatchSize : ''}
+                            onChange={(event) => {
+                              const raw = event.target.value;
+                              const parsed = raw === '' ? 0 : Number(raw);
+                              setForm((prev) => ({
+                                ...prev,
+                                schedulerPointBatchSize: Number.isFinite(parsed) && parsed >= 0
+                                  ? Math.min(500, Math.round(parsed))
+                                  : 0,
+                              }));
+                            }}
+                          />
+                        </label>
                       </div>
 
                       <div className="settings-actions">
@@ -1505,6 +1535,34 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
                             value={form.schedulerMappingWorkItemIds}
                             onChange={(event) => setForm((prev) => ({ ...prev, schedulerMappingWorkItemIds: event.target.value }))}
                             placeholder="136838,147829"
+                          />
+                        </label>
+                        <label className="settings-field settings-field--full settings-field--inline">
+                          <input
+                            type="checkbox"
+                            checked={form.schedulerRequireSuiteMapping}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerRequireSuiteMapping: event.target.checked }))}
+                          />
+                          <span className="settings-field__label">Only show suites that have a row in the mapping work items</span>
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="schedulerArtifactAlias">
+                          <span className="settings-field__label">Release artifact alias</span>
+                          <input
+                            id="schedulerArtifactAlias"
+                            className="settings-input"
+                            value={form.schedulerArtifactAlias}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerArtifactAlias: event.target.value }))}
+                            placeholder="e.g. _MyProject-ASP.NET Core-CI"
+                          />
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="schedulerManualEnvironmentsCsv">
+                          <span className="settings-field__label">Manual environments (CSV)</span>
+                          <input
+                            id="schedulerManualEnvironmentsCsv"
+                            className="settings-input"
+                            value={form.schedulerManualEnvironmentsCsv}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerManualEnvironmentsCsv: event.target.value }))}
+                            placeholder="Test Run Execute"
                           />
                         </label>
                       </div>

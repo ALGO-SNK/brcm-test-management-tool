@@ -569,6 +569,9 @@ function normalizeFieldText(value: unknown): string {
 
 interface ADOTestPointListItem {
   outcome?: unknown;
+  state?: unknown;
+  lastResultState?: unknown;
+  isActive?: unknown;
   configuration?: {
     name?: unknown;
   };
@@ -583,6 +586,9 @@ interface CasePointSummary {
   pointBreakdown?: Array<{
     configurationName?: string;
     outcome?: string;
+    state?: string;
+    lastResultState?: string;
+    isActive?: boolean;
   }>;
 }
 
@@ -598,7 +604,7 @@ function mapPointSummaryByCaseId(response: ADOListResponse<ADOTestPointListItem>
   const grouped = new Map<number, {
     configurations: string[];
     outcomes: string[];
-    pointRows: Array<{ configurationName?: string; outcome?: string }>;
+    pointRows: Array<{ configurationName?: string; outcome?: string; state?: string; lastResultState?: string; isActive?: boolean }>;
     seenPointRows: Set<string>;
   }>();
 
@@ -618,14 +624,23 @@ function mapPointSummaryByCaseId(response: ADOListResponse<ADOTestPointListItem>
     const outcome = normalizeFieldText(point?.outcome).trim();
     if (outcome) current.outcomes.push(outcome);
 
+    const state = normalizeFieldText(point?.state).trim() || undefined;
+    const lastResultState = normalizeFieldText(point?.lastResultState).trim() || undefined;
+    const isActive = typeof point?.isActive === 'boolean' ? point.isActive : undefined;
+
     const normalizedConfiguration = configurationName || undefined;
     const normalizedOutcome = outcome || undefined;
-    const pointRowKey = `${normalizedConfiguration ?? ''}::${normalizedOutcome ?? ''}`;
+    // Include state info in the dedupe key so we don't collapse different point states
+    // (e.g. one config completed, another in progress) into a single row.
+    const pointRowKey = `${normalizedConfiguration ?? ''}::${normalizedOutcome ?? ''}::${state ?? ''}::${lastResultState ?? ''}::${isActive ?? ''}`;
     if (!current.seenPointRows.has(pointRowKey)) {
       current.seenPointRows.add(pointRowKey);
       current.pointRows.push({
         configurationName: normalizedConfiguration,
         outcome: normalizedOutcome,
+        state,
+        lastResultState,
+        isActive,
       });
     }
 
@@ -2018,17 +2033,22 @@ export async function fetchBuilds(
     try {
       const response = await fetchJsonWithAction<ADOListResponse<ADOBuildListItem>>(url, settings.patToken.trim(), 'load builds', signal);
       return (response.value ?? [])
-        .map((build) => ({
-          id: Number(build.id),
-          buildNumber: normalizeFieldText(build.buildNumber).trim(),
-          sourceBranch: normalizeFieldText(build.sourceBranch).trim(),
-          sourceVersion: normalizeFieldText(build.sourceVersion).trim(),
-          status: normalizeFieldText(build.status).trim(),
-          result: normalizeFieldText(build.result).trim(),
-          queueTime: normalizeFieldText(build.queueTime).trim(),
-          repositoryId: normalizeFieldText(build.repository?.id).trim(),
-          repositoryType: normalizeFieldText(build.repository?.type).trim(),
-        }))
+        .map((build) => {
+          const repositoryId = normalizeFieldText(build.repository?.id).trim();
+          const repositoryType = normalizeFieldText(build.repository?.type).trim();
+          return {
+            id: Number(build.id),
+            buildNumber: normalizeFieldText(build.buildNumber).trim(),
+            sourceBranch: normalizeFieldText(build.sourceBranch).trim(),
+            sourceVersion: normalizeFieldText(build.sourceVersion).trim(),
+            status: normalizeFieldText(build.status).trim(),
+            result: normalizeFieldText(build.result).trim(),
+            queueTime: normalizeFieldText(build.queueTime).trim(),
+            repository: repositoryId
+              ? { id: repositoryId, type: repositoryType || undefined }
+              : undefined,
+          } satisfies ADOBuildSummary;
+        })
         .filter((build) => Number.isInteger(build.id) && build.id > 0);
     } catch (error) {
       lastError = error;
@@ -2116,11 +2136,19 @@ export async function fetchTestPointsForSuite(
           const configuration = (point.configuration ?? {}) as Record<string, unknown>;
           const results = (point.results ?? {}) as Record<string, unknown>;
           const automationStatus = normalizePointAutomationStatus(point);
-          const isAutomatedByStatus = automationStatus ? !/^not automated$/i.test(automationStatus) : true;
+          // Match C# behavior: only treat as automated when we have explicit evidence.
+          //   - "Automated" / "Yes" (case-insensitive) → true
+          //   - "Not Automated" / "Planned" / anything else → false
+          //   - Missing status → false (do NOT default to automated)
+          const isAutomatedByStatus = /^automated$|^yes$|^true$/i.test(automationStatus || '');
           const isAutomatedFlag = typeof point.isAutomated === 'boolean' ? point.isAutomated : isAutomatedByStatus;
 
           const outcome = normalizeFieldText(point.outcome ?? results.outcome).trim();
           const state = normalizeFieldText(point.state ?? results.state).trim();
+          const lastResultState = normalizeFieldText(
+            point.lastResultState ?? results.lastResultState ?? results.state,
+          ).trim();
+          const isActive = typeof point.isActive === 'boolean' ? point.isActive : undefined;
           const caseId = Number((point.testCase as { id?: unknown } | undefined)?.id);
           const configurationId = Number(configuration.id);
 
@@ -2129,6 +2157,8 @@ export async function fetchTestPointsForSuite(
             caseId: Number.isInteger(caseId) && caseId > 0 ? caseId : null,
             outcome,
             state,
+            lastResultState,
+            isActive,
             configurationId: Number.isInteger(configurationId) && configurationId > 0 ? configurationId : null,
             configurationName: normalizeFieldText(configuration.name).trim(),
             automationStatus,
@@ -2333,12 +2363,11 @@ export async function fetchReleaseDetails(
   releaseId: number,
   signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
-  const urlCandidates = getUrlCandidates(settings);
+  // Release management APIs live on vsrm.dev.azure.com, not dev.azure.com.
   let lastError: unknown;
 
-  for (const baseUrl of urlCandidates) {
+  for (const releaseBase of buildReleaseBaseApiUrls(settings)) {
     try {
-      const releaseBase = `${baseUrl}/_apis/release`;
       const url = `${releaseBase}/releases/${releaseId}?$expand=environments&api-version=${encodeURIComponent(settings.apiVersion)}`;
       return await fetchJsonWithAction<Record<string, unknown>>(
         url,
@@ -2380,12 +2409,27 @@ export async function createTestRun(
       const testBase = `${baseUrl}/_apis/test`;
       const url = `${testBase}/runs?api-version=${encodeURIComponent(settings.apiVersion)}`;
 
+      // Full payload mirroring C# `TestRunService.cs:17-35`:
+      //   isAutomated: true            — distributed run, not manual
+      //   state: "NotStarted"          — CRITICAL: prevents ADO from auto-transitioning
+      //                                  to "InProgress" before the pipeline picks it up.
+      //                                  Without this, VSTest fails with
+      //                                  "Run cannot be started from state InProgress".
+      //   dtlTestEnvironment           — DTL stub (required for automated runs)
+      //   filter                       — vstest source filter
+      //   plan: { id: <planId> }       — nested ShallowReference, not flat
       const payload = {
         name: `Run for suite ${suiteId}`,
+        isAutomated: true,
         automated: true,
-        testPlanId: planId,
-        testSuiteId: suiteId,
+        plan: { id: String(planId) },
         pointIds,
+        state: 'NotStarted',
+        dtlTestEnvironment: { id: 'vstfs://dummy' },
+        filter: {
+          sourceFilter: '*.dll',
+          testCaseFilter: '',
+        },
       };
 
       const response = await postJson<{ id: number }>(
@@ -2413,39 +2457,135 @@ export async function createTestRun(
 }
 
 /**
- * Create a release from a release definition
+ * Update a test run AFTER creating the release, attaching the release/environment
+ * VSTFS URIs and the build reference so ADO knows this run is owned by the pipeline.
+ *
+ * Mirrors C# `TestRunService.cs:37-52` (UpdateTestRunAsync). Without this step,
+ * ADO transitions automated runs to "InProgress" before the pipeline can claim them,
+ * causing: "Run <id> cannot be started from state InProgress".
  */
-export async function createRelease(
+export async function updateTestRunAfterRelease(
   settings: WorkspaceConnectionSettings,
-  definitionId: number,
+  testRunId: number,
+  releaseId: number,
+  environmentId: number,
   buildId: number,
-  buildNumber: string,
   _signal?: AbortSignal,
-): Promise<{ id: number }> {
+): Promise<void> {
   const urlCandidates = getUrlCandidates(settings);
   let lastError: unknown;
 
   for (const baseUrl of urlCandidates) {
     try {
-      const releaseBase = `${baseUrl}/_apis/release`;
+      const url = `${baseUrl}/_apis/test/runs/${testRunId}?api-version=${encodeURIComponent(settings.apiVersion)}`;
+
+      const payload = {
+        releaseUri: `vstfs:///ReleaseManagement/Release/${releaseId}`,
+        releaseEnvironmentUri: `vstfs:///ReleaseManagement/Environment/${environmentId}`,
+        build: { id: String(buildId) },
+      };
+
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Basic ${toBasicAuthToken(settings.patToken.trim())}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        const adoErr = new ADORequestError(
+          response.status,
+          buildAdoErrorMessage('update test run with release context', response.status, body),
+        );
+        if (response.status === 404) {
+          lastError = adoErr;
+          continue;
+        }
+        throw adoErr;
+      }
+
+      return; // success
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ADORequestError && error.status === 404) {
+        continue;
+      }
+      throw humanizeUnexpectedError('update test run with release context', error);
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw humanizeUnexpectedError('update test run with release context', lastError);
+  }
+  throw new Error("We couldn't update the test run with release context. Please try again.");
+}
+
+/**
+ * Create a release from a release definition
+ */
+export interface CreateReleaseOptions {
+  /** Artifact alias the release definition expects (from workspace settings). */
+  artifactAlias: string;
+  /** Environment names to skip auto-deploying when the release is created. */
+  manualEnvironments?: string[];
+}
+
+export interface CreateReleaseResult {
+  id: number;
+  /** Environments of the new release, in rank order. Use these IDs for startReleaseEnvironment. */
+  environments: Array<{ id: number; name: string; status?: string; rank?: number }>;
+}
+
+/**
+ * Create a release from a release definition. Mirrors C# `ReleasePipelineService.cs:23-54`:
+ *  - vsrm.dev.azure.com endpoint
+ *  - reason = "manual"
+ *  - artifact alias must match the release definition's artifact alias exactly
+ *  - instanceReference carries full build metadata (id, name, branch, version, repo)
+ *  - manualEnvironments lists envs that should NOT auto-deploy
+ */
+export async function createRelease(
+  settings: WorkspaceConnectionSettings,
+  definitionId: number,
+  build: ADOBuildSummary,
+  options: CreateReleaseOptions,
+  _signal?: AbortSignal,
+): Promise<CreateReleaseResult> {
+  // Release management APIs live on vsrm.dev.azure.com, not dev.azure.com.
+  let lastError: unknown;
+
+  for (const releaseBase of buildReleaseBaseApiUrls(settings)) {
+    try {
       const url = `${releaseBase}/releases?api-version=${encodeURIComponent(settings.apiVersion)}`;
 
       const payload = {
         definitionId,
-        description: `Release for build ${buildNumber}`,
+        description: `Release for build ${build.buildNumber}`,
         artifacts: [
           {
-            alias: 'drop',
+            alias: options.artifactAlias,
             instanceReference: {
-              id: buildId,
+              id: String(build.id),
+              name: build.buildNumber,
+              sourceBranch: build.sourceBranch || undefined,
+              sourceVersion: build.sourceVersion || undefined,
+              sourceRepositoryId: build.repository?.id || undefined,
+              sourceRepositoryType: build.repository?.type || undefined,
             },
           },
         ],
-        isDraft: false,
-        reason: 'continuousIntegration',
+        manualEnvironments: options.manualEnvironments?.length ? options.manualEnvironments : undefined,
+        reason: 'manual',
       };
 
-      const response = await postJson<{ id: number }>(
+      const response = await postJson<{
+        id: number;
+        environments?: Array<{ id?: unknown; name?: unknown; status?: unknown; rank?: unknown }>;
+      }>(
         url,
         settings.patToken.trim(),
         payload,
@@ -2453,7 +2593,17 @@ export async function createRelease(
         'create release',
       );
 
-      return { id: response.id };
+      const environments = (response.environments ?? [])
+        .map((env) => ({
+          id: Number(env?.id),
+          name: String(env?.name ?? '').trim(),
+          status: typeof env?.status === 'string' ? env.status : undefined,
+          rank: typeof env?.rank === 'number' ? env.rank : undefined,
+        }))
+        .filter((env) => Number.isFinite(env.id) && env.id > 0)
+        .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+
+      return { id: response.id, environments };
     } catch (error) {
       lastError = error;
       if (error instanceof ADORequestError && error.status === 404) {
@@ -2470,37 +2620,105 @@ export async function createRelease(
 }
 
 /**
- * Attach a test run ID to a release environment by updating release variables
+ * Attach a test run ID to a release environment by writing the run id as an
+ * environment variable on the target environment.
+ *
+ * Mirrors C# ReleasePipelineService.cs:77 — variables go on
+ * `release.environments[i].variables`, NOT on `release.variables`. The pipeline
+ * task reads `$(test.RunId)` or the legacy typo `$(test.RundId)`; we set both
+ * so either pipeline configuration works without further coordination.
  */
 export async function attachTestRunToRelease(
   settings: WorkspaceConnectionSettings,
   releaseId: number,
-  _environmentId: number,
+  environmentId: number,
   testRunId: number,
   _signal?: AbortSignal,
 ): Promise<void> {
-  const urlCandidates = getUrlCandidates(settings);
+  // Release management APIs live on vsrm.dev.azure.com, not dev.azure.com.
   let lastError: unknown;
 
-  for (const baseUrl of urlCandidates) {
+  for (const releaseBase of buildReleaseBaseApiUrls(settings)) {
     try {
-      const releaseBase = `${baseUrl}/_apis/release`;
       const url = `${releaseBase}/releases/${releaseId}?api-version=${encodeURIComponent(settings.apiVersion)}`;
 
-      // Fetch current release to get its structure
       const currentRelease = await fetchJsonWithAction<Record<string, unknown>>(
         url,
         settings.patToken.trim(),
         'fetch release for attachment',
       );
 
-      // Update with test run ID in variables
+      const envs = Array.isArray(currentRelease.environments)
+        ? (currentRelease.environments as Array<Record<string, unknown>>)
+        : [];
+
+      const targetIdx = envs.findIndex((env) => Number(env.id) === environmentId);
+      const idx = targetIdx >= 0 ? targetIdx : 0;
+
+      if (envs.length === 0) {
+        throw new Error(`Release ${releaseId} has no environments to attach the test run to.`);
+      }
+
+      const targetEnv = envs[idx];
+      const targetVars = (targetEnv.variables as Record<string, unknown>) || {};
+      const runIdStr = String(testRunId);
+
+      const updatedEnvs = envs.map((env, envIndex) => {
+        if (envIndex !== idx) return env;
+
+        // Also patch the last workflow task's `tcmTestRun` input directly with the
+        // numeric run id, mirroring C# `ReleasePipelineService.cs:81`. Belt-and-suspenders:
+        // if the env-variable substitution fails for any reason, the task input is
+        // already resolved to the literal id.
+        const phases = Array.isArray(env.deployPhasesSnapshot)
+          ? (env.deployPhasesSnapshot as Array<Record<string, unknown>>)
+          : [];
+        const patchedPhases = phases.map((phase, phaseIdx) => {
+          if (phaseIdx !== 0) return phase;
+          const tasks = Array.isArray(phase.workflowTasks)
+            ? (phase.workflowTasks as Array<Record<string, unknown>>)
+            : [];
+          if (tasks.length === 0) return phase;
+          // Find the LAST workflow task that has a `tcmTestRun` input — that's the VSTest task.
+          let targetTaskIndex = -1;
+          for (let i = tasks.length - 1; i >= 0; i -= 1) {
+            const inputs = tasks[i]?.inputs as Record<string, unknown> | undefined;
+            if (inputs && 'tcmTestRun' in inputs) {
+              targetTaskIndex = i;
+              break;
+            }
+          }
+          // If no task explicitly defines tcmTestRun, fall back to last task (C# does this).
+          if (targetTaskIndex < 0) targetTaskIndex = tasks.length - 1;
+          const patchedTasks = tasks.map((task, taskIdx) => {
+            if (taskIdx !== targetTaskIndex) return task;
+            const inputs = (task.inputs as Record<string, unknown>) || {};
+            return {
+              ...task,
+              inputs: {
+                ...inputs,
+                tcmTestRun: runIdStr,
+              },
+            };
+          });
+          return { ...phase, workflowTasks: patchedTasks };
+        });
+
+        return {
+          ...env,
+          variables: {
+            ...targetVars,
+            // Both keys: matches both pipeline configurations
+            'test.RunId': { value: runIdStr, isSecret: false },
+            'test.RundId': { value: runIdStr, isSecret: false },
+          },
+          deployPhasesSnapshot: patchedPhases,
+        };
+      });
+
       const payload = {
         ...currentRelease,
-        variables: {
-          ...((currentRelease.variables as Record<string, unknown>) || {}),
-          RunId: { value: String(testRunId) },
-        },
+        environments: updatedEnvs,
       };
 
       await putJson<Record<string, unknown>>(
@@ -2510,6 +2728,7 @@ export async function attachTestRunToRelease(
         'application/json',
         'attach test run to release',
       );
+      return; // success — stop trying alternate hosts
     } catch (error) {
       lastError = error;
       if (error instanceof ADORequestError && error.status === 404) {
@@ -2535,28 +2754,41 @@ export async function startReleaseEnvironment(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _signal?: AbortSignal,
 ): Promise<void> {
-  const urlCandidates = getUrlCandidates(settings);
+  // Release management APIs live on vsrm.dev.azure.com, not dev.azure.com.
+  // ADO expects a plain JSON body `{ status: "inProgress" }`, NOT JSON Patch.
   let lastError: unknown;
 
-  for (const baseUrl of urlCandidates) {
+  for (const releaseBase of buildReleaseBaseApiUrls(settings)) {
     try {
-      const releaseBase = `${baseUrl}/_apis/release`;
       const url = `${releaseBase}/releases/${releaseId}/environments/${environmentId}?api-version=${encodeURIComponent(settings.apiVersion)}`;
 
-      // Convert operations object to array of patches for patchJson
-      const operations = [
-        {
-          op: 'replace',
-          path: '/variables/ReleaseStatus',
-          value: { value: 'InProgress' },
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Basic ${toBasicAuthToken(settings.patToken.trim())}`,
         },
-      ];
-      await patchJson<Record<string, unknown>>(
-        url,
-        settings.patToken.trim(),
-        operations,
-        'start release environment',
-      );
+        body: JSON.stringify({
+          status: 'inProgress',
+          comment: 'Started by Bromcom Test Run Builder',
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        const adoErr = new ADORequestError(
+          response.status,
+          buildAdoErrorMessage('start release environment', response.status, body),
+        );
+        if (response.status === 404) {
+          lastError = adoErr;
+          continue;
+        }
+        throw adoErr;
+      }
+
+      return; // success — stop trying alternate hosts
     } catch (error) {
       lastError = error;
       if (error instanceof ADORequestError && error.status === 404) {

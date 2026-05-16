@@ -261,6 +261,7 @@ declare global {
     releaseDefinitionId: number;
     releaseDefinitionName: string;
     testSuiteId: number;
+    testRunId: number | null;
     isFailedRerun: boolean;
     totalTests: number | null;
     passedTests: number | null;
@@ -268,6 +269,8 @@ declare global {
     releaseStartTime: string;
     releaseRunTime: string;
     releaseLogModifiedTime: string;
+    batchIndex: number | null;
+    batchCount: number | null;
   }
 
   interface DesktopReleaseLogUpsertPayload {
@@ -276,6 +279,7 @@ declare global {
     releaseDefinitionId: number;
     releaseDefinitionName?: string | null;
     testSuiteId: number;
+    testRunId?: number | null;
     isFailedRerun?: boolean;
     totalTests?: number | null;
     passedTests?: number | null;
@@ -283,6 +287,8 @@ declare global {
     releaseStartTime?: string | null;
     releaseRunTime?: string | null;
     releaseLogModifiedTime?: string | null;
+    batchIndex?: number | null;
+    batchCount?: number | null;
   }
 
   type DesktopTestRunLevel = 'info' | 'error';

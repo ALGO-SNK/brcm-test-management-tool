@@ -7,6 +7,7 @@ import {
   IconDelete,
   IconDescription,
   IconError,
+  IconChevronDown,
   IconInfo,
   IconMotionPlay,
   IconAnalytics,
@@ -51,6 +52,8 @@ interface CaseTableProps {
   createSourceCase?: CloneSourceMeta | null;
   onRequestCreate?: () => void;
   refreshToken?: number;
+  /** Trigger the suite-run modal (owned by SuiteTreePanel). */
+  onRunSuite?: (mode: 'ci' | 'failed') => void;
 }
 
 type SortField = 'order' | 'id' | 'name' | 'state';
@@ -65,7 +68,7 @@ const SORT_OPTIONS: SortOption[] = [
   { label: 'Order', field: 'order' },
   { label: 'TC Id', field: 'id' },
   { label: 'Test Case Title', field: 'name' },
-  { label: 'State', field: 'state' },
+  { label: 'Outcome', field: 'state' },
 ];
 
 function getStatusBadgeClass(status: string): string {
@@ -80,6 +83,90 @@ function getStatusBadgeClass(status: string): string {
       return 'badge badge--info';
     default:
       return 'badge badge--warning';
+  }
+}
+
+/**
+ * Computed analytic state per test point, using EXACT property combinations:
+ *
+ *   Failed       → state="notReady"   lastResultState="completed" outcome="failed"      isActive=false
+ *   Passed       → state="completed"  lastResultState="completed" outcome="passed"      isActive=false
+ *   In Progress  → state="inProgress" lastResultState="pending"   outcome="failed"      isActive=false
+ *   Active       → state="ready"      outcome="unspecified"        isActive=true
+ *
+ * Anything that doesn't match an exact combination falls back via loose
+ * heuristics so the column is never blank (Active is the safe default).
+ *
+ * If a case has multiple points (multi-config), the worst-case wins:
+ *   Failed > In Progress > Active > Passed
+ */
+type AnalyticState = 'failed' | 'in-progress' | 'active' | 'passed';
+
+function classifyPoint(point: {
+  outcome?: string;
+  state?: string;
+  lastResultState?: string;
+  isActive?: boolean;
+}): AnalyticState {
+  const outcome = (point.outcome ?? '').trim().toLowerCase();
+  const state = (point.state ?? '').trim().toLowerCase();
+  const last = (point.lastResultState ?? '').trim().toLowerCase();
+  const isActive = point.isActive === true;
+
+  // ── Exact combinations (per product spec) ──
+  if (isActive && state === 'ready' && outcome === 'unspecified') {
+    return 'active';
+  }
+  if (!isActive && state === 'completed' && last === 'completed' && outcome === 'passed') {
+    return 'passed';
+  }
+  if (!isActive && state === 'notready' && last === 'completed' && outcome === 'failed') {
+    return 'failed';
+  }
+  if (!isActive && state === 'inprogress' && last === 'pending' && outcome === 'failed') {
+    return 'in-progress';
+  }
+
+  // ── Fallback heuristics for any other real-world combination ──
+  if (isActive) return 'active';
+  if (state === 'inprogress' || last === 'pending') return 'in-progress';
+  if (outcome === 'failed' || state === 'notready') return 'failed';
+  if (outcome === 'passed') return 'passed';
+  return 'active';
+}
+
+function getAnalyticStateForCase(testCase: ADOTestCase): AnalyticState {
+  const points = testCase.pointBreakdown;
+  if (!points || points.length === 0) {
+    // Fall back to top-level outcome if no point breakdown is available.
+    return classifyPoint({ outcome: testCase.outcome });
+  }
+  const order: AnalyticState[] = ['failed', 'in-progress', 'active', 'passed'];
+  let worst: AnalyticState = 'passed';
+  for (const point of points) {
+    const state = classifyPoint(point);
+    if (order.indexOf(state) < order.indexOf(worst)) {
+      worst = state;
+    }
+  }
+  return worst;
+}
+
+function getAnalyticBadgeModel(state: AnalyticState): {
+  label: string;
+  badgeClass: string;
+  Icon: (props: { size?: number }) => ReactElement;
+} {
+  switch (state) {
+    case 'failed':
+      return { label: 'Failed', badgeClass: 'badge badge--danger', Icon: IconError };
+    case 'in-progress':
+      return { label: 'In Progress', badgeClass: 'badge badge--info', Icon: IconTimelapse };
+    case 'passed':
+      return { label: 'Passed', badgeClass: 'badge badge--success', Icon: IconCheckCircle };
+    case 'active':
+    default:
+      return { label: 'Active', badgeClass: 'badge badge--primary', Icon: IconMotionPlay };
   }
 }
 
@@ -263,8 +350,22 @@ export function CaseTable({
   createSourceCase = null,
   onRequestCreate,
   refreshToken = 0,
+  onRunSuite,
 }: CaseTableProps) {
   const showSelectionColumn = false;
+  const [isRunMenuOpen, setIsRunMenuOpen] = useState(false);
+  const runMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isRunMenuOpen) return;
+    const onMouseDown = (event: MouseEvent) => {
+      if (!runMenuRef.current?.contains(event.target as Node)) {
+        setIsRunMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [isRunMenuOpen]);
 
   const [cases, setCases] = useState<ADOTestCase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -531,35 +632,76 @@ export function CaseTable({
     });
   }, [filteredCases, sortField, sortOrder]);
 
-  const outcomeChartSlices = useMemo<OutcomeChartSlice[]>(() => {
-    const grouped = new Map<string, OutcomeChartSlice>();
-
-    filteredCases.forEach((testCase) => {
-      getUniqueOutcomePointRows(testCase).forEach((row) => {
-        const normalizedOutcome = (row.outcome ?? '').trim().toLowerCase() || 'unspecified';
-        const outcomeBadge = getOutcomeBadgeModel(row.outcome);
-        const existing = grouped.get(normalizedOutcome);
-        if (existing) {
-          existing.count += 1;
-          return;
+  // Count points that match the exact "Run failed" pre-filter the executor uses:
+  //   state === "notReady" && lastResultState === "completed" && outcome === "failed".
+  // Used to gate the "Run failed" action — no point triggering a run with 0 matches.
+  const failedPointCount = useMemo(() => {
+    let count = 0;
+    for (const testCase of cases) {
+      const points = testCase.pointBreakdown ?? [];
+      for (const point of points) {
+        const state = (point.state ?? '').trim().toLowerCase();
+        const lastResultState = (point.lastResultState ?? '').trim().toLowerCase();
+        const outcome = (point.outcome ?? '').trim().toLowerCase();
+        const isActive = point.isActive === true;
+        // Exact "Failed" combination — must mirror classifyPoint's failed rule.
+        if (!isActive && state === 'notready' && lastResultState === 'completed' && outcome === 'failed') {
+          count += 1;
         }
-        grouped.set(normalizedOutcome, {
-          key: normalizedOutcome,
-          label: outcomeBadge.label,
-          count: 1,
-          badgeClass: outcomeBadge.badgeClass,
-          color: getOutcomeChartColor(outcomeBadge.badgeClass),
-        });
-      });
-    });
+      }
+    }
+    return count;
+  }, [cases]);
 
-    return Array.from(grouped.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  // Chart is a SUMMARY of the table — one classification per test case, using
+  // the same getAnalyticStateForCase logic that drives the Outcome column.
+  const outcomeChartSlices = useMemo<OutcomeChartSlice[]>(() => {
+    const meta: Record<AnalyticState, { label: string; color: string; badgeClass: string }> = {
+      passed: { label: 'Passed', color: '#15803d', badgeClass: 'badge badge--success' },
+      failed: { label: 'Failed', color: '#dc2626', badgeClass: 'badge badge--danger' },
+      'in-progress': { label: 'In Progress', color: '#2563eb', badgeClass: 'badge badge--info' },
+      active: { label: 'Active', color: '#60a5fa', badgeClass: 'badge badge--primary' },
+    };
+    const counts: Record<AnalyticState, number> = {
+      passed: 0, failed: 0, 'in-progress': 0, active: 0,
+    };
+    filteredCases.forEach((testCase) => {
+      counts[getAnalyticStateForCase(testCase)] += 1;
+    });
+    const order: AnalyticState[] = ['failed', 'in-progress', 'active', 'passed'];
+    return order
+      .filter((state) => counts[state] > 0)
+      .map((state) => ({
+        key: state,
+        label: meta[state].label,
+        count: counts[state],
+        badgeClass: meta[state].badgeClass,
+        color: meta[state].color,
+      }));
   }, [filteredCases]);
 
   const outcomeChartTotal = useMemo(
     () => outcomeChartSlices.reduce((sum, slice) => sum + slice.count, 0),
     [outcomeChartSlices],
   );
+
+  const outcomeSummary = useMemo(() => {
+    const get = (key: string) => outcomeChartSlices.find((s) => s.key === key)?.count ?? 0;
+    const passed = get('passed');
+    const failed = get('failed');
+    const total = outcomeChartTotal;
+    // Pass rate is passed over ALL cases — In Progress / Active cases have not
+    // passed, so they must not inflate the rate (8 passed of 11 total = 73%).
+    const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+    return {
+      total,
+      passed,
+      failed,
+      inProgress: get('in-progress'),
+      active: get('active'),
+      passRate,
+    };
+  }, [outcomeChartSlices, outcomeChartTotal]);
 
   const donutSegments = useMemo<DonutSegment[]>(() => {
     if (outcomeChartTotal <= 0) return [];
@@ -591,19 +733,6 @@ export function CaseTable({
     const resolvedKey = activeOutcomeKey ?? fallbackKey;
     return outcomeChartSlices.find((slice) => slice.key === resolvedKey) ?? outcomeChartSlices[0];
   }, [activeOutcomeKey, outcomeChartSlices]);
-  const outcomeDetailRows = useMemo<OutcomeDetailRow[]>(() => {
-    return sortedCases.flatMap((testCase) => {
-      return getUniqueOutcomePointRows(testCase).map((row, index) => ({
-        rowKey: `${testCase.id}-${index}-${(row.configurationName ?? '').trim()}-${(row.outcome ?? '').trim()}`,
-        order: typeof testCase.order === 'number' ? testCase.order : null,
-        id: testCase.id,
-        title: testCase.name,
-        configurationName: row.configurationName,
-        outcome: row.outcome,
-      }));
-    });
-  }, [sortedCases]);
-
   const hasActiveFilter = searchTerm.trim().length > 0;
   const noFilteredData = cases.length > 0 && sortedCases.length === 0;
 
@@ -891,49 +1020,122 @@ export function CaseTable({
         </div>
 
         <div className="cases-toolbar__filters">
-          {refreshing ? (
-            <span
-              className="btn btn--secondary btn--sm is-syncing"
-              role="status"
-              aria-live="polite"
-              title="Syncing latest test cases from Azure DevOps"
-            >
-              <IconRefresh size={16} />
-              Syncing…
-            </span>
-          ) : (
+          {/* Group 1 — Refresh */}
+          <div className="cases-toolbar__group">
+            {refreshing ? (
+              <span
+                className="btn btn--secondary btn--sm is-syncing"
+                role="status"
+                aria-live="polite"
+                title="Syncing latest test cases from Azure DevOps"
+              >
+                <IconRefresh size={16} />
+                Syncing…
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm btn--icon"
+                onClick={() => { void handleRefreshCases(); }}
+                title="Refresh test cases"
+                aria-label="Refresh test cases"
+                disabled={!workspaceReady || loading}
+              >
+                <IconRefresh size={16} />
+              </button>
+            )}
+          </div>
+
+          <span className="cases-toolbar__divider" aria-hidden="true" />
+
+          {/* Group 2 — Outcome + Run menu */}
+          <div className="cases-toolbar__group">
             <button
               type="button"
               className="btn btn--secondary btn--sm"
-              onClick={() => { void handleRefreshCases(); }}
-              title="Refresh test cases"
-              aria-label="Refresh test cases"
-              disabled={!workspaceReady || loading}
+              onClick={openOutcomeChart}
+              title="View suite test summary"
+              disabled={sortedCases.length === 0}
             >
-              <IconRefresh size={16} />
+              <IconAnalytics size={16} />
+              <span>Summary</span>
             </button>
-          )}
 
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm btn--icon cases-toolbar__outcome-btn"
-            onClick={openOutcomeChart}
-            title="Overall outcome chart"
-            aria-label="Open overall outcome chart"
-            disabled={sortedCases.length === 0}
-          >
-            <IconAnalytics size={16} />
-          </button>
+            <div className="cases-toolbar__run-menu" ref={runMenuRef}>
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm cases-toolbar__run-trigger"
+                onClick={() => setIsRunMenuOpen((open) => !open)}
+                aria-haspopup="menu"
+                aria-expanded={isRunMenuOpen}
+                disabled={!onRunSuite}
+                title="Run options for this suite"
+              >
+                <IconMotionPlay size={15} />
+                <span>Run in CI</span>
+                <IconChevronDown size={14} />
+              </button>
+              {isRunMenuOpen && (
+                <div className="cases-toolbar__run-popover action-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="action-menu__item"
+                    disabled={!onRunSuite}
+                    onClick={() => {
+                      setIsRunMenuOpen(false);
+                      onRunSuite?.('ci');
+                    }}
+                  >
+                    <IconMotionPlay size={16} />
+                    <span>Run all</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="action-menu__item"
+                    disabled={!onRunSuite || failedPointCount === 0}
+                    title={
+                      failedPointCount === 0
+                        ? 'No failed test points in this suite to rerun'
+                        : `${failedPointCount} failed test point(s) eligible for rerun`
+                    }
+                    onClick={() => {
+                      setIsRunMenuOpen(false);
+                      if (failedPointCount === 0) {
+                        addNotification(
+                          'info',
+                          'No failed test points to rerun in this suite.',
+                        );
+                        return;
+                      }
+                      onRunSuite?.('failed');
+                    }}
+                  >
+                    <IconRefresh size={16} />
+                    <span>Run failed</span>
+                    {failedPointCount > 0 && (
+                      <span className="action-menu__item-badge">{failedPointCount}</span>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
 
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
-            onClick={handleStartCreate}
-            title="Add a new test case to this suite"
-          >
-            + Add Test Case
-          </button>
+          <span className="cases-toolbar__divider" aria-hidden="true" />
 
+          {/* Group 3 — New test */}
+          <div className="cases-toolbar__group">
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              onClick={handleStartCreate}
+              title="Add a new test case to this suite"
+            >
+              + New Test
+            </button>
+          </div>
         </div>
       </div>
 
@@ -962,6 +1164,9 @@ export function CaseTable({
               {renderSortableHeader(SORT_OPTIONS[1], 88)}
               {renderSortableHeader(SORT_OPTIONS[2])}
               {renderSortableHeader(SORT_OPTIONS[3], 140)}
+              <th style={{ width: 170 }}>
+                <span>Config</span>
+              </th>
               <th style={{ width: 220 }}>
                 <span>Assigned To</span>
               </th>
@@ -971,7 +1176,7 @@ export function CaseTable({
           <tbody>
             {noFilteredData ? (
               <tr>
-                <td colSpan={showSelectionColumn ? 7 : 6}>
+                <td colSpan={showSelectionColumn ? 8 : 7}>
                   <div className="cases-table__no-data">
                     <strong>No data</strong>
                     <span>
@@ -1015,9 +1220,32 @@ export function CaseTable({
                     </div>
                   </td>
                   <td>
-                    <span className={getStatusBadgeClass(testCase.state || 'Unknown')}>
-                      {testCase.state || 'Unknown'}
-                    </span>
+                    {(() => {
+                      const analyticState = getAnalyticStateForCase(testCase);
+                      const badge = getAnalyticBadgeModel(analyticState);
+                      const BadgeIcon = badge.Icon;
+                      return (
+                        <span
+                          className={`${badge.badgeClass} cases-table__outcome-badge`}
+                          title={`Lifecycle: ${testCase.state || 'Unknown'}`}
+                        >
+                          <BadgeIcon size={13} />
+                          {badge.label}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                  <td>
+                    {testCase.configurationName ? (
+                      <span
+                        className="badge badge--neutral cases-table__config-badge"
+                        title={testCase.configurationName}
+                      >
+                        {testCase.configurationName}
+                      </span>
+                    ) : (
+                      <span className="cases-table__config-empty">—</span>
+                    )}
                   </td>
                   <td>
                     <div className="cases-table__assigned-to">
@@ -1142,7 +1370,7 @@ export function CaseTable({
           <div className="modal cases-outcome-modal" role="dialog" aria-modal="true" aria-labelledby="overallOutcomeChartTitle">
             <div className="modal__header">
               <div>
-                <h3 className="modal__title" id="overallOutcomeChartTitle">Overall Outcome</h3>
+                <h3 className="modal__title" id="overallOutcomeChartTitle">Suite Test Summary</h3>
               </div>
               <button
                 type="button"
@@ -1155,23 +1383,8 @@ export function CaseTable({
             </div>
 
             <div className="modal__body cases-outcome-modal__body">
-              <section className="cases-outcome-modal__track" aria-label="Outcome distribution bar">
-                {outcomeChartSlices.map((slice) => (
-                  <span
-                    key={slice.key}
-                    className={`cases-outcome-modal__track-segment${activeOutcomeSlice?.key === slice.key ? ' is-active' : ''}`}
-                    style={{ width: `${(slice.count / outcomeChartTotal) * 100}%`, backgroundColor: slice.color }}
-                    onMouseEnter={() => setActiveOutcomeKey(slice.key)}
-                    onFocus={() => setActiveOutcomeKey(slice.key)}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`${slice.label}: ${slice.count}`}
-                  />
-                ))}
-              </section>
-
-              <div className="cases-outcome-modal__grid">
-                <section className="cases-outcome-modal__chart-shell" aria-label="Outcome distribution donut chart">
+              <section className="cases-outcome-card" aria-label="Outcome distribution">
+                <div className="cases-outcome-card__chart" aria-label="Outcome distribution donut chart">
                   <svg
                     viewBox="0 0 240 240"
                     className="cases-outcome-modal__chart"
@@ -1185,7 +1398,7 @@ export function CaseTable({
                         r="92"
                         fill="none"
                         stroke={donutSegments[0].color}
-                        strokeWidth="34"
+                        strokeWidth="30"
                       />
                     ) : (
                       donutSegments.map((segment) => (
@@ -1201,95 +1414,60 @@ export function CaseTable({
                       ))
                     )}
                   </svg>
-                  {activeOutcomeSlice && (
-                    <div className="cases-outcome-modal__center">
-                      <strong>{activeOutcomeSlice.label}</strong>
-                      <span>{activeOutcomeSlice.count}</span>
-                      <small>{Math.round((activeOutcomeSlice.count / outcomeChartTotal) * 100)}%</small>
-                    </div>
-                  )}
-                </section>
+                  <div className="cases-outcome-modal__center">
+                    <strong>Pass rate</strong>
+                    <span>{outcomeSummary.passRate}%</span>
+                    <small>{outcomeSummary.passed} of {outcomeSummary.total}</small>
+                  </div>
+                </div>
 
-                <section className="cases-outcome-modal__legend" aria-label="Outcome breakdown">
+                <ul className="cases-outcome-legend" aria-label="Outcome breakdown">
                   {outcomeChartSlices.map((slice) => {
                     const percentage = outcomeChartTotal > 0
                       ? Math.round((slice.count / outcomeChartTotal) * 100)
                       : 0;
                     return (
-                      <button
+                      <li
                         key={slice.key}
-                        type="button"
-                        className={`cases-outcome-modal__legend-item${activeOutcomeSlice?.key === slice.key ? ' is-active' : ''}`}
+                        className={`cases-outcome-legend__row${activeOutcomeSlice?.key === slice.key ? ' is-active' : ''}`}
                         onMouseEnter={() => setActiveOutcomeKey(slice.key)}
-                        onFocus={() => setActiveOutcomeKey(slice.key)}
-                        onClick={() => setActiveOutcomeKey(slice.key)}
                       >
                         <span
-                          className="cases-outcome-modal__legend-dot"
+                          className="cases-outcome-legend__dot"
                           style={{ backgroundColor: slice.color }}
                           aria-hidden="true"
                         />
-                        <span className="cases-outcome-modal__legend-label">{slice.label}</span>
-                        <span className="cases-outcome-modal__legend-count">{slice.count}</span>
-                        <span className="cases-outcome-modal__legend-percent">{percentage}%</span>
-                      </button>
+                        <span className="cases-outcome-legend__label">{slice.label}</span>
+                        <span className="cases-outcome-legend__count">{slice.count}</span>
+                        <span className="cases-outcome-legend__pct">{percentage}%</span>
+                      </li>
                     );
                   })}
-                </section>
-              </div>
+                </ul>
+              </section>
 
-              <section className="cases-outcome-modal__details" aria-label="Test case breakdown">
-                <div className="cases-outcome-modal__details-head">
-                  <strong>Test Case Breakdown</strong>
-                  <span>{outcomeDetailRows.length} row{outcomeDetailRows.length === 1 ? '' : 's'}</span>
+              <section className="cases-outcome-kpis" aria-label="Suite summary stats">
+                <div className="cases-outcome-kpis__item">
+                  <span className="cases-outcome-kpis__value">{outcomeSummary.total}</span>
+                  <span className="cases-outcome-kpis__label">Total cases</span>
                 </div>
-                <div className="cases-outcome-modal__details-table-wrap">
-                  <table className="cases-outcome-modal__details-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: 72 }}>Order</th>
-                        <th style={{ width: 92 }}>TC ID</th>
-                        <th>Title</th>
-                        <th style={{ width: 170 }}>Config</th>
-                        <th style={{ width: 160 }}>Outcome</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {outcomeDetailRows.map((row) => {
-                        const outcomeBadge = getOutcomeBadgeModel(row.outcome);
-                        return (
-                          <tr key={row.rowKey}>
-                            <td>{row.order ?? '-'}</td>
-                            <td className="cases-outcome-modal__details-id">{row.id}</td>
-                            <td className="cases-outcome-modal__details-title" title={row.title}>{row.title}</td>
-                            <td title={row.configurationName || 'Unspecified'}>
-                              {row.configurationName || 'Unspecified'}
-                            </td>
-                            <td>
-                              <span className={outcomeBadge.badgeClass}>
-                                <span className="cases-table__outcome-icon" aria-hidden="true">
-                                  {outcomeBadge.icon}
-                                </span>
-                                <span>{outcomeBadge.label}</span>
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="cases-outcome-kpis__item">
+                  <span className="cases-outcome-kpis__value cases-outcome-kpis__value--pass">{outcomeSummary.passed}</span>
+                  <span className="cases-outcome-kpis__label">Passed</span>
+                </div>
+                <div className="cases-outcome-kpis__item">
+                  <span className="cases-outcome-kpis__value cases-outcome-kpis__value--fail">{outcomeSummary.failed}</span>
+                  <span className="cases-outcome-kpis__label">Failed</span>
+                </div>
+                <div className="cases-outcome-kpis__item">
+                  <span className="cases-outcome-kpis__value cases-outcome-kpis__value--progress">{outcomeSummary.inProgress}</span>
+                  <span className="cases-outcome-kpis__label">In Progress</span>
+                </div>
+                <div className="cases-outcome-kpis__item">
+                  <span className="cases-outcome-kpis__value cases-outcome-kpis__value--active">{outcomeSummary.active}</span>
+                  <span className="cases-outcome-kpis__label">Active</span>
                 </div>
               </section>
-            </div>
-
-            <div className="modal__footer">
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => setIsOutcomeChartOpen(false)}
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>

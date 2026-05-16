@@ -4039,15 +4039,30 @@ async function openSchedulerDatabase() {
       release_definition_id INTEGER NOT NULL,
       release_definition_name TEXT,
       test_suite_id INTEGER NOT NULL,
+      test_run_id INTEGER,
       is_failed_rerun INTEGER NOT NULL DEFAULT 0,
       total_tests INTEGER,
       passed_tests INTEGER,
       failed_tests INTEGER,
       release_start_time TEXT,
       release_run_time TEXT,
-      release_log_modified_time TEXT
+      release_log_modified_time TEXT,
+      batch_index INTEGER,
+      batch_count INTEGER
     );
   `);
+  // Migrations: add columns to pre-existing databases (no-op if already present)
+  const existingCols = await db.all('PRAGMA table_info(release_logs);');
+  const colNames = new Set(existingCols.map((row) => row.name));
+  if (!colNames.has('batch_index')) {
+    await db.exec('ALTER TABLE release_logs ADD COLUMN batch_index INTEGER;');
+  }
+  if (!colNames.has('batch_count')) {
+    await db.exec('ALTER TABLE release_logs ADD COLUMN batch_count INTEGER;');
+  }
+  if (!colNames.has('test_run_id')) {
+    await db.exec('ALTER TABLE release_logs ADD COLUMN test_run_id INTEGER;');
+  }
   await db.exec('CREATE INDEX IF NOT EXISTS idx_release_logs_modified_time ON release_logs(release_log_modified_time DESC);');
   await db.exec('CREATE INDEX IF NOT EXISTS idx_release_logs_test_suite_id ON release_logs(test_suite_id);');
   return db;
@@ -4352,13 +4367,16 @@ const RELEASE_LOG_SELECT = `
     release_definition_id AS releaseDefinitionId,
     release_definition_name AS releaseDefinitionName,
     test_suite_id AS testSuiteId,
+    test_run_id AS testRunId,
     is_failed_rerun AS isFailedRerunInt,
     total_tests AS totalTests,
     passed_tests AS passedTests,
     failed_tests AS failedTests,
     release_start_time AS releaseStartTime,
     release_run_time AS releaseRunTime,
-    release_log_modified_time AS releaseLogModifiedTime
+    release_log_modified_time AS releaseLogModifiedTime,
+    batch_index AS batchIndex,
+    batch_count AS batchCount
   FROM release_logs
 `;
 
@@ -4370,6 +4388,7 @@ function mapReleaseLogRow(row) {
     releaseDefinitionId: row.releaseDefinitionId,
     releaseDefinitionName: row.releaseDefinitionName || '',
     testSuiteId: row.testSuiteId,
+    testRunId: row.testRunId ?? null,
     isFailedRerun: row.isFailedRerunInt === 1,
     totalTests: row.totalTests,
     passedTests: row.passedTests,
@@ -4377,6 +4396,8 @@ function mapReleaseLogRow(row) {
     releaseStartTime: row.releaseStartTime || '',
     releaseRunTime: row.releaseRunTime || '',
     releaseLogModifiedTime: row.releaseLogModifiedTime || '',
+    batchIndex: row.batchIndex ?? null,
+    batchCount: row.batchCount ?? null,
   };
 }
 
@@ -4412,31 +4433,37 @@ async function insertOrReplaceReleaseLog(input) {
       throw new Error('testSuiteId must be a positive number for new release logs');
     }
 
+    const testRunIdInt = Number(input.testRunId);
     await db.run(
       `
         INSERT INTO release_logs (
           release_id, release_name, release_definition_id, release_definition_name,
-          test_suite_id, is_failed_rerun, total_tests, passed_tests, failed_tests,
-          release_start_time, release_run_time, release_log_modified_time
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          test_suite_id, test_run_id, is_failed_rerun, total_tests, passed_tests, failed_tests,
+          release_start_time, release_run_time, release_log_modified_time,
+          batch_index, batch_count
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(release_id) DO UPDATE SET
           release_name = COALESCE(excluded.release_name, release_logs.release_name),
           release_definition_id = excluded.release_definition_id,
           release_definition_name = COALESCE(excluded.release_definition_name, release_logs.release_definition_name),
           test_suite_id = excluded.test_suite_id,
+          test_run_id = COALESCE(excluded.test_run_id, release_logs.test_run_id),
           is_failed_rerun = excluded.is_failed_rerun,
           total_tests = COALESCE(excluded.total_tests, release_logs.total_tests),
           passed_tests = COALESCE(excluded.passed_tests, release_logs.passed_tests),
           failed_tests = COALESCE(excluded.failed_tests, release_logs.failed_tests),
           release_start_time = COALESCE(excluded.release_start_time, release_logs.release_start_time),
           release_run_time = COALESCE(excluded.release_run_time, release_logs.release_run_time),
-          release_log_modified_time = COALESCE(excluded.release_log_modified_time, release_logs.release_log_modified_time);
+          release_log_modified_time = COALESCE(excluded.release_log_modified_time, release_logs.release_log_modified_time),
+          batch_index = COALESCE(excluded.batch_index, release_logs.batch_index),
+          batch_count = COALESCE(excluded.batch_count, release_logs.batch_count);
       `,
       releaseId,
       input.releaseName ?? null,
       releaseDefinitionId,
       input.releaseDefinitionName ?? null,
       testSuiteId,
+      Number.isFinite(testRunIdInt) && testRunIdInt > 0 ? testRunIdInt : null,
       input.isFailedRerun ? 1 : 0,
       input.totalTests ?? null,
       input.passedTests ?? null,
@@ -4444,6 +4471,8 @@ async function insertOrReplaceReleaseLog(input) {
       input.releaseStartTime ?? null,
       input.releaseRunTime ?? null,
       input.releaseLogModifiedTime ?? null,
+      Number.isInteger(input.batchIndex) ? input.batchIndex : null,
+      Number.isInteger(input.batchCount) ? input.batchCount : null,
     );
     const row = await db.get(`${RELEASE_LOG_SELECT} WHERE release_id = ?;`, releaseId);
     return mapReleaseLogRow(row);
@@ -4472,11 +4501,18 @@ async function listReleaseLogs(limit = 200) {
 }
 
 async function getPendingReleaseLogs() {
+  // Rows are "pending" if runtime OR test counts are missing — otherwise Update Logs
+  // can't recover from a first pass that grabbed runtime but missed pass/fail
+  // (which happens for historical rows that lack test_run_id).
   let db = null;
   try {
     db = await openSchedulerDatabase();
     const rows = await db.all(
-      `${RELEASE_LOG_SELECT} WHERE release_run_time IS NULL OR release_run_time = '';`,
+      `${RELEASE_LOG_SELECT}
+       WHERE release_run_time IS NULL
+          OR release_run_time = ''
+          OR total_tests IS NULL
+          OR (passed_tests IS NULL AND failed_tests IS NULL);`,
     );
     return rows.map(mapReleaseLogRow);
   } finally {

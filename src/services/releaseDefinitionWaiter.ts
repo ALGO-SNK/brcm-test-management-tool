@@ -1,72 +1,70 @@
 import type { ADOReleaseDefinitionAvailability, WorkspaceConnectionSettings } from '../types';
 import { fetchReleaseDefinitionAvailability } from './adoApi';
 
+export interface WaitOptions {
+  /** Poll interval while no CD is available. Default 30s. */
+  pollIntervalMs?: number;
+  /** Hard cap on attempts. Default Infinity (poll forever until signal aborts). */
+  maxAttempts?: number;
+  /** Callback fired each time we have to wait (i.e. no CD found in current poll). */
+  onWaiting?: (attempt: number) => void;
+  signal?: AbortSignal;
+}
+
 /**
- * Waits for an available release definition from a pool of definitions.
- * Retries every [retryDelayMs] if none are available.
+ * Waits for an available release definition from the pool.
+ *
+ * Polls indefinitely by default; cancel via AbortSignal. While waiting, emits
+ * `onWaiting(attempt)` each poll cycle so the UI can show a "paused" banner.
+ *
+ * Returns the first available definition, or null if the pool is empty / cancelled.
  */
 export async function waitForAvailableReleaseDefinition(
   settings: WorkspaceConnectionSettings,
   definitionIds: number[],
-  maxRetries: number = 3,
-  retryDelayMs: number = 300_000, // 5 minutes
-  signal?: AbortSignal,
+  options: WaitOptions = {},
 ): Promise<ADOReleaseDefinitionAvailability | null> {
   if (!definitionIds.length) {
     return null;
   }
 
-  let lastError: Error | null = null;
-  let retryCount = 0;
+  const {
+    pollIntervalMs = 30_000,
+    maxAttempts = Number.POSITIVE_INFINITY,
+    onWaiting,
+    signal,
+  } = options;
 
-  while (retryCount <= maxRetries) {
+  let attempt = 0;
+
+  while (attempt < maxAttempts) {
+    if (signal?.aborted) {
+      return null;
+    }
+
     try {
-      // Check if abort signal was triggered
-      if (signal?.aborted) {
-        throw new Error('Release definition waiter was cancelled');
-      }
-
-      // Fetch availability for all definitions
       const availability = await fetchReleaseDefinitionAvailability(settings, definitionIds, signal);
-
-      // Find first available definition
       const available = availability.find((def) => def.isAvailable);
       if (available) {
         return available;
       }
-
-      // If no available definitions and we haven't exhausted retries
-      if (retryCount < maxRetries) {
-        // Wait before retrying
-        await sleep(retryDelayMs, signal);
-        retryCount += 1;
-        continue;
-      }
-
-      // All retries exhausted, return null
-      return null;
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
+      if (signal?.aborted) return null;
+      // Swallow transient errors and keep polling. The caller's cancellation
+      // path is via AbortSignal, not exceptions from a single fetch.
+      console.warn('[CD waiter] fetch failed, will retry:', error);
+    }
 
-      // If abort signal, propagate immediately
-      if (signal?.aborted || error instanceof Error && error.message.includes('cancelled')) {
-        throw error;
-      }
+    attempt += 1;
+    if (onWaiting) {
+      try { onWaiting(attempt); } catch { /* callback must not crash the poll loop */ }
+    }
 
-      // If we haven't exhausted retries, wait and retry
-      if (retryCount < maxRetries) {
-        try {
-          await sleep(retryDelayMs, signal);
-        } catch {
-          // Sleep was cancelled, propagate
-          throw error;
-        }
-        retryCount += 1;
-        continue;
-      }
-
-      // Retries exhausted, throw last error
-      throw lastError;
+    try {
+      await sleep(pollIntervalMs, signal);
+    } catch {
+      // Sleep aborted — exit cleanly
+      return null;
     }
   }
 
@@ -74,7 +72,7 @@ export async function waitForAvailableReleaseDefinition(
 }
 
 /**
- * Sleep for a duration, respecting abort signals
+ * Sleep for a duration, respecting abort signals.
  */
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {

@@ -34,8 +34,33 @@ export async function updatePendingReleaseLogs(
         continue;
       }
 
-      const createdDate = parseDate(releaseDetails.createdOn);
-      const modifiedDate = parseDate(releaseDetails.modifiedOn);
+      // Use environment[0].createdOn/modifiedOn (mirrors C# SyncPageViewModel.cs:617).
+      // The release root createdOn fires immediately on POST; env timings track the
+      // actual deployment lifecycle — that's the real runtime.
+      const envs = Array.isArray(releaseDetails.environments)
+        ? (releaseDetails.environments as Array<Record<string, unknown>>)
+        : [];
+      const env0 = envs[0];
+
+      const createdDate = parseDate(env0?.createdOn ?? releaseDetails.createdOn);
+      const modifiedDate = parseDate(env0?.modifiedOn ?? releaseDetails.modifiedOn);
+
+      // If we don't have a stored testRunId, try to recover it from the release
+      // env variables (matches C# TestSuitesRunService.cs:128). Check both keys.
+      let effectiveRunId: number | null | undefined = log.testRunId;
+      if (!effectiveRunId && env0) {
+        const envVars = (env0.variables as Record<string, unknown>) || {};
+        const fromRun = readRunIdFromVar(envVars['test.RunId']);
+        const fromRund = readRunIdFromVar(envVars['test.RundId']);
+        effectiveRunId = fromRun ?? fromRund ?? null;
+      }
+      // Last resort: the release root may also carry the variable
+      if (!effectiveRunId) {
+        const rootVars = (releaseDetails.variables as Record<string, unknown>) || {};
+        const fromRun = readRunIdFromVar(rootVars['test.RunId']);
+        const fromRund = readRunIdFromVar(rootVars['test.RundId']) ?? readRunIdFromVar(rootVars.RunId);
+        effectiveRunId = fromRun ?? fromRund ?? null;
+      }
 
       // Only update if release was created after cutoff time
       if (createdDate && modifiedDate) {
@@ -44,15 +69,24 @@ export async function updatePendingReleaseLogs(
           // Calculate runtime
           const runtime = modifiedDate.getTime() - createdDate.getTime();
 
-          // Fetch test run details if we have a test run ID
+          // Fetch test run details if we now have a test run ID
           let passCount: number | undefined;
           let failCount: number | undefined;
+          let totalCount: number | undefined;
 
-          if (log.testRunId) {
+          if (effectiveRunId) {
             try {
-              const testRunDetails = await fetchTestRunDetails(settings, log.testRunId, signal);
+              const testRunDetails = await fetchTestRunDetails(settings, effectiveRunId, signal);
               passCount = extractTestCount(testRunDetails, 'passedTests', 'PassedTests');
-              failCount = extractTestCount(testRunDetails, 'failedTests', 'FailedTests');
+              totalCount = extractTestCount(testRunDetails, 'totalTests', 'TotalTests');
+              const failed = extractTestCount(testRunDetails, 'failedTests', 'FailedTests');
+              const unanalyzed = extractTestCount(testRunDetails, 'unanalyzedTests', 'UnanalyzedTests');
+              const incomplete = extractTestCount(testRunDetails, 'incompleteTests', 'IncompleteTests');
+              // C# uses UnanalyzedTests as the "failed" value (TestSuitesRunService.cs:143).
+              // Prefer explicit failedTests if present; otherwise sum unanalyzed + incomplete.
+              failCount = failed !== undefined
+                ? failed
+                : (unanalyzed ?? 0) + (incomplete ?? 0);
             } catch {
               // If test run fetch fails, skip counts
             }
@@ -60,6 +94,7 @@ export async function updatePendingReleaseLogs(
 
           const updated = {
             ...log,
+            testRunId: effectiveRunId ?? log.testRunId ?? null,
             runtime,
             passCount,
             failCount,
@@ -67,17 +102,20 @@ export async function updatePendingReleaseLogs(
           };
           updatedLogs.push(updated);
 
-          // Persist updated counts/runtime to local SQLite (mirrors C# UpdateReleaseLog)
+          // Persist (mirrors C# UpdateReleaseLog). Also persist recovered testRunId
+          // so subsequent passes can use it directly.
           if (window.desktop?.upsertReleaseLog) {
             try {
-              const totalTests =
-                passCount !== undefined && failCount !== undefined ? passCount + failCount : null;
+              const finalTotal = totalCount !== undefined
+                ? totalCount
+                : (passCount !== undefined && failCount !== undefined ? passCount + failCount : null);
               await window.desktop.upsertReleaseLog({
                 releaseId: log.releaseId,
                 releaseDefinitionId: log.releaseDefinitionId ?? 0,
                 releaseDefinitionName: log.releaseDefinitionName,
                 testSuiteId: log.suiteId,
-                totalTests,
+                testRunId: effectiveRunId ?? undefined,
+                totalTests: finalTotal,
                 passedTests: passCount ?? null,
                 failedTests: failCount ?? null,
                 releaseStartTime: createdDate.toISOString(),
@@ -101,6 +139,25 @@ export async function updatePendingReleaseLogs(
   }
 
   return updatedLogs;
+}
+
+/** Extract a numeric run id from a variable that may be `{ value: "1274240" }` or just a string. */
+function readRunIdFromVar(raw: unknown): number | null {
+  if (raw == null) return null;
+  let str: string | null = null;
+  if (typeof raw === 'string') {
+    str = raw;
+  } else if (typeof raw === 'object') {
+    const value = (raw as { value?: unknown }).value;
+    if (typeof value === 'string' || typeof value === 'number') {
+      str = String(value);
+    }
+  } else if (typeof raw === 'number') {
+    str = String(raw);
+  }
+  if (!str) return null;
+  const parsed = Number(str.trim());
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : null;
 }
 
 /**

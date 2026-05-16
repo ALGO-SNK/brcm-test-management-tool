@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from '../layouts/Header';
-import { SuiteTreePanel } from '../SuiteTree/SuiteTreePanel';
+import { SuiteTreePanel, type SuiteRunTrigger } from '../SuiteTree/SuiteTreePanel';
 import { CaseTable } from '../TestCases/CaseTable';
 import { TestCaseDetail } from './TestCaseDetail';
 import { PageDetailLayout } from '../layouts/PageDetailLayout';
@@ -56,6 +56,9 @@ export function TestCaseList({
   const dragging = useRef(false);
   const preserveCreateModeOnSuiteChangeRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // The CaseTable toolbar's Run menu uses this trigger (published by SuiteTreePanel)
+  // to open the suite-run modal. Trigger is captured by ref to avoid re-renders.
+  const suiteRunTriggerRef = useRef<SuiteRunTrigger | null>(null);
 
   const handleMouseDown = useCallback(() => {
     dragging.current = true;
@@ -210,6 +213,7 @@ export function TestCaseList({
             onAddTestCase={handleAddTestCaseFromSuite}
             workspaceSettings={workspaceSettings}
             createPlanSuiteRequest={createPlanSuiteRequest}
+            onRunTriggerReady={(trigger) => { suiteRunTriggerRef.current = trigger; }}
           />
         </div>
 
@@ -273,6 +277,11 @@ export function TestCaseList({
                     suiteSelfHref={suite._links?.self?.href ?? suite._links?._self?.href}
                     workspaceSettings={workspaceSettings}
                     onSelectCase={onSelectCase}
+                    onRunSuite={(mode) => {
+                      if (suite && suiteRunTriggerRef.current) {
+                        suiteRunTriggerRef.current.trigger(suite, mode);
+                      }
+                    }}
                     onCaseCountChange={(count) => {
                       setSuiteCaseCountBySuiteId((prev) => {
                         if (prev[suite.id] === count) return prev;

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  IconBranch,
   IconChevronRight,
   IconFolder,
   IconFolderOpen,
@@ -21,7 +20,6 @@ interface SuiteTreeNodeProps {
   onAddSuite: (suite: ADOTestSuite) => void;
   onAddTestCase: (suite: ADOTestSuite, path: ADOTestSuite[]) => void;
   onRunSuiteInCi: (suite: ADOTestSuite) => void;
-  onRunSuiteOnDevicesInBatches: (suite: ADOTestSuite) => void;
   onRerunFailedTests: (suite: ADOTestSuite) => void;
   onOpenInAdo: (suite: ADOTestSuite) => void;
   filterText: string;
@@ -47,7 +45,6 @@ export function SuiteTreeNode({
   onAddSuite,
   onAddTestCase,
   onRunSuiteInCi,
-  onRunSuiteOnDevicesInBatches,
   onRerunFailedTests,
   onOpenInAdo,
   filterText,
@@ -183,42 +180,7 @@ export function SuiteTreeNode({
                 <IconPlus size={16} />
                 <span>Add test case</span>
               </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="action-menu__item"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onRunSuiteInCi(suite);
-                }}
-              >
-                <IconMotionPlay size={16} />
-                <span>Run in CI Pipeline</span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="action-menu__item"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onRunSuiteOnDevicesInBatches(suite);
-                }}
-              >
-                <IconBranch size={16} />
-                <span>Run in CI (Batched)</span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="action-menu__item"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onRerunFailedTests(suite);
-                }}
-              >
-                <IconRefresh size={16} />
-                <span>Rerun Failed Tests</span>
-              </button>
+              {/* Run actions moved to the CaseTable toolbar's Run menu. */}
               <button
                 type="button"
                 role="menuitem"
@@ -250,7 +212,6 @@ export function SuiteTreeNode({
               onAddSuite={onAddSuite}
               onAddTestCase={onAddTestCase}
               onRunSuiteInCi={onRunSuiteInCi}
-              onRunSuiteOnDevicesInBatches={onRunSuiteOnDevicesInBatches}
               onRerunFailedTests={onRerunFailedTests}
               onOpenInAdo={onOpenInAdo}
               filterText={filterText}
