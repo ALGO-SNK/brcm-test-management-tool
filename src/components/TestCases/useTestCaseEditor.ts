@@ -66,9 +66,9 @@ function buildStepsFromCase(testCase: ADOTestCase): ParsedStep[] {
 }
 
 function normalizeStepForCompare(step: ParsedStep) {
-  const rest = { ...step } as ParsedStep & { index?: number };
-  delete rest.index;
-  return rest;
+  const clone: Record<string, unknown> = { ...step };
+  delete clone.index;
+  return clone;
 }
 
 export function validateTestCaseEditor(

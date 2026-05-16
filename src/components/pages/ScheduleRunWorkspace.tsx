@@ -176,7 +176,6 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
   const [releaseDefinitions, setReleaseDefinitions] = useState<ADOReleaseDefinitionAvailability[]>([]);
   const [releaseDefinitionPool, setReleaseDefinitionPool] = useState<number[]>([]);
   const [isResolvingCdPool, setIsResolvingCdPool] = useState(false);
-  const [suitePointPlan, setSuitePointPlan] = useState<SuitePointPlan[]>([]);
   const batchSize = workspaceSettings.schedulerDefaultBatchSize;
   const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [isLoadingSuites, setIsLoadingSuites] = useState(false);
@@ -794,7 +793,6 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
 
   const buildSuitePointPlan = useCallback(async (suites: SuiteRow[]): Promise<SuitePointPlan[]> => {
     if (!isConnectionConfigured || suites.length === 0) {
-      setSuitePointPlan([]);
       return [];
     }
     try {
@@ -816,7 +814,6 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
           } satisfies SuitePointPlan;
         }),
       );
-      setSuitePointPlan(plans);
       return plans;
     } finally {
       // kept intentionally for future loading instrumentation
