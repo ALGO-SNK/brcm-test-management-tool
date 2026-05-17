@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
-import { IconPlus, IconDelete, IconSave, IconX } from './Common/Icons';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { createPortal } from 'react-dom';
+import { IconPlus, IconSave, IconX, IconMoreHoriz, IconSearch, IconDownload, IconAttachFile } from './Common/Icons';
 import { useNotification } from '../context/useNotification';
+import { actionsToCsv, parseActionsCsv } from '../utils/actionCatalogCsv';
 import './ActionCatalogManager.css';
 
 interface Action {
@@ -37,11 +39,12 @@ const CONTRACT_FIELDS = [
 
 export function ActionCatalogManager() {
   const [actions, setActions] = useState<Action[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedAction, setSelectedAction] = useState<Action | null>(null);
-  const [filter, setFilter] = useState<{ category?: string; deprecated?: boolean }>({});
+  const [filter, setFilter] = useState<{ deprecated?: boolean }>({});
+  const [search, setSearch] = useState('');
+  const [menuOpenKey, setMenuOpenKey] = useState<string | null>(null);
   const [formData, setFormData] = useState<ActionFormData>({
     actionKey: '',
     label: '',
@@ -49,13 +52,26 @@ export function ActionCatalogManager() {
     category: 'custom',
     contract: {},
   });
-  const [usageCounts, setUsageCounts] = useState<Record<string, number>>({});
+  const [busy, setBusy] = useState(false);
   const { addNotification } = useNotification();
+  const menuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadActions();
-    loadCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!menuOpenKey) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenKey(null);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuOpenKey]);
 
   const loadActions = async () => {
     if (!window.desktop?.listActions) return;
@@ -66,34 +82,11 @@ export function ActionCatalogManager() {
         includeDeprecated: filter.deprecated !== false
       });
 
-      const filtered = filter.category
-        ? allActions.filter((a: { category: string }) => a.category === filter.category)
-        : allActions;
-
-      setActions(filtered);
-
-      // Load usage counts for all actions
-      const counts: Record<string, number> = {};
-      for (const action of filtered) {
-        const count = await window.desktop!.getActionUsageCount!(action.action_key);
-        counts[action.action_key] = count;
-      }
-      setUsageCounts(counts);
+      setActions(allActions);
     } catch (error) {
       addNotification('error', `Failed to load actions: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadCategories = async () => {
-    if (!window.desktop?.getActionCategories) return;
-
-    try {
-      const cats = await window.desktop.getActionCategories();
-      setCategories(cats);
-    } catch (error) {
-      console.error('Failed to load categories:', error);
     }
   };
 
@@ -113,6 +106,7 @@ export function ActionCatalogManager() {
   };
 
   const handleEditAction = (action: Action) => {
+    setMenuOpenKey(null);
     setSelectedAction(action);
     setFormData({
       actionKey: action.action_key,
@@ -134,7 +128,6 @@ export function ActionCatalogManager() {
       }
 
       if (selectedAction) {
-        // Update existing action
         await window.desktop.updateAction(selectedAction.action_key, {
           label: formData.label,
           description: formData.description,
@@ -143,7 +136,6 @@ export function ActionCatalogManager() {
         });
         addNotification('success', `Updated action: ${formData.actionKey}`);
       } else {
-        // Create new action
         await window.desktop.createAction({
           actionKey: formData.actionKey,
           label: formData.label,
@@ -162,6 +154,7 @@ export function ActionCatalogManager() {
   };
 
   const handleDeprecateAction = async (action: Action) => {
+    setMenuOpenKey(null);
     if (!window.desktop?.deprecateAction) return;
 
     try {
@@ -174,6 +167,7 @@ export function ActionCatalogManager() {
   };
 
   const handleDeleteAction = async (action: Action) => {
+    setMenuOpenKey(null);
     if (!window.desktop?.deleteAction) return;
 
     if (!confirm(`Delete action "${action.action_key}"? This cannot be undone.`)) {
@@ -190,41 +184,121 @@ export function ActionCatalogManager() {
     }
   };
 
+  const handleExportCsv = async () => {
+    if (!window.desktop?.listActions) return;
+    try {
+      setBusy(true);
+      // Export the full catalog, ignoring UI filters, for a complete transfer.
+      const all = await window.desktop.listActions({ includeDeprecated: true });
+      const csv = actionsToCsv(all);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `action-catalog-${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      addNotification('success', `Exported ${all.length} actions to CSV`);
+    } catch (error) {
+      addNotification('error', `Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleImportFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!window.desktop?.createAction || !window.desktop?.updateAction || !window.desktop?.listActions) {
+      addNotification('error', 'Import is not available in this environment');
+      return;
+    }
+
+    try {
+      setBusy(true);
+      const text = await file.text();
+      const { rows, errors } = parseActionsCsv(text);
+
+      if (rows.length === 0) {
+        addNotification('error', `No valid rows found. ${errors[0] ?? ''}`);
+        return;
+      }
+
+      const existing = await window.desktop.listActions({ includeDeprecated: true });
+      const existingKeys = new Set(existing.map((a) => a.action_key.toUpperCase()));
+
+      let created = 0;
+      let updated = 0;
+      let failed = 0;
+
+      for (const row of rows) {
+        try {
+          if (existingKeys.has(row.action_key)) {
+            await window.desktop.updateAction(row.action_key, {
+              label: row.label,
+              description: row.description,
+              category: row.category,
+              contract: row.contract,
+            });
+            updated++;
+          } else {
+            await window.desktop.createAction({
+              actionKey: row.action_key,
+              label: row.label,
+              description: row.description,
+              category: row.category,
+              contract: row.contract,
+            });
+            created++;
+          }
+        } catch {
+          failed++;
+        }
+      }
+
+      await loadActions();
+      const summary = `Import complete: ${created} added, ${updated} updated${failed ? `, ${failed} failed` : ''}`;
+      addNotification(failed ? 'error' : 'success', summary);
+    } catch (error) {
+      addNotification('error', `Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const visibleActions = actions.filter((a) =>
+    a.action_key.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
   if (loading) {
-    return <div className="action-catalog-manager"><p>Loading actions...</p></div>;
+    return (
+      <div className="plans-table-shell action-catalog">
+        <div className="empty-state">
+          <p className="empty-state__title">Loading actions…</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="action-catalog-manager">
-      <div className="catalog-header">
-        <div className="catalog-stats">
-          <div className="stat-chip">
-            <span>Total Actions</span>
-            <strong>{actions.length}</strong>
-          </div>
-          <div className="stat-chip">
-            <span>Custom Actions</span>
-            <strong>{actions.filter((a) => a.is_user_modified).length}</strong>
-          </div>
-          <div className="stat-chip">
-            <span>Deprecated</span>
-            <strong>{actions.filter((a) => a.is_deprecated).length}</strong>
-          </div>
+    <div className="plans-table-shell action-catalog">
+      <div className="cases-toolbar">
+        <div className="cases-toolbar__search">
+          <IconSearch size={15} className="cases-toolbar__search-icon" />
+          <input
+            type="text"
+            className="cases-toolbar__search-input"
+            placeholder="Search action key..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-
-        <div className="catalog-controls">
-          <select
-            value={filter.category || ''}
-            onChange={(e) => setFilter({ ...filter, category: e.target.value || undefined })}
-            className="select-filter"
-          >
-            <option value="">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-
-          <label className="checkbox-filter">
+        <div className="cases-toolbar__filters">
+          <label className="checkbox-inline">
             <input
               type="checkbox"
               checked={filter.deprecated === false}
@@ -233,10 +307,126 @@ export function ActionCatalogManager() {
             Hide deprecated
           </label>
 
-          <button className="btn btn--primary btn--sm" onClick={handleCreateAction}>
-            <IconPlus /> Create Action
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            onClick={handleExportCsv}
+            disabled={busy}
+            title="Export the full catalog to a CSV file (opens in Excel)"
+          >
+            <IconDownload size={14} /> Export CSV
+          </button>
+
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+            title="Import actions from a CSV file (updates existing, adds new)"
+          >
+            <IconAttachFile size={14} /> Import CSV
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
+
+          <button type="button" className="btn btn--primary btn--sm" onClick={handleCreateAction} disabled={busy}>
+            <IconPlus size={14} /> Create Action
           </button>
         </div>
+      </div>
+
+      <div className="data-table-wrapper">
+      <table className="data-table plans-table">
+        <thead>
+          <tr>
+            <th style={{ width: 280 }}>Key</th>
+            <th>Description</th>
+            <th style={{ width: 80 }}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visibleActions.length === 0 ? (
+            <tr>
+              <td colSpan={3}>
+                <div className="cases-table__no-data">
+                  <strong>No actions</strong>
+                  <span>
+                    {search.trim()
+                      ? 'Try changing the search.'
+                      : 'Create one to get started.'}
+                  </span>
+                </div>
+              </td>
+            </tr>
+          ) : (
+            visibleActions.map((action) => (
+              <tr key={action.action_key}>
+                <td>
+                  <span className="action-catalog__key">{action.action_key}</span>
+                  {action.is_deprecated ? (
+                    <span className="badge badge--warning" style={{ marginLeft: 8 }}>Deprecated</span>
+                  ) : null}
+                </td>
+                <td>
+                  <span className="text-secondary" title={action.description || ''}>
+                    {action.description || '—'}
+                  </span>
+                </td>
+                <td>
+                  <div
+                    className="cases-table__row-menu"
+                    ref={menuOpenKey === action.action_key ? menuRef : undefined}
+                  >
+                    <button
+                      type="button"
+                      className="cases-table__action-btn"
+                      aria-label={`Actions for ${action.action_key}`}
+                      aria-haspopup="menu"
+                      aria-expanded={menuOpenKey === action.action_key}
+                      onClick={() => setMenuOpenKey(menuOpenKey === action.action_key ? null : action.action_key)}
+                    >
+                      <IconMoreHoriz size={16} />
+                    </button>
+                    {menuOpenKey === action.action_key && (
+                      <div className="action-menu cases-table__action-menu" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="action-menu__item"
+                          onClick={() => handleEditAction(action)}
+                        >
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="action-menu__item"
+                          onClick={() => handleDeprecateAction(action)}
+                        >
+                          <span>{action.is_deprecated ? 'Restore' : 'Deprecate'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="action-menu__item action-menu__item--danger"
+                          onClick={() => handleDeleteAction(action)}
+                        >
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
       </div>
 
       {showForm && (
@@ -247,78 +437,6 @@ export function ActionCatalogManager() {
           onCancel={() => setShowForm(false)}
           onChange={setFormData}
         />
-      )}
-
-      <table className="action-table">
-        <thead>
-          <tr>
-            <th>Key</th>
-            <th>Label</th>
-            <th>Category</th>
-            <th>Usage</th>
-            <th>Status</th>
-            <th>Modified By</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {actions.map((action) => (
-            <tr key={action.action_key} className={action.is_deprecated ? 'deprecated' : ''}>
-              <td className="key-cell">
-                <code>{action.action_key}</code>
-              </td>
-              <td>{action.label}</td>
-              <td><span className="category-badge">{action.category}</span></td>
-              <td className="usage-cell">
-                <span className="usage-count">{usageCounts[action.action_key] || 0}</span>
-              </td>
-              <td>
-                {action.is_deprecated ? (
-                  <span className="status-badge status-deprecated">Deprecated</span>
-                ) : (
-                  <span className="status-badge status-active">Active</span>
-                )}
-              </td>
-              <td className="modified-cell">
-                {action.is_user_modified ? (
-                  <span className="modified-badge">Custom</span>
-                ) : (
-                  <span className="built-in-badge">Built-in</span>
-                )}
-              </td>
-              <td className="action-buttons">
-                <button
-                  className="btn btn--xs btn--secondary"
-                  onClick={() => handleEditAction(action)}
-                  title="Edit action"
-                >
-                  Edit
-                </button>
-                <button
-                  className={`btn btn--xs ${action.is_deprecated ? 'btn--success' : 'btn--warning'}`}
-                  onClick={() => handleDeprecateAction(action)}
-                  title={action.is_deprecated ? 'Restore action' : 'Deprecate action'}
-                >
-                  {action.is_deprecated ? 'Restore' : 'Deprecate'}
-                </button>
-                <button
-                  className="btn btn--xs btn--danger"
-                  onClick={() => handleDeleteAction(action)}
-                  disabled={usageCounts[action.action_key] > 0}
-                  title={usageCounts[action.action_key] > 0 ? 'Cannot delete actions in use' : 'Delete action'}
-                >
-                  <IconDelete /> Delete
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {actions.length === 0 && (
-        <div className="empty-state">
-          <p>No actions found. {filter.category ? 'Try changing the filter.' : 'Create one to get started.'}</p>
-        </div>
       )}
     </div>
   );
@@ -333,72 +451,88 @@ interface ActionFormProps {
 }
 
 function ActionForm({ data, isEditing, onSave, onCancel, onChange }: ActionFormProps) {
-  return (
-    <div className="action-form-modal">
-      <div className="modal-overlay" onClick={onCancel} />
-      <div className="modal-content">
-        <div className="modal-header">
-          <h3>{isEditing ? 'Edit Action' : 'Create Action'}</h3>
-          <button className="btn--icon" onClick={onCancel}>
-            <IconX />
-          </button>
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  return createPortal(
+    <div className="modal-overlay" role="presentation">
+      <button
+        type="button"
+        className="modal-overlay__backdrop"
+        aria-label="Close dialog"
+        onClick={onCancel}
+      />
+      <div className="modal action-catalog-modal" role="dialog" aria-modal="true">
+        <div className="modal__header">
+          <div>
+            <h3 className="modal__title">{isEditing ? 'Edit Action' : 'Create Action'}</h3>
+            <p className="modal__subtitle">Define the action key, metadata, and parameter contract.</p>
+          </div>
         </div>
 
-        <div className="form-body">
-          <div className="form-group">
-            <label>Action Key *</label>
-            <input
-              type="text"
-              disabled={isEditing}
-              placeholder="MY_ACTION"
-              value={data.actionKey}
-              onChange={(e) => onChange({ ...data, actionKey: e.target.value.toUpperCase() })}
-              className="form-input"
-            />
+        <div className="modal__body">
+          <div className="action-catalog-form-grid">
+            <label className="settings-field">
+              <span className="settings-field__label">Action Key *</span>
+              <input
+                type="text"
+                className="settings-input"
+                disabled={isEditing}
+                placeholder="MY_ACTION"
+                value={data.actionKey}
+                onChange={(e) => onChange({ ...data, actionKey: e.target.value.toUpperCase() })}
+              />
+            </label>
+
+            <label className="settings-field">
+              <span className="settings-field__label">Category *</span>
+              <select
+                className="settings-input"
+                value={data.category}
+                onChange={(e) => onChange({ ...data, category: e.target.value })}
+              >
+                {CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </label>
           </div>
 
-          <div className="form-group">
-            <label>Label *</label>
+          <label className="settings-field settings-field--full">
+            <span className="settings-field__label">Label *</span>
             <input
               type="text"
+              className="settings-input"
               placeholder="My Custom Action"
               value={data.label}
               onChange={(e) => onChange({ ...data, label: e.target.value })}
-              className="form-input"
             />
-          </div>
+          </label>
 
-          <div className="form-group">
-            <label>Description</label>
+          <label className="settings-field settings-field--full">
+            <span className="settings-field__label">Description</span>
             <textarea
+              className="settings-input"
               placeholder="What does this action do?"
               value={data.description}
               onChange={(e) => onChange({ ...data, description: e.target.value })}
-              className="form-input"
               rows={3}
             />
-          </div>
+          </label>
 
-          <div className="form-group">
-            <label>Category *</label>
-            <select
-              value={data.category}
-              onChange={(e) => onChange({ ...data, category: e.target.value })}
-              className="form-input"
-            >
-              {CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
-          <fieldset className="contract-fieldset">
-            <legend>Parameter Contract</legend>
-            <div className="contract-grid">
+          <fieldset className="action-catalog-contract">
+            <legend className="settings-field__label">Parameter Contract</legend>
+            <div className="action-catalog-contract-grid">
               {CONTRACT_FIELDS.map((field) => (
-                <div key={field} className="contract-field">
-                  <label>{field}</label>
+                <label key={field} className="settings-field">
+                  <span className="settings-field__label">{field}</span>
                   <select
+                    className="settings-input"
                     value={data.contract[field] || 'not-used'}
                     onChange={(e) => onChange({
                       ...data,
@@ -409,21 +543,22 @@ function ActionForm({ data, isEditing, onSave, onCancel, onChange }: ActionFormP
                     <option value="optional">Optional</option>
                     <option value="not-used">Not Used</option>
                   </select>
-                </div>
+                </label>
               ))}
             </div>
           </fieldset>
         </div>
 
-        <div className="modal-footer">
-          <button className="btn btn--secondary" onClick={onCancel}>
-            <IconX /> Cancel
+        <div className="modal__footer">
+          <button type="button" className="btn btn--secondary" onClick={onCancel}>
+            <IconX size={14} /> Cancel
           </button>
-          <button className="btn btn--primary" onClick={onSave}>
-            <IconSave /> Save Action
+          <button type="button" className="btn btn--primary" onClick={onSave}>
+            <IconSave size={14} /> Save Action
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

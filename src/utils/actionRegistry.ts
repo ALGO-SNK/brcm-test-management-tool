@@ -256,10 +256,13 @@ export function syncActionsFromDatabase(actions: Array<{
     if (action.is_deprecated) continue;
 
     const contract = normalizeActionContract(action.contract, action.action_key);
-    databaseActions[action.action_key.toUpperCase()] = {
-      name: action.label || action.action_key,
+    const actionKey = action.action_key.trim().toUpperCase();
+    // `name` must be the action key (matches built-in registry + dropdown
+    // option values). The DB `label` column holds the human description.
+    databaseActions[actionKey] = {
+      name: actionKey,
       category: action.category,
-      description: action.description || '',
+      description: action.description || action.label || '',
       notes: '',
       contract,
     };

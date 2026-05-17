@@ -12,7 +12,6 @@ import {
 import { NOT_SELECTED_LABEL } from '../../utils/selectLabels';
 import { fetchPlans, getCachedPlans } from '../../services/adoApi';
 import type { ADOTestPlan } from '../../types';
-import { ActionCatalogManager } from '../ActionCatalogManager';
 
 export interface WorkspaceSettingsValues {
   organization: string;
@@ -73,7 +72,7 @@ interface WorkspaceSettingsProps {
   embedded?: boolean;
 }
 
-type SettingsSection = 'appearance' | 'workspace' | 'scheduler' | 'db-mappings' | 'action-catalog' | 'about';
+type SettingsSection = 'appearance' | 'workspace' | 'scheduler' | 'db-mappings' | 'about';
 type ValidationState = 'idle' | 'success' | 'error';
 type SchedulerRunMode = 'nightly_full' | 'selected_suite' | 'failed_only_rerun';
 
@@ -430,8 +429,6 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
         ? 'Scheduler'
       : section === 'db-mappings'
         ? 'DB Mappings'
-        : section === 'action-catalog'
-          ? 'Action Catalog'
         : 'About';
   const sectionSubtitle = section === 'appearance'
     ? 'Theme modes, accent palettes, and typography controls.'
@@ -441,8 +438,6 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
     ? 'Control scheduler runtime and orchestration defaults used by Schedule Run.'
     : section === 'db-mappings'
     ? 'Map Azure test plans to local SQLite DB files for targeted refreshes.'
-    : section === 'action-catalog'
-    ? 'Import, export, and reset dynamic action definitions without rebuilding the app.'
     : 'About Bromcom Test Builder and system information.';
 
   const updateField = (field: keyof WorkspaceSettingsValues, value: string) => {
@@ -761,14 +756,6 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
               >
                 <span className="settings-nav-item__title">DB Mappings</span>
                 <span className="settings-nav-item__sub">Plans and local DB files</span>
-              </button>
-              <button
-                type="button"
-                className={sectionItemClassName('action-catalog')}
-                onClick={() => setSection('action-catalog')}
-              >
-                <span className="settings-nav-item__title">Action Catalog</span>
-                <span className="settings-nav-item__sub">Import/export action definitions</span>
               </button>
               <p className="settings-nav-label" style={{ marginTop: '20px' }}>Other</p>
               <button
@@ -1734,12 +1721,6 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
                       </div>
                     </div>
                   </form>
-                </section>
-              )}
-
-              {section === 'action-catalog' && (
-                <section className="settings-pane">
-                  <ActionCatalogManager />
                 </section>
               )}
 
