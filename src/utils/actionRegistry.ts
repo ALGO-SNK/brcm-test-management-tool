@@ -242,6 +242,40 @@ export function supportsDynamicLocatorControls(
 export const ACTION_REGISTRY: Record<string, ActionDefinition> = {};
 initializeRegistry();
 
+export function syncActionsFromDatabase(actions: Array<{
+  action_key: string;
+  label: string;
+  description?: string;
+  category: string;
+  contract: Record<string, 'required' | 'optional' | 'not-used'>;
+  is_deprecated?: number;
+}>): void {
+  const databaseActions: ActionRegistryRecord = {};
+
+  for (const action of actions) {
+    if (action.is_deprecated) continue;
+
+    const contract = normalizeActionContract(action.contract, action.action_key);
+    const actionKey = action.action_key.trim().toUpperCase();
+    // `name` must be the action key (matches built-in registry + dropdown
+    // option values). The DB `label` column holds the human description.
+    databaseActions[actionKey] = {
+      name: actionKey,
+      category: action.category,
+      description: action.description || action.label || '',
+      notes: '',
+      contract,
+    };
+  }
+
+  if (Object.keys(databaseActions).length > 0) {
+    replaceRegistry({
+      ...BUILT_IN_ACTION_REGISTRY,
+      ...databaseActions,
+    });
+  }
+}
+
 /**
  * Get an action definition by action name
  */

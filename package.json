@@ -35,7 +35,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Bromcom Test Builder",
       "runAfterFinish": false,
-      "perMachine": true
+      "perMachine": false
     },
     "linux": {
       "target": "AppImage",
@@ -81,6 +81,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "electron/db/seed",
+        "to": "seed",
+        "filter": [
+          "app-seed.sqlite"
+        ]
       }
     ]
   },
@@ -94,16 +101,17 @@
     "bump-version": "node scripts/bump-version.cjs",
     "bump-version:major": "node scripts/bump-version.cjs major",
     "bump-version:minor": "node scripts/bump-version.cjs minor",
+    "generate-seed-db": "node scripts/build-seed-db.cjs",
     "electron:dev": "npm run setup:netcoredbg:win && node electron/dev-runner.cjs",
-    "electron:start": "npm run setup:netcoredbg:win && npm run build && electron .",
+    "electron:start": "npm run setup:netcoredbg:win && npm run generate-seed-db && npm run build && electron .",
     "setup:netcoredbg:win": "node scripts/setup-netcoredbg-win.cjs",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
-    "dist": "npm run typecheck && npm run bump-version && npm run build && electron-builder -mwl",
-    "dist:win": "npm run setup:netcoredbg:win && npm run typecheck && npm run bump-version && npm run build && electron-builder --win",
-    "dist:linux": "npm run typecheck && npm run bump-version && npm run build && electron-builder --linux",
-    "dist:mac": "npm run typecheck && npm run bump-version && npm run build && electron-builder --mac"
+    "dist": "npm run generate-seed-db && npm run typecheck && npm run bump-version && npm run build && electron-builder -mwl",
+    "dist:win": "npm run setup:netcoredbg:win && npm run generate-seed-db && npm run typecheck && npm run bump-version && npm run build && electron-builder --win",
+    "dist:linux": "npm run generate-seed-db && npm run typecheck && npm run bump-version && npm run build && electron-builder --linux",
+    "dist:mac": "npm run generate-seed-db && npm run typecheck && npm run bump-version && npm run build && electron-builder --mac"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

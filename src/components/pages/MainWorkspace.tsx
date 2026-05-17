@@ -8,8 +8,9 @@ import { IconDatabase, IconSchedule } from '../Common/Icons';
 import type { ADOTestPlan } from '../../types';
 import { ScheduleRunWorkspace } from './ScheduleRunWorkspace';
 import { ScheduleRunHistoryPage } from './ScheduleRunHistoryPage';
+import { ActionCatalogManager } from '../ActionCatalogManager';
 
-export type MainWorkspaceSection = 'plans' | 'schedule-run' | 'automation-repo' | 'db-manager' | 'schedule-history';
+export type MainWorkspaceSection = 'plans' | 'schedule-run' | 'automation-repo' | 'db-manager' | 'schedule-history' | 'action-catalog';
 
 interface MainWorkspaceProps {
   section: MainWorkspaceSection;
@@ -49,6 +50,11 @@ const WORKSPACE_NAV_ITEMS: WorkspaceNavItem[] = [
     id: 'db-manager',
     title: 'Database Manager',
     icon: <IconDatabase size={16} />,
+  },
+  {
+    id: 'action-catalog',
+    title: 'Action Catalog',
+    icon: <span className="material-symbols" aria-hidden="true">action_key</span>,
   },
 ];
 
@@ -127,6 +133,22 @@ export function MainWorkspace({
     </section>
   );
 
+  const actionCatalogView = (
+    <section className="workspace-hub__plans-panel">
+      <div className="settings-panel__head workspace-hub__plans-head">
+        <div>
+          <div className="suite-main-heading">
+            <h2>Action Catalog</h2>
+          </div>
+          <p className="settings-panel__sub">Manage dynamic action definitions without rebuilding the app.</p>
+        </div>
+      </div>
+      <div className="workspace-hub__plans-body">
+        <ActionCatalogManager />
+      </div>
+    </section>
+  );
+
   const scheduleRunView = (
     <ScheduleRunWorkspace workspaceSettings={workspaceSettings} />
   );
@@ -140,6 +162,9 @@ export function MainWorkspace({
     }
     if (section === 'schedule-history') {
       return <ScheduleRunHistoryPage />;
+    }
+    if (section === 'action-catalog') {
+      return actionCatalogView;
     }
     if (section === 'db-manager') {
       return <DbUpdaterModal workspaceSettings={workspaceSettings} onClose={() => onSectionChange('plans')} embedded />;

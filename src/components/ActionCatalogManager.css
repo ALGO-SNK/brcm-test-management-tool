@@ -1,0 +1,71 @@
+/* Layout only — all colors, fonts, shadows come from the global theme. */
+
+/* Action key: monospace, no pill background (unlike the global <code>). */
+.action-catalog__key {
+  font-family: var(--font-mono), monospace;
+  font-weight: 600;
+  color: var(--color-primary-ink, var(--color-primary));
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.checkbox-inline input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.action-catalog-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.action-catalog-modal .modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.action-catalog-contract {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin: 0;
+}
+
+.action-catalog-contract legend {
+  padding: 0 var(--space-2);
+}
+
+.action-catalog-contract-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.action-menu__item--danger {
+  color: var(--color-danger);
+}
+
+.action-menu__item--danger:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+@media (max-width: 640px) {
+  .action-catalog-form-grid,
+  .action-catalog-contract-grid {
+    grid-template-columns: 1fr;
+  }
+}

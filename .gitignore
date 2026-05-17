@@ -37,3 +37,4 @@ mock/
 .claude
 tools/netcoredbg/
 C# Scheduler/
+electron/db/seed/*.sqlite
