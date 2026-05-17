@@ -7,6 +7,9 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const { getOrCreateDb, closeDb, getLiveDb, createSeedDb, getLiveDbPath } = require('./db/manager.cjs');
+const { getConfig, setConfig, getMeta, setMeta } = require('./db/config-dao.cjs');
+const { performLegacyImport } = require('./db/legacy-import.cjs');
 
 const APP_ID = 'com.bromcom.testbuilder';
 const PRODUCT_NAME = 'Bromcom Test Builder';
@@ -4109,9 +4112,7 @@ async function runDebuggerCommand(runId, command) {
 }
 
 function getSchedulerDatabasePath() {
-  const schedulerDir = path.join(app.getPath('userData'), 'scheduler');
-  fs.mkdirSync(schedulerDir, { recursive: true });
-  return path.join(schedulerDir, 'scheduler.sqlite');
+  return getLiveDbPath(app.getPath('userData'));
 }
 
 async function openSchedulerDatabase() {
@@ -5141,7 +5142,7 @@ function stopSchedulerTickLoop() {
 
 app.setAppUserModelId(APP_ID);
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.setName(PRODUCT_NAME);
 
   if (process.platform === 'darwin' && app.dock && brandLogoPath) {
@@ -5150,6 +5151,25 @@ app.whenReady().then(() => {
 
   createSplashWindow();
   createWindow();
+
+  try {
+    // Initialize the main app database (handles seed copy, migrations, legacy import)
+    const liveDb = await getOrCreateDb(app, process.resourcesPath);
+    console.log('[DB] App database initialized');
+
+    // Perform one-time legacy import from old scheduler.sqlite
+    await performLegacyImport(liveDb, app.getPath('userData'));
+    console.log('[DB] Legacy import complete');
+  } catch (error) {
+    console.error('[DB] Database initialization failed:', error);
+    await dialog.showErrorBox(
+      'Database Error',
+      'Failed to initialize the application database. The app will now exit.\n\n' + error.message
+    );
+    app.quit();
+    return;
+  }
+
   void ensureSchedulerDatabase()
     .then(() => {
       startSchedulerTickLoop();
@@ -5170,8 +5190,9 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
   stopSchedulerTickLoop();
+  await closeDb();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -5472,6 +5493,26 @@ ipcMain.handle('desktop:list-release-logs', (_event, limit) => {
 
 ipcMain.handle('desktop:list-pending-release-logs', () => {
   return getPendingReleaseLogs();
+});
+
+ipcMain.handle('desktop:config-get', async () => {
+  try {
+    const db = getLiveDb();
+    return await getConfig(db);
+  } catch (error) {
+    console.error('[IPC] config-get failed:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('desktop:config-set', async (_event, key, value) => {
+  try {
+    const db = getLiveDb();
+    return await setConfig(db, key, value);
+  } catch (error) {
+    console.error('[IPC] config-set failed:', error);
+    throw error;
+  }
 });
 
 ipcMain.handle('desktop:read-text-file', (_event, targetPath) => {

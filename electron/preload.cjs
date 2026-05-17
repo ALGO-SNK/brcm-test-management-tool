@@ -182,6 +182,12 @@ contextBridge.exposeInMainWorld('desktop', {
   listPendingReleaseLogs() {
     return ipcRenderer.invoke('desktop:list-pending-release-logs');
   },
+  getConfig() {
+    return ipcRenderer.invoke('desktop:config-get');
+  },
+  setConfig(key, value) {
+    return ipcRenderer.invoke('desktop:config-set', key, value);
+  },
   readTextFile(targetPath) {
     return ipcRenderer.invoke('desktop:read-text-file', targetPath);
   },
