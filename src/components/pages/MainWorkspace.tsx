@@ -4,10 +4,11 @@ import { PlansList, type ConnectionStatus } from '../TestPlans/PlansList';
 import { DbUpdaterModal } from '../DbUpdater/DbUpdaterModal';
 import { SeleniumRepoBrowserModal } from '../TestCases/SeleniumRepoBrowserModal';
 import type { WorkspaceSettingsValues } from './WorkspaceSettings';
-import { IconDatabase, IconSchedule } from '../Common/Icons';
+import { IconDatabase, IconSchedule, IconMoreHoriz } from '../Common/Icons';
 import type { ADOTestPlan } from '../../types';
 import { ScheduleRunWorkspace } from './ScheduleRunWorkspace';
 import { ScheduleRunHistoryPage } from './ScheduleRunHistoryPage';
+import { ActionCatalogPanel } from '../ActionCatalogPanel';
 
 export type MainWorkspaceSection = 'plans' | 'schedule-run' | 'automation-repo' | 'db-manager' | 'schedule-history';
 
@@ -78,6 +79,7 @@ export function MainWorkspace({
   const [planCount, setPlanCount] = useState(0);
   const [planRefreshToken, setPlanRefreshToken] = useState(0);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
+  const [showActionCatalog, setShowActionCatalog] = useState(false);
   const projectName = workspaceSettings.projectName.trim() || 'Azure Test Plans';
   const connectionMeta = useMemo(() => getConnectionMeta(connectionStatus), [connectionStatus]);
   const seleniumRepoPath = workspaceSettings.seleniumRepoPath.trim();
@@ -97,34 +99,47 @@ export function MainWorkspace({
   }, []);
 
   const plansView = (
-    <section className="workspace-hub__plans-panel">
-      <div className="settings-panel__head workspace-hub__plans-head">
-        <div>
-          <div className="suite-main-heading">
-            <h2>Plans</h2>
+    <div className="plans-view-container">
+      <section className="workspace-hub__plans-panel">
+        <div className="settings-panel__head workspace-hub__plans-head">
+          <div>
+            <div className="suite-main-heading">
+              <h2>Plans</h2>
+            </div>
+            <p className="settings-panel__sub">Choose a plan to open suite tree and test table view.</p>
           </div>
-          <p className="settings-panel__sub">Choose a plan to open suite tree and test table view.</p>
+          <div className="workspace-hub__plans-meta">
+            <span className="meta-pill">
+              <span className={`dot ${connectionMeta.dotClass}`} />
+              <span>{connectionMeta.label}</span>
+            </span>
+            <span className="meta-pill">{planCount} plans</span>
+            <button
+              className="btn btn--secondary btn--sm"
+              onClick={() => setShowActionCatalog(!showActionCatalog)}
+              title="Toggle action catalog"
+            >
+              <IconMoreHoriz size={16} />
+              {showActionCatalog ? 'Hide' : 'Actions'}
+            </button>
+          </div>
         </div>
-        <div className="workspace-hub__plans-meta">
-          <span className="meta-pill">
-            <span className={`dot ${connectionMeta.dotClass}`} />
-            <span>{connectionMeta.label}</span>
-          </span>
-          <span className="meta-pill">{planCount} plans</span>
+        <div className="workspace-hub__plans-body">
+          <PlansList
+            onSelectPlan={onSelectPlan}
+            onCreateSuiteForPlan={onCreateSuiteForPlan}
+            workspaceSettings={workspaceSettings}
+            onPlansLoaded={handlePlansLoaded}
+            onConnectionStatusChange={handleConnectionStatusChange}
+            onRefreshPlans={handleRefreshPlans}
+            refreshToken={planRefreshToken}
+          />
         </div>
-      </div>
-      <div className="workspace-hub__plans-body">
-        <PlansList
-          onSelectPlan={onSelectPlan}
-          onCreateSuiteForPlan={onCreateSuiteForPlan}
-          workspaceSettings={workspaceSettings}
-          onPlansLoaded={handlePlansLoaded}
-          onConnectionStatusChange={handleConnectionStatusChange}
-          onRefreshPlans={handleRefreshPlans}
-          refreshToken={planRefreshToken}
-        />
-      </div>
-    </section>
+      </section>
+      {showActionCatalog && (
+        <ActionCatalogPanel onClose={() => setShowActionCatalog(false)} />
+      )}
+    </div>
   );
 
   const scheduleRunView = (
