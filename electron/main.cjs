@@ -1154,9 +1154,9 @@ async function searchInitialStepsInDb(settingsInput, payload) {
                   "TestStepsJson" AS testStepsJson, "BatchName" AS batchName,
                   "TestSuitId" AS testSuitId
              FROM TestCaseDao
-            WHERE "Title" LIKE ? COLLATE NOCASE
+            WHERE TRIM("Title") = TRIM(?) COLLATE NOCASE
             ORDER BY "Title"`,
-          `%${name}%`,
+          name,
         );
         for (const row of rows) {
           const id = Number(getDbRowValue(row, 'id', 'Id'));
