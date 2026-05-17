@@ -4,6 +4,7 @@ const sqlite3 = require('sqlite3');
 const { open } = require('sqlite');
 const { MIGRATIONS } = require('./migrations.cjs');
 const seedData = require('./seed-data.cjs');
+const { seedActionCatalog } = require('./legacy-import.cjs');
 
 let liveDb = null;
 
@@ -201,6 +202,9 @@ async function getOrCreateDb(app, resourcesPath) {
       throw error;
     }
   }
+
+  // Seed action catalog on first run
+  await seedActionCatalog(liveDb);
 
   console.log('[DB] Database ready');
   return liveDb;

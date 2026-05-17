@@ -10,6 +10,16 @@ const { autoUpdater } = require('electron-updater');
 const { getOrCreateDb, closeDb, getLiveDb, createSeedDb, getLiveDbPath } = require('./db/manager.cjs');
 const { getConfig, setConfig, getMeta, setMeta } = require('./db/config-dao.cjs');
 const { performLegacyImport } = require('./db/legacy-import.cjs');
+const {
+  listActions,
+  getAction,
+  createAction,
+  updateAction,
+  deprecateAction,
+  deleteAction,
+  getActionUsageCount,
+  getCategories,
+} = require('./db/action-dao.cjs');
 
 const APP_ID = 'com.bromcom.testbuilder';
 const PRODUCT_NAME = 'Bromcom Test Builder';
@@ -5511,6 +5521,89 @@ ipcMain.handle('desktop:config-set', async (_event, key, value) => {
     return await setConfig(db, key, value);
   } catch (error) {
     console.error('[IPC] config-set failed:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('desktop:list-actions', async (_event, options = {}) => {
+  try {
+    const db = getLiveDb();
+    return await listActions(db, options);
+  } catch (error) {
+    console.error('[IPC] list-actions failed:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('desktop:get-action', async (_event, actionKey) => {
+  try {
+    const db = getLiveDb();
+    return await getAction(db, actionKey);
+  } catch (error) {
+    console.error('[IPC] get-action failed:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('desktop:create-action', async (_event, payload) => {
+  try {
+    const db = getLiveDb();
+    const user = 'user'; // TODO: resolve ADO identity
+    return await createAction(db, payload, user);
+  } catch (error) {
+    console.error('[IPC] create-action failed:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('desktop:update-action', async (_event, actionKey, payload) => {
+  try {
+    const db = getLiveDb();
+    const user = 'user'; // TODO: resolve ADO identity
+    return await updateAction(db, actionKey, payload, user);
+  } catch (error) {
+    console.error('[IPC] update-action failed:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('desktop:deprecate-action', async (_event, actionKey, deprecate = true) => {
+  try {
+    const db = getLiveDb();
+    const user = 'user'; // TODO: resolve ADO identity
+    return await deprecateAction(db, actionKey, deprecate, user);
+  } catch (error) {
+    console.error('[IPC] deprecate-action failed:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('desktop:delete-action', async (_event, actionKey) => {
+  try {
+    const db = getLiveDb();
+    return await deleteAction(db, actionKey);
+  } catch (error) {
+    console.error('[IPC] delete-action failed:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('desktop:get-action-usage-count', async (_event, actionKey) => {
+  try {
+    const db = getLiveDb();
+    return await getActionUsageCount(db, actionKey);
+  } catch (error) {
+    console.error('[IPC] get-action-usage-count failed:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('desktop:get-action-categories', async () => {
+  try {
+    const db = getLiveDb();
+    return await getCategories(db);
+  } catch (error) {
+    console.error('[IPC] get-action-categories failed:', error);
     throw error;
   }
 });

@@ -188,6 +188,30 @@ contextBridge.exposeInMainWorld('desktop', {
   setConfig(key, value) {
     return ipcRenderer.invoke('desktop:config-set', key, value);
   },
+  listActions(options) {
+    return ipcRenderer.invoke('desktop:list-actions', options ?? {});
+  },
+  getAction(actionKey) {
+    return ipcRenderer.invoke('desktop:get-action', actionKey);
+  },
+  createAction(payload) {
+    return ipcRenderer.invoke('desktop:create-action', payload);
+  },
+  updateAction(actionKey, payload) {
+    return ipcRenderer.invoke('desktop:update-action', actionKey, payload);
+  },
+  deprecateAction(actionKey, deprecate = true) {
+    return ipcRenderer.invoke('desktop:deprecate-action', actionKey, deprecate);
+  },
+  deleteAction(actionKey) {
+    return ipcRenderer.invoke('desktop:delete-action', actionKey);
+  },
+  getActionUsageCount(actionKey) {
+    return ipcRenderer.invoke('desktop:get-action-usage-count', actionKey);
+  },
+  getActionCategories() {
+    return ipcRenderer.invoke('desktop:get-action-categories');
+  },
   readTextFile(targetPath) {
     return ipcRenderer.invoke('desktop:read-text-file', targetPath);
   },

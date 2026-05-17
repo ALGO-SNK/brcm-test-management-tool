@@ -149,7 +149,54 @@ async function performLegacyImport(liveDb, userDataPath) {
   }
 }
 
+async function seedActionCatalog(liveDb) {
+  // Check if actions already seeded
+  const count = await liveDb.get('SELECT COUNT(*) as count FROM action_catalog');
+  if (count && count.count > 0) {
+    console.log('[DB] Action catalog already seeded, skipping');
+    return;
+  }
+
+  console.log('[DB] Seeding action catalog from extracted definitions...');
+
+  const seedDataPath = path.join(path.dirname(__filename), 'action-catalog-seed.json');
+  if (!fs.existsSync(seedDataPath)) {
+    console.log('[DB] Action catalog seed file not found, skipping');
+    return;
+  }
+
+  const seedData = JSON.parse(fs.readFileSync(seedDataPath, 'utf-8'));
+  let inserted = 0;
+
+  for (const action of seedData) {
+    try {
+      await liveDb.run(
+        `INSERT OR IGNORE INTO action_catalog
+         (action_key, label, description, category, contract_json, created_by, created_at, updated_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          action.action_key,
+          action.label,
+          action.description,
+          action.category,
+          action.contract_json,
+          action.created_by,
+          action.created_at,
+          action.updated_by,
+          action.updated_at,
+        ]
+      );
+      inserted++;
+    } catch (error) {
+      console.warn(`[DB] Failed to insert action ${action.action_key}:`, error.message);
+    }
+  }
+
+  console.log(`[DB] Action catalog seeded: ${inserted}/${seedData.length} actions inserted`);
+}
+
 module.exports = {
   performLegacyImport,
   isLegacyImportDone,
+  seedActionCatalog,
 };

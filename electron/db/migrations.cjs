@@ -126,6 +126,34 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    v: 2,
+    name: 'Add action catalog tables',
+    sql: `
+      CREATE TABLE action_catalog (
+        action_key TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL,
+        contract_json TEXT NOT NULL,
+        is_user_modified INTEGER NOT NULL DEFAULT 0,
+        is_deprecated INTEGER NOT NULL DEFAULT 0,
+        created_by TEXT,
+        created_at TEXT NOT NULL,
+        updated_by TEXT,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_action_catalog_category ON action_catalog(category);
+      CREATE INDEX idx_action_catalog_is_deprecated ON action_catalog(is_deprecated);
+
+      CREATE TABLE action_usage_index (
+        action_key TEXT PRIMARY KEY,
+        test_case_count INTEGER NOT NULL DEFAULT 0,
+        last_used_at TEXT,
+        FOREIGN KEY (action_key) REFERENCES action_catalog(action_key) ON DELETE CASCADE
+      );
+    `,
+  },
 ];
 
 module.exports = { MIGRATIONS };
