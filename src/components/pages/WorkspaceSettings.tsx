@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { IconDelete, IconPlus, IconSave, IconX } from '../Common/Icons';
 import { useThemeContext } from '../../context/useThemeContext';
 import { useNotification } from '../../context/useNotification';
@@ -12,14 +12,7 @@ import {
 import { NOT_SELECTED_LABEL } from '../../utils/selectLabels';
 import { fetchPlans, getCachedPlans } from '../../services/adoApi';
 import type { ADOTestPlan } from '../../types';
-import {
-  clearActionCatalogOverride,
-  exportActionCatalogJson,
-  getActionCatalogStatus,
-  importActionCatalogOverrideFromJson,
-  subscribeActionRegistryChanges,
-  type ActionCatalogStatus,
-} from '../../utils/actionRegistry';
+import { ActionCatalogManager } from '../ActionCatalogManager';
 
 export interface WorkspaceSettingsValues {
   organization: string;
@@ -246,13 +239,6 @@ function toPathTail(fullPath: string): string {
   return parts[parts.length - 1] || fullPath;
 }
 
-function getActionCatalogSummary(status: ActionCatalogStatus): string {
-  if (status.source === 'override') {
-    return `Override active (${status.overrideActions} custom actions layered on built-in catalog).`;
-  }
-  return 'Using built-in action catalog.';
-}
-
 export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: WorkspaceSettingsProps) {
   const [form, setForm] = useState<WorkspaceSettingsValues>({
     ...values,
@@ -271,9 +257,6 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
   const [runSettingsOptions, setRunSettingsOptions] = useState<string[]>([]);
   const [seleniumFolderOptions, setSeleniumFolderOptions] = useState<string[]>([]);
   const [runOptionsLoading, setRunOptionsLoading] = useState(false);
-  const [actionCatalogStatus, setActionCatalogStatus] = useState<ActionCatalogStatus>(() => getActionCatalogStatus());
-  const [actionCatalogMessage, setActionCatalogMessage] = useState(() => getActionCatalogSummary(getActionCatalogStatus()));
-  const actionCatalogFileInputRef = useRef<HTMLInputElement | null>(null);
   const { mode, font, setTheme, setFont } = useThemeContext();
   const { addNotification } = useNotification();
 
@@ -283,14 +266,6 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
       dbMappings: normalizeWorkspaceDbMappings(values),
     });
   }, [values]);
-
-  useEffect(() => {
-    return subscribeActionRegistryChanges(() => {
-      const status = getActionCatalogStatus();
-      setActionCatalogStatus(status);
-      setActionCatalogMessage(getActionCatalogSummary(status));
-    });
-  }, []);
 
   const isConnectionConfigured = Boolean(
     form.organization.trim() && form.projectName.trim() && form.patToken.trim(),
@@ -489,60 +464,6 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
     setValidationState('success');
     setValidationMessage('Connection details look complete. Save these settings to keep them for the next session.');
     addNotification('success', 'Connection settings look valid.');
-  };
-
-  const handleImportActionCatalog = () => {
-    actionCatalogFileInputRef.current?.click();
-  };
-
-  const handleActionCatalogFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0];
-    if (!selectedFile) return;
-
-    try {
-      const fileContent = await selectedFile.text();
-      const nextStatus = importActionCatalogOverrideFromJson(fileContent);
-      setActionCatalogStatus(nextStatus);
-      setActionCatalogMessage(
-        `Imported ${nextStatus.overrideActions} override actions. Total available actions: ${nextStatus.totalActions}.`,
-      );
-      addNotification('success', `Imported action catalog from ${selectedFile.name}.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not import action catalog.';
-      setActionCatalogMessage(message);
-      addNotification('error', message);
-    } finally {
-      event.target.value = '';
-    }
-  };
-
-  const handleExportActionCatalog = () => {
-    try {
-      const exportJson = exportActionCatalogJson();
-      const blob = new Blob([exportJson], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      link.href = url;
-      link.download = `action-catalog-${stamp}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      setActionCatalogMessage(`Exported ${actionCatalogStatus.totalActions} actions to JSON.`);
-      addNotification('success', 'Action catalog exported.');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not export action catalog.';
-      setActionCatalogMessage(message);
-      addNotification('error', message);
-    }
-  };
-
-  const handleResetActionCatalog = () => {
-    const nextStatus = clearActionCatalogOverride();
-    setActionCatalogStatus(nextStatus);
-    setActionCatalogMessage(getActionCatalogSummary(nextStatus));
-    addNotification('success', 'Action catalog reset to built-in defaults.');
   };
 
   const validateDbMappings = (mappings: WorkspaceDbMapping[]): string | null => {
@@ -1818,65 +1739,7 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
 
               {section === 'action-catalog' && (
                 <section className="settings-pane">
-                  <div className="settings-chip-row">
-                    <div className="settings-summary-chip">
-                      <span>Source</span>
-                      <strong>{actionCatalogStatus.source === 'override' ? 'Override' : 'Built-in'}</strong>
-                    </div>
-                    <div className="settings-summary-chip">
-                      <span>Total Actions</span>
-                      <strong>{actionCatalogStatus.totalActions}</strong>
-                    </div>
-                    <div className="settings-summary-chip">
-                      <span>Override Actions</span>
-                      <strong>{actionCatalogStatus.overrideActions}</strong>
-                    </div>
-                    <div className="settings-summary-chip">
-                      <span>Last Updated</span>
-                      <strong>{actionCatalogStatus.updatedAt ? new Date(actionCatalogStatus.updatedAt).toLocaleString() : 'Built-in'}</strong>
-                    </div>
-                  </div>
-
-                  <div className="settings-panel">
-                    <div className="settings-panel__head">
-                      <h3 className="settings-panel__title">Action Catalog JSON</h3>
-                      <p className="settings-panel__sub">
-                        Export the current catalog to JSON, edit externally, then import it back. Invalid imports are rejected and the current catalog stays active.
-                      </p>
-                    </div>
-
-                    <div className="settings-field-grid">
-                      <label className="settings-field settings-field--full">
-                        <span className="settings-field__label">Catalog Status</span>
-                        <span className="settings-field__hint">{actionCatalogMessage}</span>
-                      </label>
-                    </div>
-
-                    <div className="settings-actions">
-                      <input
-                        ref={actionCatalogFileInputRef}
-                        type="file"
-                        accept=".json,application/json"
-                        style={{ display: 'none' }}
-                        onChange={handleActionCatalogFileSelected}
-                      />
-                      <button type="button" className="btn btn--secondary btn--sm" onClick={handleImportActionCatalog}>
-                        Import JSON
-                      </button>
-                      <button type="button" className="btn btn--secondary btn--sm" onClick={handleExportActionCatalog}>
-                        Export JSON
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--danger btn--sm"
-                        onClick={handleResetActionCatalog}
-                        disabled={actionCatalogStatus.source !== 'override'}
-                        title={actionCatalogStatus.source === 'override' ? 'Reset to built-in action catalog' : 'Built-in catalog is already active'}
-                      >
-                        Reset to Built-in
-                      </button>
-                    </div>
-                  </div>
+                  <ActionCatalogManager />
                 </section>
               )}
 

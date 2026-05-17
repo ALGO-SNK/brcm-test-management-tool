@@ -330,6 +330,35 @@ declare global {
     batchCount?: number | null;
   }
 
+  interface DesktopAction {
+    action_key: string;
+    label: string;
+    description?: string;
+    category: string;
+    contract: Record<string, 'required' | 'optional' | 'not-used'>;
+    is_deprecated: number;
+    is_user_modified: number;
+    created_by?: string;
+    created_at: string;
+    updated_by?: string;
+    updated_at: string;
+  }
+
+  interface DesktopActionCreatePayload {
+    actionKey: string;
+    label: string;
+    description?: string;
+    category: string;
+    contract: Record<string, 'required' | 'optional' | 'not-used'>;
+  }
+
+  interface DesktopActionUpdatePayload {
+    label?: string;
+    description?: string;
+    category?: string;
+    contract?: Record<string, 'required' | 'optional' | 'not-used'>;
+  }
+
   type DesktopTestRunLevel = 'info' | 'error';
   type DesktopTestRunStatus = 'running' | 'complete' | 'failed' | 'cancelled';
   type DesktopTestRunMode = 'run' | 'debug';
@@ -603,6 +632,16 @@ declare global {
     debuggerPause?: (runId: string) => Promise<{ ok: boolean }>;
     stopDotnetTest?: (runId: string) => Promise<{ ok: boolean }>;
     onTestRunProgress?: (callback: (progress: DesktopTestRunProgress) => void) => (() => void);
+    listActions?: (options?: { category?: string; includeDeprecated?: boolean }) => Promise<DesktopAction[]>;
+    getAction?: (actionKey: string) => Promise<DesktopAction | null>;
+    createAction?: (payload: DesktopActionCreatePayload) => Promise<DesktopAction>;
+    updateAction?: (actionKey: string, payload: DesktopActionUpdatePayload) => Promise<DesktopAction>;
+    deprecateAction?: (actionKey: string, deprecate?: boolean) => Promise<DesktopAction>;
+    deleteAction?: (actionKey: string) => Promise<{ ok: boolean }>;
+    getActionUsageCount?: (actionKey: string) => Promise<number>;
+    getActionCategories?: () => Promise<string[]>;
+    getConfig?: () => Promise<Record<string, unknown>>;
+    setConfig?: (key: string, value: unknown) => Promise<void>;
   }
 
   interface Window {
