@@ -42,6 +42,8 @@ export interface WorkspaceSettingsValues {
   schedulerDefaultPointConfigurationId: number;
   /** Release-definition folder name; the CD pool is resolved from ADO by folder. */
   schedulerReleaseDefinitionFolder: string;
+  /** CSV of release-definition (CD) ids to drop from the folder-resolved pool. */
+  schedulerExcludedReleaseDefinitionIdsCsv: string;
   schedulerWorldPayRegressionBranch: string;
   schedulerWorldPayKanbanBranch: string;
   schedulerSagePayTestPlanId: number;
@@ -515,12 +517,6 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
     }
     if (!Number.isInteger(form.schedulerBuildDefinitionId) || form.schedulerBuildDefinitionId <= 0) {
       return 'Build definition ID must be a positive number.';
-    }
-    if (!Number.isInteger(form.schedulerDefaultConfigurationId) || form.schedulerDefaultConfigurationId <= 0) {
-      return 'Run configuration ID must be a positive number.';
-    }
-    if (!Number.isInteger(form.schedulerDefaultPointConfigurationId) || form.schedulerDefaultPointConfigurationId <= 0) {
-      return 'Default point configuration ID must be a positive number.';
     }
     if (!form.schedulerReleaseDefinitionFolder.trim()) {
       return 'Release definition folder is required (CDs are resolved from this folder).';
@@ -1307,43 +1303,7 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
                               const value = Number(event.target.value);
                               setForm((prev) => ({
                                 ...prev,
-                                schedulerBuildDefinitionId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 260,
-                              }));
-                            }}
-                          />
-                        </label>
-                        <label className="settings-field" htmlFor="schedulerDefaultConfigurationId">
-                          <span className="settings-field__label">Run configuration ID</span>
-                          <input
-                            id="schedulerDefaultConfigurationId"
-                            className="settings-input"
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={form.schedulerDefaultConfigurationId}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              setForm((prev) => ({
-                                ...prev,
-                                schedulerDefaultConfigurationId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 34,
-                              }));
-                            }}
-                          />
-                        </label>
-                        <label className="settings-field" htmlFor="schedulerDefaultPointConfigurationId">
-                          <span className="settings-field__label">Base point configuration ID</span>
-                          <input
-                            id="schedulerDefaultPointConfigurationId"
-                            className="settings-input"
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={form.schedulerDefaultPointConfigurationId}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              setForm((prev) => ({
-                                ...prev,
-                                schedulerDefaultPointConfigurationId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 33,
+                                schedulerBuildDefinitionId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 762,
                               }));
                             }}
                           />
@@ -1360,6 +1320,20 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
                           <span className="settings-field__hint">
                             Release definitions inside these ADO folders become the CD pool.
                             Separate multiple folders with commas.
+                          </span>
+                        </label>
+                        <label className="settings-field settings-field--full" htmlFor="schedulerExcludedReleaseDefinitionIdsCsv">
+                          <span className="settings-field__label">Excluded CD IDs</span>
+                          <input
+                            id="schedulerExcludedReleaseDefinitionIdsCsv"
+                            className="settings-input"
+                            value={form.schedulerExcludedReleaseDefinitionIdsCsv}
+                            onChange={(event) => setForm((prev) => ({ ...prev, schedulerExcludedReleaseDefinitionIdsCsv: event.target.value }))}
+                            placeholder="771, 802"
+                          />
+                          <span className="settings-field__hint">
+                            Release-definition ids to drop from the folder-resolved CD pool.
+                            Leave blank to run every CD in the folder.
                           </span>
                         </label>
                         <label className="settings-field settings-field--full" htmlFor="schedulerWorldPayRegressionBranch">
@@ -1393,42 +1367,6 @@ export function WorkspaceSettings({ values, onSave, onBack, embedded = false }: 
                         </p>
                       </div>
                       <div className="settings-field-grid">
-                        <label className="settings-field" htmlFor="schedulerSagePayTestPlanId">
-                          <span className="settings-field__label">Sage Pay test plan ID</span>
-                          <input
-                            id="schedulerSagePayTestPlanId"
-                            className="settings-input"
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={form.schedulerSagePayTestPlanId}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              setForm((prev) => ({
-                                ...prev,
-                                schedulerSagePayTestPlanId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 78806,
-                              }));
-                            }}
-                          />
-                        </label>
-                        <label className="settings-field" htmlFor="schedulerWorldPayTestPlanId">
-                          <span className="settings-field__label">WorldPay test plan ID</span>
-                          <input
-                            id="schedulerWorldPayTestPlanId"
-                            className="settings-input"
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={form.schedulerWorldPayTestPlanId}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              setForm((prev) => ({
-                                ...prev,
-                                schedulerWorldPayTestPlanId: Number.isFinite(value) ? Math.max(1, Math.round(value)) : 139145,
-                              }));
-                            }}
-                          />
-                        </label>
                         <label className="settings-field settings-field--full" htmlFor="schedulerMappingWorkItemIds">
                           <span className="settings-field__label">Mapping work item IDs (CSV)</span>
                           <input
