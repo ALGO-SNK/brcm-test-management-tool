@@ -69,10 +69,14 @@ async function createSeedDb(seedDbPath) {
       driver: sqlite3.Database,
     });
 
-    // Create schema from migration #1
+    // Apply every migration in order so a freshly built DB has the full
+    // schema. Stamping user_version below to MIGRATIONS.length without
+    // running them all would leave later tables (e.g. action_catalog)
+    // missing while runMigrations() believes it is already up to date.
     await db.exec('PRAGMA journal_mode = WAL;');
-    const schemaSql = MIGRATIONS[0].sql;
-    await db.exec(schemaSql);
+    for (const migration of MIGRATIONS) {
+      await db.exec(migration.sql);
+    }
 
     // Populate factory defaults
     for (const row of seedData.featureRegistry) {
@@ -179,16 +183,27 @@ async function getOrCreateDb(app, resourcesPath) {
   const liveDbPath = getLiveDbPath(userDataPath);
   const seedDbPath = getSeedDbPath(resourcesPath);
 
-  // On first launch, copy seed to live
+  // On first launch, materialise the live DB.
   if (!fs.existsSync(liveDbPath)) {
-    console.log('[DB] First launch: live DB missing, initializing from seed');
-
-    // If seed doesn't exist (in dev), create it
-    if (!fs.existsSync(seedDbPath)) {
-      await createSeedDb(seedDbPath);
+    if (fs.existsSync(seedDbPath)) {
+      console.log('[DB] First launch: live DB missing, copying bundled seed');
+      await copySeedToLive(seedDbPath, liveDbPath);
+    } else {
+      // Seed not bundled (or stale build). NEVER write into resourcesPath —
+      // it is read-only in a packaged install and causes SQLITE_CANTOPEN.
+      // Build the schema directly into userData, which is always writable.
+      console.warn('[DB] Seed DB not found; building live DB directly at userData');
+      try {
+        await createSeedDb(liveDbPath);
+      } catch (error) {
+        // Don't leave a half-built DB behind — the next launch would see the
+        // file exist, skip creation, and open a poisoned database.
+        if (fs.existsSync(liveDbPath)) {
+          fs.rmSync(liveDbPath, { force: true });
+        }
+        throw error;
+      }
     }
-
-    await copySeedToLive(seedDbPath, liveDbPath);
   }
 
   // Open live DB
