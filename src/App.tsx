@@ -24,61 +24,73 @@ type ContentPage = 'landing' | 'cases' | 'detail';
 
 const WORKSPACE_SETTINGS_KEY = 'workspace-settings';
 
-function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
-    const fallback: WorkspaceSettingsValues = {
-        organization: '',
-        projectName: '',
-        patToken: '',
-        apiVersion: '7.1',
-        seleniumRepoPath: '',
-        dbDirectory: 'C:\\Automation Tests\\Database',
-        mainDbName: 'BromcomTestCases.db',
-        worldPayDbName: 'BromcomWorldPayTestCases.db',
-        dbMappings: DEFAULT_DB_MAPPINGS,
-        testRunWorkingDirectory: '',
-        testRunProjectPath: 'BromCom.Tests\\BromCom.Tests.csproj',
-        testRunSettingsPath: 'BromCom.Tests\\Bromcom.runsettings',
-        testRunLogger: 'console;verbosity=detailed',
-        testRunUsePatAsEnv: true,
-        schedulerEnabled: true,
-        schedulerTimezone: 'Asia/Kolkata',
-        schedulerPollSeconds: 30,
-        schedulerDefaultCron: '0 0 1 * * *',
-        schedulerDefaultMode: 'nightly_full',
-        schedulerDefaultBatchSize: 10,
-        schedulerMaxHistoryRows: 500,
-        schedulerPointBatchSize: 15,
-        schedulerBuildDefinitionId: 260,
-        schedulerDefaultConfigurationId: 34,
-        schedulerDefaultPointConfigurationId: 33,
-        schedulerReleaseDefinitionFolder: 'Schedule CDs',
-        schedulerWorldPayRegressionBranch: 'refs/heads/regression_worldpay',
-        schedulerWorldPayKanbanBranch: 'refs/heads/kanban_worldpay',
-        schedulerSagePayTestPlanId: 78806,
-        schedulerWorldPayTestPlanId: 139145,
-        schedulerEnabledPlanIds: [],
-        schedulerMappingWorkItemIds: '136838,147829',
-        schedulerRequireSuiteMapping: true,
-        schedulerArtifactAlias: '_Automated Testing Framework-ASP.NET Core-CI',
-        schedulerManualEnvironmentsCsv: 'Test Run Execute',
-        schedulerExcludedSuiteIdsCsv: '',
-        schedulerExcludedSuiteNamePatterns: 'initial,intial',
+const FALLBACK_WORKSPACE_SETTINGS: WorkspaceSettingsValues = {
+    organization: '',
+    projectName: '',
+    patToken: '',
+    apiVersion: '7.1',
+    seleniumRepoPath: '',
+    dbDirectory: 'C:\\Automation Tests\\Database',
+    mainDbName: 'BromcomTestCases.db',
+    worldPayDbName: 'BromcomWorldPayTestCases.db',
+    dbMappings: DEFAULT_DB_MAPPINGS,
+    testRunWorkingDirectory: '',
+    testRunProjectPath: 'BromCom.Tests\\BromCom.Tests.csproj',
+    testRunSettingsPath: 'BromCom.Tests\\Bromcom.runsettings',
+    testRunLogger: 'console;verbosity=detailed',
+    testRunUsePatAsEnv: true,
+    schedulerEnabled: true,
+    schedulerTimezone: 'Asia/Kolkata',
+    schedulerPollSeconds: 30,
+    schedulerDefaultCron: '0 0 1 * * *',
+    schedulerDefaultMode: 'nightly_full',
+    schedulerDefaultBatchSize: 10,
+    schedulerMaxHistoryRows: 500,
+    schedulerPointBatchSize: 15,
+    schedulerBuildDefinitionId: 762,
+    schedulerDefaultConfigurationId: 33,
+    schedulerDefaultPointConfigurationId: 33,
+    schedulerReleaseDefinitionFolder: 'Overnight CDs A, Overnight CDs B',
+    schedulerExcludedReleaseDefinitionIdsCsv: '24, 25',
+    schedulerWorldPayRegressionBranch: 'refs/heads/regression_worldpay',
+    schedulerWorldPayKanbanBranch: 'refs/heads/kanban_worldpay',
+    schedulerSagePayTestPlanId: 78806,
+    schedulerWorldPayTestPlanId: 139145,
+    schedulerEnabledPlanIds: [78806, 139145],
+    schedulerMappingWorkItemIds: '136838,147829',
+    schedulerRequireSuiteMapping: true,
+    schedulerArtifactAlias: '_Automated Testing Framework-ASP.NET Core-CI',
+    schedulerManualEnvironmentsCsv: 'Test Run Execute',
+    schedulerExcludedSuiteIdsCsv: '209484, 144095, 144094',
+    schedulerExcludedSuiteNamePatterns: 'initial,intial',
+};
+
+function mergeWorkspaceSettings(
+    parsed: Partial<WorkspaceSettingsValues> & { organizationUrl?: string },
+): WorkspaceSettingsValues {
+    const nextSettings = {
+        ...FALLBACK_WORKSPACE_SETTINGS,
+        ...parsed,
+        organization:
+            parsed.organization ?? parsed.organizationUrl ?? FALLBACK_WORKSPACE_SETTINGS.organization,
     };
+    return {
+        ...nextSettings,
+        dbMappings: normalizeWorkspaceDbMappings(nextSettings),
+    };
+}
+
+// Synchronous first-paint value: localStorage cache, else hard-coded fallback.
+// The authoritative DB-backed values load asynchronously after mount.
+function getInitialWorkspaceSettings(): WorkspaceSettingsValues {
     try {
         const raw = localStorage.getItem(WORKSPACE_SETTINGS_KEY);
-        if (!raw) return fallback;
-        const parsed = JSON.parse(raw) as Partial<WorkspaceSettingsValues> & { organizationUrl?: string };
-        const nextSettings = {
-            ...fallback,
-            ...parsed,
-            organization: parsed.organization ?? parsed.organizationUrl ?? fallback.organization,
-        };
-        return {
-            ...nextSettings,
-            dbMappings: normalizeWorkspaceDbMappings(nextSettings),
-        };
+        if (!raw) return FALLBACK_WORKSPACE_SETTINGS;
+        return mergeWorkspaceSettings(
+            JSON.parse(raw) as Partial<WorkspaceSettingsValues> & { organizationUrl?: string },
+        );
     } catch {
-        return fallback;
+        return FALLBACK_WORKSPACE_SETTINGS;
     }
 }
 
@@ -337,7 +349,41 @@ export function App() {
     const handleSaveWorkspaceSettings = (values: WorkspaceSettingsValues) => {
         setWorkspaceSettings(values);
         localStorage.setItem(WORKSPACE_SETTINGS_KEY, JSON.stringify(values));
+        // Persist to the DB layer; this flips is_user_modified = 1 so factory
+        // defaults never overwrite the user's saved values on a version update.
+        void window.desktop?.setConfig?.('workspace.settings', values).catch(() => {
+            // Ignore optional desktop bridge failures (e.g. web build).
+        });
     };
+
+    // Authoritative load: pull workspace settings from the DB once on mount and
+    // merge over the synchronous localStorage/fallback value used for first paint.
+    useEffect(() => {
+        if (!window.desktop?.getConfig) {
+            return;
+        }
+        let cancelled = false;
+        void window.desktop
+            .getConfig()
+            .then((config) => {
+                if (cancelled) return;
+                const stored = config?.['workspace.settings'];
+                if (!stored) return;
+                const parsed =
+                    typeof stored === 'string'
+                        ? (JSON.parse(stored) as Partial<WorkspaceSettingsValues>)
+                        : (stored as Partial<WorkspaceSettingsValues>);
+                const merged = mergeWorkspaceSettings(parsed);
+                setWorkspaceSettings(merged);
+                localStorage.setItem(WORKSPACE_SETTINGS_KEY, JSON.stringify(merged));
+            })
+            .catch(() => {
+                // Keep the localStorage/fallback value if the DB read fails.
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     useEffect(() => {
         if (!window.desktop?.syncSchedulerConfig) {

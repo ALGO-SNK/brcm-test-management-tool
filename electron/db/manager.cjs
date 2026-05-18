@@ -96,6 +96,14 @@ async function createSeedDb(seedDbPath) {
       );
     }
 
+    const seedNow = new Date().toISOString();
+    for (const row of seedData.appConfig) {
+      await db.run(
+        'INSERT OR IGNORE INTO app_config (key, value, is_user_modified, updated_at) VALUES (?, ?, 0, ?)',
+        [row.key, row.value, seedNow]
+      );
+    }
+
     // Set initial user_version to match latest migration
     const targetVersion = MIGRATIONS.length;
     await db.exec(`PRAGMA user_version = ${targetVersion};`);
@@ -140,12 +148,26 @@ async function runMigrations(db, currentVersion, targetVersion, backupPath) {
   console.log('[DB] All migrations completed successfully');
 }
 
-async function seedConfigSync(db, seedDb) {
+async function seedConfigSync(db) {
   console.log('[DB] Syncing config from seed...');
 
-  // For now, this is a no-op since app_config is empty in seed
-  // In future, this will update factory defaults without clobbering user edits
-  console.log('[DB] Config sync complete');
+  // Backfill ONLY missing factory-default keys. INSERT OR IGNORE leaves any
+  // existing row untouched, so user edits (is_user_modified = 1) are never
+  // clobbered on version update — new defaults added in later versions still
+  // appear for users who installed before the key existed.
+  const now = new Date().toISOString();
+  let inserted = 0;
+  for (const row of seedData.appConfig) {
+    const result = await db.run(
+      'INSERT OR IGNORE INTO app_config (key, value, is_user_modified, updated_at) VALUES (?, ?, 0, ?)',
+      [row.key, row.value, now]
+    );
+    if (result && result.changes) {
+      inserted += result.changes;
+    }
+  }
+
+  console.log(`[DB] Config sync complete (${inserted} default key(s) backfilled)`);
 }
 
 async function getOrCreateDb(app, resourcesPath) {
@@ -205,6 +227,9 @@ async function getOrCreateDb(app, resourcesPath) {
 
   // Seed action catalog on first run
   await seedActionCatalog(liveDb);
+
+  // Backfill any missing factory-default config keys (never clobbers user edits)
+  await seedConfigSync(liveDb);
 
   console.log('[DB] Database ready');
   return liveDb;

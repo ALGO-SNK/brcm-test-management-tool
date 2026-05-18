@@ -117,6 +117,19 @@ export function parseExcludedSuiteIdsCsv(csv: string): Set<number> {
 }
 
 /**
+ * Parse CSV of excluded release-definition (CD) ids
+ */
+export function parseExcludedReleaseDefinitionIdsCsv(csv: string): Set<number> {
+  const ids = new Set<number>();
+  csv
+    .split(/[,\s]+/)
+    .map((token) => Number(token.trim()))
+    .filter((token) => Number.isFinite(token) && token > 0)
+    .forEach((id) => ids.add(id));
+  return ids;
+}
+
+/**
  * Parse CSV of excluded suite name patterns
  */
 export function parseExcludedSuiteNamePatterns(csv: string): string[] {

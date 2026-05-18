@@ -15,6 +15,7 @@ import {
 } from '../../services/adoApi';
 import {
   isSuiteNameExcluded,
+  parseExcludedReleaseDefinitionIdsCsv,
   parseExcludedSuiteIdsCsv,
   parseExcludedSuiteNamePatterns,
   parseWorkItemIdsCsv,
@@ -336,8 +337,11 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     }
   }, [addNotification, enabledPlans, isConnectionConfigured, planFilter, workspaceSettings]);
 
-  // Resolve the CD pool from the configured release-definition folder.
+  // Resolve the CD pool from the configured release-definition folder,
+  // then drop any ids the user has excluded.
   const releaseDefinitionFolder = workspaceSettings.schedulerReleaseDefinitionFolder;
+  const excludedReleaseDefinitionIdsCsv =
+    workspaceSettings.schedulerExcludedReleaseDefinitionIdsCsv || '';
   useEffect(() => {
     if (!isConnectionConfigured || !releaseDefinitionFolder.trim()) {
       setReleaseDefinitionPool([]);
@@ -345,9 +349,12 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
     }
     let cancelled = false;
     setIsResolvingCdPool(true);
+    const excludedIds = parseExcludedReleaseDefinitionIdsCsv(excludedReleaseDefinitionIdsCsv);
     void fetchReleaseDefinitionIdsByFolder(workspaceSettings, releaseDefinitionFolder)
       .then((ids) => {
-        if (!cancelled) setReleaseDefinitionPool(ids);
+        if (!cancelled) {
+          setReleaseDefinitionPool(ids.filter((id) => !excludedIds.has(id)));
+        }
       })
       .catch((error) => {
         if (cancelled) return;
@@ -362,7 +369,7 @@ export function ScheduleRunWorkspace({ workspaceSettings }: { workspaceSettings:
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnectionConfigured, releaseDefinitionFolder]);
+  }, [isConnectionConfigured, releaseDefinitionFolder, excludedReleaseDefinitionIdsCsv]);
 
   const loadBuilds = useCallback(async () => {
     if (!isConnectionConfigured) {
